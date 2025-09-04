@@ -1,0 +1,757 @@
+#!/usr/bin/env python3
+"""
+Pure Paradox Resolution Engine
+==============================
+
+Domain-agnostic theory validator that only asks:
+1. What contradictions/paradoxes does your theory claim to resolve?
+2. Does it actually resolve them?
+3. Are there internal contradictions in your solution?
+
+No predefined physics domains - just pure logical analysis.
+"""
+
+import os
+import random
+import json
+import numpy as np
+from datetime import datetime
+from typing import Dict, List, Any, Optional, Tuple
+import ipywidgets as widgets
+from IPython.display import display, HTML, clear_output
+from google.colab import files
+from enum import Enum
+
+class ResolutionStatus(Enum):
+    RESOLVES = "RESOLVES"
+    PARTIAL = "PARTIAL"
+    FAILS = "FAILS"
+    CREATES_NEW_PARADOXES = "CREATES_NEW_PARADOXES"
+
+class PureParadoxAnalyzer:
+    """
+    Pure paradox resolution analysis - no domain bias, just logic.
+    """
+
+    def __init__(self):
+        # Common contradiction indicators (domain-agnostic)
+        self.contradiction_patterns = [
+            # Logical opposites
+            ("infinite", "finite"),
+            ("always", "never"),
+            ("impossible", "possible"),
+            ("exists", "doesn't exist"),
+            ("increases", "decreases"),
+            ("conserved", "violated"),
+            ("continuous", "discrete"),
+            ("deterministic", "random"),
+
+            # Quantitative contradictions
+            ("zero", "non-zero"),
+            ("positive", "negative"),
+            ("greater", "less"),
+            ("maximum", "minimum"),
+            ("converges", "diverges"),
+
+            # Physical contradictions
+            ("attracts", "repels"),
+            ("accelerates", "decelerates"),
+            ("expands", "contracts"),
+            ("heats", "cools"),
+            ("orders", "disorders")
+        ]
+
+        # Resolution claim indicators
+        self.resolution_claims = [
+            "solves", "resolves", "eliminates", "fixes", "addresses",
+            "explains", "accounts for", "reconciles", "unifies",
+            "removes", "prevents", "avoids", "corrects", "repairs"
+        ]
+
+        # Problem/paradox indicators
+        self.problem_indicators = [
+            "paradox", "contradiction", "problem", "issue", "conflict",
+            "inconsistency", "disagreement", "discrepancy", "anomaly",
+            "violation", "failure", "breakdown", "crisis", "puzzle"
+        ]
+
+        # Evidence indicators
+        self.evidence_indicators = [
+            "data", "observation", "measurement", "experiment", "test",
+            "evidence", "result", "finding", "detection", "analysis",
+            "correlation", "fit", "r²", "rmse", "accuracy", "precision"
+        ]
+
+        # Mathematical rigor indicators
+        self.math_indicators = [
+            "equation", "formula", "calculation", "derivation", "proof",
+            "∫", "∂", "∇", "Σ", "∝", "≈", "≠", "≤", "≥", "→"
+        ]
+
+    def analyze_theory(self, theory_text: str) -> Dict[str, Any]:
+        """
+        Pure paradox analysis - extract and validate resolution claims.
+        """
+
+        # Step 1: Extract what paradoxes/problems theory claims to solve
+        claimed_resolutions = self._extract_resolution_claims(theory_text)
+
+        # Step 2: Check if theory actually provides solutions to claimed problems
+        resolution_analysis = self._validate_resolution_claims(theory_text, claimed_resolutions)
+
+        # Step 3: Check for internal contradictions within the theory
+        internal_contradictions = self._find_internal_contradictions(theory_text)
+
+        # Step 4: Assess quality of evidence/mathematical support
+        evidence_quality = self._assess_evidence_quality(theory_text)
+
+        # Step 5: Determine overall resolution status
+        overall_status = self._determine_resolution_status(
+            resolution_analysis, internal_contradictions, evidence_quality
+        )
+
+        return {
+            "claimed_resolutions": claimed_resolutions,
+            "resolution_analysis": resolution_analysis,
+            "internal_contradictions": internal_contradictions,
+            "evidence_quality": evidence_quality,
+            "overall_status": overall_status,
+            "confidence": self._calculate_confidence(resolution_analysis, internal_contradictions, evidence_quality)
+        }
+
+    def _extract_resolution_claims(self, text: str) -> List[Dict[str, Any]]:
+        """Extract what problems/paradoxes the theory claims to resolve."""
+
+        claims = []
+        sentences = text.split('.')
+        text_lower = text.lower()
+
+        for sentence in sentences:
+            sentence = sentence.strip().lower()
+            if not sentence:
+                continue
+
+            # Look for resolution claims
+            has_resolution_claim = any(claim in sentence for claim in self.resolution_claims)
+            has_problem_reference = any(prob in sentence for prob in self.problem_indicators)
+
+            if has_resolution_claim and has_problem_reference:
+                # Extract the specific problem being claimed to be resolved
+                problem_keywords = [word for word in self.problem_indicators if word in sentence]
+                resolution_keywords = [word for word in self.resolution_claims if word in sentence]
+
+                claims.append({
+                    "sentence": sentence,
+                    "problems_mentioned": problem_keywords,
+                    "resolution_type": resolution_keywords[0] if resolution_keywords else "solves",
+                    "context": self._get_context_around_sentence(text, sentence)
+                })
+
+        # Also look for specific contradiction claims
+        for contradiction_pair in self.contradiction_patterns:
+            term1, term2 = contradiction_pair
+            if term1 in text_lower and term2 in text_lower:
+                # Check if theory is claiming to resolve this contradiction
+                term1_context = self._get_nearby_text(text_lower, term1, 100)
+                term2_context = self._get_nearby_text(text_lower, term2, 100)
+
+                # Look for resolution language near the contradiction
+                combined_context = term1_context + " " + term2_context
+                if any(claim in combined_context for claim in self.resolution_claims):
+                    claims.append({
+                        "sentence": f"resolves {term1} vs {term2} contradiction",
+                        "problems_mentioned": ["contradiction"],
+                        "resolution_type": "resolves",
+                        "context": combined_context,
+                        "contradiction_pair": contradiction_pair
+                    })
+
+        return claims
+
+    def _validate_resolution_claims(self, text: str, claims: List[Dict]) -> Dict[str, Any]:
+        """Check if theory actually provides mechanisms to resolve claimed problems."""
+
+        analysis = {
+            "total_claims": len(claims),
+            "resolved_claims": [],
+            "unresolved_claims": [],
+            "partially_resolved_claims": []
+        }
+
+        text_lower = text.lower()
+
+        for claim in claims:
+            validation = self._validate_single_claim(text_lower, claim)
+
+            if validation["resolution_quality"] >= 0.8:
+                analysis["resolved_claims"].append({
+                    "claim": claim["sentence"],
+                    "mechanism": validation["mechanism"],
+                    "quality": validation["resolution_quality"]
+                })
+            elif validation["resolution_quality"] >= 0.4:
+                analysis["partially_resolved_claims"].append({
+                    "claim": claim["sentence"],
+                    "mechanism": validation["mechanism"],
+                    "quality": validation["resolution_quality"],
+                    "gaps": validation["gaps"]
+                })
+            else:
+                analysis["unresolved_claims"].append({
+                    "claim": claim["sentence"],
+                    "reason": validation["failure_reason"],
+                    "quality": validation["resolution_quality"]
+                })
+
+        return analysis
+
+    def _validate_single_claim(self, text: str, claim: Dict) -> Dict[str, Any]:
+        """Validate a single resolution claim."""
+
+        claim_sentence = claim["sentence"].lower()
+        context = claim.get("context", "").lower()
+
+        # Look for mechanism explanation near the claim
+        mechanism_indicators = [
+            "because", "through", "by", "via", "using", "mechanism",
+            "method", "approach", "process", "principle", "theory",
+            "equation", "formula", "calculation", "proof"
+        ]
+
+        has_mechanism = any(indicator in context for indicator in mechanism_indicators)
+
+        # Look for specific details/explanations
+        detail_indicators = [
+            "specifically", "precisely", "exactly", "namely", "i.e.",
+            "for example", "such as", "including", "particularly"
+        ]
+
+        has_details = any(indicator in context for indicator in detail_indicators)
+
+        # Look for mathematical/quantitative support
+        has_math = any(indicator in context for indicator in self.math_indicators)
+
+        # Look for evidence/validation
+        has_evidence = any(indicator in context for indicator in self.evidence_indicators)
+
+        # Calculate resolution quality
+        quality_score = 0.0
+        gaps = []
+        mechanism = "none"
+
+        if has_mechanism:
+            quality_score += 0.4
+            mechanism = "mechanism_provided"
+        else:
+            gaps.append("no_mechanism_explained")
+
+        if has_details:
+            quality_score += 0.2
+        else:
+            gaps.append("lacks_specific_details")
+
+        if has_math:
+            quality_score += 0.2
+            mechanism += "_with_math"
+        else:
+            gaps.append("no_mathematical_framework")
+
+        if has_evidence:
+            quality_score += 0.2
+            mechanism += "_with_evidence"
+        else:
+            gaps.append("no_supporting_evidence")
+
+        # Special handling for contradiction pairs
+        if "contradiction_pair" in claim:
+            term1, term2 = claim["contradiction_pair"]
+            # Check if theory explains why both terms can coexist or chooses one
+            if "both" in context or "coexist" in context or "different" in context:
+                quality_score += 0.2
+                mechanism += "_reconciles_contradiction"
+            elif f"not {term1}" in context or f"not {term2}" in context:
+                quality_score += 0.1
+                mechanism += "_eliminates_contradiction"
+
+        failure_reason = "insufficient_explanation" if quality_score < 0.4 else "none"
+
+        return {
+            "resolution_quality": min(1.0, quality_score),
+            "mechanism": mechanism,
+            "gaps": gaps,
+            "failure_reason": failure_reason
+        }
+
+    def _find_internal_contradictions(self, text: str) -> List[Dict[str, Any]]:
+        """Find internal contradictions within the theory itself."""
+
+        contradictions = []
+        text_lower = text.lower()
+
+        # Check for contradictory statements
+        for term1, term2 in self.contradiction_patterns:
+            if term1 in text_lower and term2 in text_lower:
+                # Get contexts around both terms
+                context1 = self._get_nearby_text(text_lower, term1, 50)
+                context2 = self._get_nearby_text(text_lower, term2, 50)
+
+                # Check if they're talking about the same thing
+                words1 = set(context1.split())
+                words2 = set(context2.split())
+                overlap = len(words1 & words2)
+
+                # If significant overlap, might be contradictory
+                if overlap >= 3:
+                    # Check if it's a comparison (classical vs new approach)
+                    comparison_indicators = [
+                        "classical", "traditional", "standard", "conventional", "old",
+                        "versus", "vs", "compared to", "unlike", "instead of", "rather than"
+                    ]
+
+                    is_comparison = any(indicator in context1 + context2 for indicator in comparison_indicators)
+
+                    if not is_comparison:
+                        contradictions.append({
+                            "type": "contradictory_statements",
+                            "terms": [term1, term2],
+                            "context1": context1,
+                            "context2": context2,
+                            "severity": "high" if overlap > 5 else "medium"
+                        })
+
+        # Look for logical inconsistencies
+        logical_inconsistencies = self._find_logical_inconsistencies(text_lower)
+        contradictions.extend(logical_inconsistencies)
+
+        return contradictions
+
+    def _find_logical_inconsistencies(self, text: str) -> List[Dict[str, Any]]:
+        """Find logical inconsistencies in reasoning."""
+
+        inconsistencies = []
+
+        # Look for circular reasoning
+        if "because" in text and "therefore" in text:
+            # Simple heuristic: if A because B and B because A
+            because_statements = []
+            therefore_statements = []
+
+            sentences = text.split('.')
+            for sentence in sentences:
+                if "because" in sentence:
+                    because_statements.append(sentence.strip())
+                if "therefore" in sentence:
+                    therefore_statements.append(sentence.strip())
+
+            # Check for potential circular logic (very basic check)
+            if len(because_statements) > 1 and len(therefore_statements) > 1:
+                inconsistencies.append({
+                    "type": "potential_circular_reasoning",
+                    "severity": "low",
+                    "evidence": f"{len(because_statements)} because statements, {len(therefore_statements)} therefore statements"
+                })
+
+        return inconsistencies
+
+    def _assess_evidence_quality(self, text: str) -> Dict[str, Any]:
+        """Assess quality of evidence and mathematical support."""
+
+        text_lower = text.lower()
+
+        # Count different types of evidence
+        quantitative_evidence = 0
+        qualitative_claims = 0
+        mathematical_content = 0
+
+        # Look for quantitative evidence
+        quantitative_patterns = [
+            r"r² = ", r"rmse = ", r"accuracy", r"precision",
+            r"\d+\.\d+", r"\d+%", r"correlation", r"fit"
+        ]
+
+        import re
+        for pattern in quantitative_patterns:
+            matches = re.findall(pattern, text_lower)
+            quantitative_evidence += len(matches)
+
+        # Count qualitative claims
+        qualitative_patterns = ["shows", "demonstrates", "proves", "indicates", "suggests"]
+        for pattern in qualitative_patterns:
+            qualitative_claims += text_lower.count(pattern)
+
+        # Count mathematical content
+        for indicator in self.math_indicators:
+            mathematical_content += text_lower.count(indicator)
+
+        # Assess overall evidence quality
+        evidence_score = min(1.0,
+            0.4 * min(1.0, quantitative_evidence / 3) +
+            0.3 * min(1.0, mathematical_content / 5) +
+            0.3 * min(1.0, qualitative_claims / 5)
+        )
+
+        return {
+            "quantitative_evidence_count": quantitative_evidence,
+            "qualitative_claims_count": qualitative_claims,
+            "mathematical_content_count": mathematical_content,
+            "evidence_quality_score": evidence_score,
+            "has_strong_evidence": evidence_score > 0.7
+        }
+
+    def _determine_resolution_status(self, resolution_analysis: Dict,
+                                   internal_contradictions: List,
+                                   evidence_quality: Dict) -> ResolutionStatus:
+        """Determine overall resolution status."""
+
+        total_claims = resolution_analysis["total_claims"]
+        resolved_count = len(resolution_analysis["resolved_claims"])
+        partial_count = len(resolution_analysis["partially_resolved_claims"])
+        contradiction_count = len(internal_contradictions)
+
+        if total_claims == 0:
+            return ResolutionStatus.FAILS  # No resolution claims made
+
+        resolution_ratio = (resolved_count + 0.5 * partial_count) / total_claims
+
+        # Check for serious internal contradictions
+        serious_contradictions = sum(1 for c in internal_contradictions
+                                   if c.get("severity") == "high")
+
+        if serious_contradictions > 0:
+            return ResolutionStatus.CREATES_NEW_PARADOXES
+        elif resolution_ratio >= 0.8 and evidence_quality["evidence_quality_score"] >= 0.6:
+            return ResolutionStatus.RESOLVES
+        elif resolution_ratio >= 0.5:
+            return ResolutionStatus.PARTIAL
+        else:
+            return ResolutionStatus.FAILS
+
+    def _calculate_confidence(self, resolution_analysis: Dict,
+                            internal_contradictions: List,
+                            evidence_quality: Dict) -> float:
+        """Calculate confidence in the analysis."""
+
+        base_confidence = 0.7
+
+        # Boost confidence for clear evidence
+        if evidence_quality["evidence_quality_score"] > 0.8:
+            base_confidence += 0.2
+        elif evidence_quality["quantitative_evidence_count"] > 0:
+            base_confidence += 0.1
+
+        # Reduce confidence for contradictions
+        contradiction_penalty = len(internal_contradictions) * 0.05
+        base_confidence -= contradiction_penalty
+
+        # Boost confidence for detailed analysis
+        if resolution_analysis["total_claims"] > 0:
+            detailed_claims = len([c for c in resolution_analysis["resolved_claims"]
+                                 if c["quality"] > 0.8])
+            if detailed_claims > 0:
+                base_confidence += 0.1
+
+        return max(0.1, min(0.95, base_confidence))
+
+    def _get_nearby_text(self, text: str, phrase: str, context_length: int) -> str:
+        """Get text near a phrase for context analysis."""
+        index = text.find(phrase)
+        if index == -1:
+            return ""
+
+        start = max(0, index - context_length)
+        end = min(len(text), index + len(phrase) + context_length)
+        return text[start:end]
+
+    def _get_context_around_sentence(self, text: str, sentence: str, context_sentences: int = 2) -> str:
+        """Get broader context around a sentence."""
+        sentences = text.split('.')
+        try:
+            sentence_index = next(i for i, s in enumerate(sentences)
+                                if sentence.strip().lower() in s.lower())
+
+            start_idx = max(0, sentence_index - context_sentences)
+            end_idx = min(len(sentences), sentence_index + context_sentences + 1)
+
+            return '. '.join(sentences[start_idx:end_idx])
+        except:
+            return sentence
+
+class PureParadoxInterface:
+    """Interface for pure paradox resolution analysis."""
+
+    def __init__(self):
+        self.analyzer = PureParadoxAnalyzer()
+        self.uploaded_file = None
+        self.results = None
+
+    def create_interface(self):
+        """Create the interface - no domain selection needed!"""
+
+        display(HTML("""
+        <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 10px; margin-bottom: 20px;">
+            <h1 style="margin: 0; font-size: 2.5em;">🧠 Pure Paradox Resolution Engine ⚡</h1>
+            <p style="margin: 10px 0 0 0; font-size: 1.2em;">Domain-Agnostic Theory Validation</p>
+            <p style="margin: 5px 0 0 0; opacity: 0.9;">Upload any theory - we'll check if it resolves what it claims to resolve</p>
+        </div>
+        """))
+
+        display(HTML("""
+        <div style="background: #e8f5e8; border: 2px solid #4caf50; border-radius: 10px; padding: 15px; margin: 15px 0;">
+            <h3 style="margin-top: 0; color: #2e7d2e;">🎯 What This Engine Does</h3>
+            <ul style="margin: 0; color: #1b5e1f;">
+                <li><strong>Extracts your resolution claims</strong> - What paradoxes do you claim to solve?</li>
+                <li><strong>Validates the solutions</strong> - Do you actually provide mechanisms?</li>
+                <li><strong>Checks internal consistency</strong> - Are there contradictions in your theory?</li>
+                <li><strong>Assesses evidence quality</strong> - Do you have math/data backing?</li>
+                <li><strong>No domain bias</strong> - Doesn't care about existing theory categories!</li>
+            </ul>
+        </div>
+        """))
+
+        # File upload
+        display(HTML("<h2>📁 Upload Your Theory</h2>"))
+
+        upload_button = widgets.Button(
+            description='Upload Theory File',
+            disabled=False,
+            button_style='info',
+            icon='upload'
+        )
+
+        file_status = widgets.HTML(value="<p style='color: #666;'>No file uploaded yet</p>")
+
+        def handle_upload(b):
+            uploaded = files.upload()
+            if uploaded:
+                filename = list(uploaded.keys())[0]
+                content = uploaded[filename].decode('utf-8')
+                self.uploaded_file = {
+                    'name': filename,
+                    'content': content
+                }
+                file_status.value = f"<p style='color: green;'>✅ Uploaded: <strong>{filename}</strong></p>"
+
+        upload_button.on_click(handle_upload)
+        display(upload_button)
+        display(file_status)
+
+        # Analyze button
+        display(HTML("<h2>🚀 Run Pure Analysis</h2>"))
+
+        analyze_button = widgets.Button(
+            description='Analyze Theory',
+            disabled=False,
+            button_style='success',
+            icon='play',
+            layout=widgets.Layout(width='200px', height='50px')
+        )
+
+        output_area = widgets.Output()
+
+        def handle_analyze(b):
+            if not self.uploaded_file:
+                with output_area:
+                    clear_output()
+                    print("❌ Please upload a theory file first!")
+                return
+
+            with output_area:
+                clear_output()
+                print("🔄 Running pure paradox analysis...")
+                print("📊 Extracting resolution claims...")
+                print("🔍 Validating claimed solutions...")
+                print("⚖️ Checking internal consistency...")
+
+            self.results = self.analyzer.analyze_theory(self.uploaded_file['content'])
+
+            with output_area:
+                clear_output()
+                self.display_results()
+
+        analyze_button.on_click(handle_analyze)
+        display(analyze_button)
+        display(output_area)
+
+    def display_results(self):
+        """Display pure analysis results."""
+
+        if not self.results:
+            return
+
+        status = self.results['overall_status']
+        confidence = self.results['confidence']
+
+        # Status display
+        status_info = {
+            ResolutionStatus.RESOLVES: {'color': 'green', 'icon': '✅', 'bg': '#d4edda'},
+            ResolutionStatus.PARTIAL: {'color': 'blue', 'icon': '🎯', 'bg': '#d1ecf1'},
+            ResolutionStatus.FAILS: {'color': 'orange', 'icon': '⚠️', 'bg': '#fff3cd'},
+            ResolutionStatus.CREATES_NEW_PARADOXES: {'color': 'red', 'icon': '❌', 'bg': '#f8d7da'}
+        }
+
+        info = status_info[status]
+
+        display(HTML(f"""
+        <div style="background: {info['bg']}; border: 2px solid {info['color']}; border-radius: 10px; padding: 20px; margin: 20px 0;">
+            <h2 style="margin: 0; color: {info['color']};">{info['icon']} {status.value}</h2>
+            <p style="margin: 5px 0; color: #666;">
+                {self.uploaded_file['name']} | Confidence: {int(confidence * 100)}%
+            </p>
+        </div>
+        """))
+
+        # Resolution Claims Analysis
+        resolution_analysis = self.results['resolution_analysis']
+        print("🎯 RESOLUTION CLAIMS ANALYSIS")
+        print("=" * 40)
+        print(f"Total Claims Made: {resolution_analysis['total_claims']}")
+        print(f"Successfully Resolved: {len(resolution_analysis['resolved_claims'])}")
+        print(f"Partially Resolved: {len(resolution_analysis['partially_resolved_claims'])}")
+        print(f"Failed to Resolve: {len(resolution_analysis['unresolved_claims'])}")
+        print()
+
+        # Show resolved claims
+        if resolution_analysis['resolved_claims']:
+            print("✅ SUCCESSFULLY RESOLVED:")
+            for claim in resolution_analysis['resolved_claims']:
+                print(f"  ✓ {claim['claim']}")
+                print(f"    Mechanism: {claim['mechanism']}")
+                print(f"    Quality: {claim['quality']:.2f}")
+                print()
+
+        # Show partial resolutions
+        if resolution_analysis['partially_resolved_claims']:
+            print("🎯 PARTIALLY RESOLVED:")
+            for claim in resolution_analysis['partially_resolved_claims']:
+                print(f"  ◐ {claim['claim']}")
+                print(f"    Quality: {claim['quality']:.2f}")
+                print(f"    Gaps: {', '.join(claim['gaps'])}")
+                print()
+
+        # Show unresolved claims
+        if resolution_analysis['unresolved_claims']:
+            print("❌ UNRESOLVED CLAIMS:")
+            for claim in resolution_analysis['unresolved_claims']:
+                print(f"  ✗ {claim['claim']}")
+                print(f"    Reason: {claim['reason']}")
+                print()
+
+        # Internal contradictions
+        contradictions = self.results['internal_contradictions']
+        if contradictions:
+            print("⚠️ INTERNAL CONTRADICTIONS DETECTED:")
+            for contradiction in contradictions:
+                print(f"  • {contradiction['type']}: {contradiction.get('terms', 'N/A')}")
+                print(f"    Severity: {contradiction.get('severity', 'unknown')}")
+                print()
+        else:
+            print("✅ NO INTERNAL CONTRADICTIONS DETECTED")
+            print()
+
+        # Evidence quality
+        evidence = self.results['evidence_quality']
+        print("📊 EVIDENCE QUALITY ASSESSMENT")
+        print("=" * 40)
+        print(f"Quantitative Evidence: {evidence['quantitative_evidence_count']} instances")
+        print(f"Mathematical Content: {evidence['mathematical_content_count']} instances")
+        print(f"Evidence Quality Score: {evidence['evidence_quality_score']:.2f}/1.0")
+        print(f"Strong Evidence: {'Yes' if evidence['has_strong_evidence'] else 'No'}")
+        print()
+
+        # Interpretation
+        print("📖 INTERPRETATION")
+        print("=" * 40)
+        if status == ResolutionStatus.RESOLVES:
+            print("🎉 Your theory successfully resolves the paradoxes it claims to solve!")
+            print("✅ Strong evidence and clear mechanisms provided")
+        elif status == ResolutionStatus.PARTIAL:
+            print("🎯 Your theory partially resolves claimed paradoxes")
+            print("💡 Consider strengthening mechanisms and evidence")
+        elif status == ResolutionStatus.FAILS:
+            print("⚠️ Your theory doesn't adequately resolve claimed paradoxes")
+            print("🔧 Need clearer mechanisms and better evidence")
+        else:
+            print("❌ Your theory creates new contradictions while trying to solve others")
+            print("🚨 Significant revision needed")
+
+        # Save option
+        print("\n💾 SAVE RESULTS")
+        print("=" * 40)
+
+        save_button = widgets.Button(
+            description='Download Analysis',
+            button_style='info',
+            icon='download'
+        )
+
+        def save_results(b):
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"paradox_analysis_{timestamp}.json"
+
+            save_data = {
+                "theory_file": self.uploaded_file['name'],
+                "analysis_results": {
+                    "overall_status": self.results['overall_status'].value,
+                    "confidence": self.results['confidence'],
+                    "resolution_analysis": self.results['resolution_analysis'],
+                    "internal_contradictions": self.results['internal_contradictions'],
+                    "evidence_quality": self.results['evidence_quality']
+                },
+                "timestamp": timestamp,
+                "analyzer_version": "Pure-Paradox-1.0"
+            }
+
+            with open(filename, 'w') as f:
+                json.dump(save_data, f, indent=2, default=str)
+
+            files.download(filename)
+            print(f"✅ Analysis saved as {filename}")
+
+        save_button.on_click(save_results)
+        display(save_button)
+
+def run_pure_paradox_analyzer():
+    """Main function to run the pure paradox analyzer."""
+
+    print("🚀 Starting Pure Paradox Resolution Engine...")
+    print("🔍 Domain-agnostic theory validation")
+    print("📊 Pure logical analysis - no theoretical bias!")
+    print("\n" + "="*60 + "\n")
+
+    interface = PureParadoxInterface()
+    interface.create_interface()
+
+    return interface
+
+def show_instructions():
+    """Show usage instructions."""
+
+    display(HTML("""
+    <div style="background: #f0f8ff; border-left: 4px solid #4682b4; padding: 15px; margin: 20px 0;">
+        <h3>📚 Pure Paradox Resolution Engine</h3>
+        <p><strong>Philosophy:</strong> Let theories stand on their own merit - no domain categories, no theoretical bias</p>
+
+        <h4>🔍 What it analyzes:</h4>
+        <ul>
+            <li><strong>Resolution Claims:</strong> What problems does your theory claim to solve?</li>
+            <li><strong>Solution Mechanisms:</strong> Do you explain HOW you solve them?</li>
+            <li><strong>Internal Consistency:</strong> Are there contradictions within your theory?</li>
+            <li><strong>Evidence Quality:</strong> Do you provide mathematical/empirical support?</li>
+        </ul>
+
+        <h4>🎯 Status meanings:</h4>
+        <ul>
+            <li><strong>RESOLVES:</strong> Successfully resolves claimed paradoxes with clear mechanisms</li>
+            <li><strong>PARTIAL:</strong> Partially addresses problems but needs strengthening</li>
+            <li><strong>FAILS:</strong> Doesn't adequately resolve claimed problems</li>
+            <li><strong>CREATES_NEW_PARADOXES:</strong> Introduces new contradictions</li>
+        </ul>
+
+        <p><strong>Key insight:</strong> This engine doesn't care if you're challenging Einstein or proposing completely new physics. It only asks: "Do you resolve the contradictions you claim to resolve?"</p>
+    </div>
+    """))
+
+if __name__ == "__main__":
+    show_instructions()
+    print("\n🎯 Ready for pure paradox analysis!")
+    print("Run: analyzer = run_pure_paradox_analyzer()")
