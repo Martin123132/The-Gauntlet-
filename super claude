@@ -1,0 +1,1138 @@
+# Complete Paradox-Aware AI for Google Colab
+# Run each cell in sequence to set up the enhanced AI system
+
+#@title 🚀 **Install Dependencies and Setup**
+#@markdown ### Install required packages and initialize the system
+
+# Install required packages
+!pip install anthropic numpy pandas matplotlib seaborn ipywidgets
+
+import anthropic
+import json
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from collections import defaultdict, Counter
+from dataclasses import dataclass
+from typing import Dict, List, Any, Optional, Tuple
+from datetime import datetime
+import re
+import ipywidgets as widgets
+from IPython.display import display, HTML, Markdown, clear_output
+import time
+
+print("🎉 Dependencies installed successfully!")
+print("📝 Ready to set up your Paradox-Aware AI system")
+
+#@title 🔑 **API Key Setup**
+#@markdown ### Enter your Anthropic API key
+
+# API Key input (secure)
+api_key_widget = widgets.Password(
+    placeholder='Enter your Anthropic API key here...',
+    description='API Key:',
+    layout=widgets.Layout(width='500px'),
+    style={'description_width': '80px'}
+)
+
+test_button = widgets.Button(
+    description='🧪 Test API Connection',
+    button_style='info',
+    layout=widgets.Layout(width='200px')
+)
+
+api_status = widgets.Output()
+
+def test_api_connection(b):
+    with api_status:
+        api_status.clear_output()
+        
+        if not api_key_widget.value.strip():
+            print("❌ Please enter your API key first!")
+            return
+        
+        try:
+            print("🔄 Testing API connection...")
+            client = anthropic.Anthropic(api_key=api_key_widget.value.strip())
+            
+            response = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=50,
+                messages=[
+                    {"role": "user", "content": "Hello! Please respond with just 'API test successful'"}
+                ]
+            )
+            
+            if response.content[0].text.strip():
+                print("✅ API connection successful!")
+                print(f"📡 Response: {response.content[0].text.strip()}")
+                global ANTHROPIC_CLIENT
+                ANTHROPIC_CLIENT = client
+                return True
+            else:
+                print("❌ API test failed - no response received")
+                return False
+                
+        except Exception as e:
+            print(f"❌ API connection failed: {str(e)}")
+            print("💡 Make sure your API key is correct and has sufficient credits")
+            return False
+
+test_button.on_click(test_api_connection)
+
+display(HTML("<h3>🔑 API Key Configuration</h3>"))
+display(HTML("<p>Enter your Anthropic API key to enable the enhanced AI features:</p>"))
+display(api_key_widget)
+display(test_button)
+display(api_status)
+
+# Global client variable
+ANTHROPIC_CLIENT = None
+
+#@title 🌀 **Universal Paradox Engine** 
+#@markdown ### Core paradox detection system (from your existing code)
+
+@dataclass
+class ContradictionResult:
+    """Results of contradiction analysis"""
+    has_contradiction: bool
+    contradiction_type: str
+    confidence: float
+    explanation: str
+    evidence_quality: float
+    resolution_suggestions: List[str]
+    domain: str
+
+@dataclass
+class ClaimAnalysis:
+    """Analysis of individual claims"""
+    claim_text: str
+    claim_type: str
+    resolution_mechanism: str
+    evidence_strength: float
+    internal_consistency: float
+    status: str  # 'resolved', 'partial', 'failed'
+
+class UniversalParadoxEngine:
+    """Universal contradiction detection and analysis system"""
+    
+    def __init__(self):
+        self.domain_patterns = {
+            'physics': {
+                'keywords': ['physics', 'quantum', 'relativity', 'particle', 'energy', 'mass', 
+                           'velocity', 'acceleration', 'force', 'wave', 'field', 'electromagnetic', 
+                           'entropy', 'thermodynamics', 'momentum', 'gravity'],
+                'math_indicators': ['equation', 'formula', '=', '∫', '∂', '∇', 'Σ', '∝'],
+                'evidence_types': ['experimental', 'theoretical', 'mathematical', 'observational']
+            },
+            'legal': {
+                'keywords': ['law', 'legal', 'court', 'judge', 'statute', 'precedent', 
+                           'constitution', 'contract', 'liability', 'tort', 'jurisdiction', 
+                           'evidence', 'testimony', 'ruling', 'appeal'],
+                'math_indicators': [],
+                'evidence_types': ['precedent', 'statutory', 'constitutional', 'case_law']
+            },
+            'business': {
+                'keywords': ['business', 'market', 'revenue', 'profit', 'customer', 'strategy', 
+                           'competition', 'pricing', 'sales', 'investment', 'ROI', 'growth', 
+                           'valuation', 'economics', 'finance'],
+                'math_indicators': ['%', '$', 'revenue', 'cost', 'margin', 'ROI', 'growth rate'],
+                'evidence_types': ['market_data', 'financial', 'statistical', 'case_study']
+            },
+            'philosophy': {
+                'keywords': ['philosophy', 'existence', 'consciousness', 'reality', 'truth', 
+                           'knowledge', 'ethics', 'morality', 'logic', 'reasoning', 'metaphysics', 
+                           'epistemology', 'ontology', 'phenomenology'],
+                'math_indicators': ['logic', 'therefore', 'premise', 'conclusion'],
+                'evidence_types': ['logical', 'conceptual', 'intuitive', 'dialectical']
+            },
+            'medical': {
+                'keywords': ['medical', 'health', 'disease', 'treatment', 'diagnosis', 'clinical', 
+                           'patient', 'therapy', 'drug', 'surgery', 'symptoms', 'pathology', 
+                           'epidemiology', 'immunology'],
+                'math_indicators': ['p <', 'confidence interval', 'efficacy', 'n =', 'statistical'],
+                'evidence_types': ['clinical_trial', 'observational', 'meta_analysis', 'case_report']
+            }
+        }
+        
+        self.contradiction_patterns = {
+            'direct_negation': [
+                (r'(.+) is true', r'\1 is false'),
+                (r'(.+) exists', r'\1 does not exist'),
+                (r'all (.+) are', r'no \1 are'),
+                (r'always (.+)', r'never \1'),
+                (r'(.+) increases', r'\1 decreases')
+            ],
+            'property_mismatch': [
+                (r'(.+) has (.+)', r'\1 lacks \2'),
+                (r'(.+) = (\d+)', r'\1 = (?!\2)\d+'),
+                (r'(.+) is (\w+)', r'\1 is (?!\2)\w+')
+            ],
+            'causal_conflict': [
+                (r'(.+) causes (.+)', r'\2 prevents \1'),
+                (r'(.+) leads to (.+)', r'\2 eliminates \1'),
+                (r'because (.+), (.+)', r'despite \1, not \2')
+            ]
+        }
+    
+    def detect_domain(self, text: str) -> str:
+        """Auto-detect the domain of the input text"""
+        text_lower = text.lower()
+        domain_scores = {}
+        
+        for domain, patterns in self.domain_patterns.items():
+            score = 0
+            for keyword in patterns['keywords']:
+                score += text_lower.count(keyword)
+            for indicator in patterns['math_indicators']:
+                if indicator in text:
+                    score += 2
+            domain_scores[domain] = score
+        
+        if max(domain_scores.values()) == 0:
+            return 'general'
+        return max(domain_scores, key=domain_scores.get)
+    
+    def extract_claims(self, text: str) -> List[str]:
+        """Extract potential claims from text"""
+        sentences = re.split(r'[.!?]+', text)
+        claims = []
+        
+        claim_indicators = [
+            'resolves', 'solves', 'explains', 'proves', 'demonstrates', 'shows',
+            'establishes', 'confirms', 'validates', 'supports', 'indicates',
+            'suggests', 'implies', 'reveals', 'addresses', 'eliminates'
+        ]
+        
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) < 10:
+                continue
+                
+            if any(indicator in sentence.lower() for indicator in claim_indicators):
+                claims.append(sentence)
+            elif re.search(r'(therefore|thus|consequently|hence)', sentence.lower()):
+                claims.append(sentence)
+            elif re.search(r'(because|since|due to)', sentence.lower()):
+                claims.append(sentence)
+        
+        return claims[:10]
+    
+    def analyze_evidence_quality(self, text: str, domain: str) -> Dict[str, Any]:
+        """Analyze quality of evidence provided"""
+        evidence_score = 0.4
+        
+        numbers = len(re.findall(r'\d+\.?\d*', text))
+        if numbers > 0:
+            evidence_score += min(0.2, numbers * 0.05)
+        
+        domain_patterns = self.domain_patterns.get(domain, {})
+        math_indicators = domain_patterns.get('math_indicators', [])
+        math_content = sum(1 for indicator in math_indicators if indicator in text)
+        if math_content > 0:
+            evidence_score += min(0.2, math_content * 0.1)
+        
+        citations = len(re.findall(r'\([12]\d{3}\)|et al\.|according to', text, re.IGNORECASE))
+        if citations > 0:
+            evidence_score += min(0.15, citations * 0.05)
+        
+        evidence_types = domain_patterns.get('evidence_types', [])
+        domain_evidence = sum(1 for etype in evidence_types 
+                            if etype.replace('_', ' ') in text.lower())
+        if domain_evidence > 0:
+            evidence_score += min(0.15, domain_evidence * 0.05)
+        
+        return {
+            'overall_score': min(0.95, evidence_score),
+            'quantitative_evidence': numbers,
+            'mathematical_content': math_content,
+            'citations': citations,
+            'domain_specific': domain_evidence,
+            'has_strong_evidence': evidence_score > 0.7
+        }
+    
+    def check_internal_contradictions(self, text: str) -> List[Dict[str, Any]]:
+        """Check for internal contradictions within the text"""
+        contradictions = []
+        sentences = re.split(r'[.!?]+', text.lower())
+        
+        for i, sent1 in enumerate(sentences):
+            for j, sent2 in enumerate(sentences[i+1:], i+1):
+                for pattern_type, patterns in self.contradiction_patterns.items():
+                    if (any(word in sent1 for word in ['not', 'never', 'no']) != 
+                        any(word in sent2 for word in ['not', 'never', 'no'])):
+                        
+                        words1 = set(sent1.split())
+                        words2 = set(sent2.split())
+                        overlap = len(words1 & words2) / max(len(words1), len(words2))
+                        
+                        if overlap > 0.4:
+                            contradictions.append({
+                                'type': pattern_type.replace('_', ' ').title(),
+                                'sentence1': sent1.strip(),
+                                'sentence2': sent2.strip(),
+                                'confidence': overlap,
+                                'explanation': f"Potential {pattern_type} detected"
+                            })
+        
+        return contradictions[:5]
+    
+    def analyze_claims(self, claims: List[str], domain: str) -> List[ClaimAnalysis]:
+        """Analyze individual claims for resolution mechanisms"""
+        claim_analyses = []
+        
+        resolution_indicators = ['by', 'through', 'via', 'using', 'because', 'since', 'due to']
+        mechanism_words = ['mechanism', 'process', 'method', 'approach', 'framework', 'model']
+        
+        for claim in claims:
+            has_mechanism = any(indicator in claim.lower() for indicator in resolution_indicators)
+            has_explicit_mechanism = any(word in claim.lower() for word in mechanism_words)
+            
+            numbers_in_claim = len(re.findall(r'\d+\.?\d*', claim))
+            evidence_strength = 0.5 + (numbers_in_claim * 0.1) + (0.2 if has_explicit_mechanism else 0)
+            evidence_strength = min(0.9, evidence_strength)
+            
+            if has_mechanism and evidence_strength > 0.7:
+                status = 'resolved'
+            elif has_mechanism or evidence_strength > 0.5:
+                status = 'partial'
+            else:
+                status = 'failed'
+            
+            claim_analyses.append(ClaimAnalysis(
+                claim_text=claim[:100] + '...' if len(claim) > 100 else claim,
+                claim_type='resolution_claim',
+                resolution_mechanism='provided' if has_mechanism else 'missing',
+                evidence_strength=evidence_strength,
+                internal_consistency=0.8,
+                status=status
+            ))
+        
+        return claim_analyses
+    
+    def analyze_text(self, text: str, domain: str = None) -> Dict[str, Any]:
+        """Main analysis function"""
+        if domain is None:
+            domain = self.detect_domain(text)
+        
+        claims = self.extract_claims(text)
+        claim_analyses = self.analyze_claims(claims, domain)
+        evidence_quality = self.analyze_evidence_quality(text, domain)
+        contradictions = self.check_internal_contradictions(text)
+        
+        resolved_claims = [c for c in claim_analyses if c.status == 'resolved']
+        partial_claims = [c for c in claim_analyses if c.status == 'partial']
+        failed_claims = [c for c in claim_analyses if c.status == 'failed']
+        
+        resolution_ratio = len(resolved_claims) / max(1, len(claim_analyses))
+        
+        if resolution_ratio >= 0.8 and evidence_quality['overall_score'] >= 0.6:
+            overall_status = 'RESOLVES'
+            status_icon = '✅'
+        elif resolution_ratio >= 0.4:
+            overall_status = 'PARTIAL'
+            status_icon = '🎯'
+        else:
+            overall_status = 'FAILS'
+            status_icon = '❌'
+        
+        return {
+            'domain': domain,
+            'overall_status': overall_status,
+            'status_icon': status_icon,
+            'confidence': 0.75 + (resolution_ratio * 0.2),
+            'claims': {
+                'total': len(claim_analyses),
+                'resolved': len(resolved_claims),
+                'partial': len(partial_claims),
+                'failed': len(failed_claims),
+                'analyses': claim_analyses
+            },
+            'evidence_quality': evidence_quality,
+            'contradictions': contradictions,
+            'resolution_ratio': resolution_ratio
+        }
+
+# Initialize the paradox engine
+engine = UniversalParadoxEngine()
+print("🌀 Universal Paradox Engine initialized!")
+
+#@title 🤖 **Enhanced AI with Paradox Detection**
+#@markdown ### Claude + Paradox Engine integration
+
+class ParadoxAwareAI:
+    """
+    Enhanced AI that combines Claude with the Universal Paradox Engine
+    """
+    
+    def __init__(self, client, paradox_engine):
+        self.client = client
+        self.engine = paradox_engine
+        self.conversation_history = []
+        
+    def call_claude_api(self, prompt: str, system_prompt: str = None, max_tokens: int = 1500) -> str:
+        """Make API call to Claude"""
+        try:
+            messages = []
+            messages.extend(self.conversation_history)
+            messages.append({"role": "user", "content": prompt})
+            
+            response = self.client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=max_tokens,
+                system=system_prompt or "You are a helpful, logical, and precise AI assistant. Focus on clear reasoning and avoiding contradictions.",
+                messages=messages
+            )
+            
+            return response.content[0].text.strip()
+            
+        except Exception as e:
+            return f"API Error: {str(e)}"
+    
+    def enhanced_response(self, user_query: str, max_iterations: int = 2) -> Dict[str, Any]:
+        """
+        Generate response with paradox checking and refinement
+        """
+        
+        print(f"🤔 Processing: {user_query[:80]}...")
+        
+        # Stage 1: Initial response
+        initial_response = self.call_claude_api(user_query)
+        current_response = initial_response
+        
+        analysis_log = []
+        iteration = 0
+        
+        while iteration < max_iterations:
+            print(f"🔍 Checking for logical issues (iteration {iteration + 1})...")
+            
+            # Analyze current response for contradictions
+            paradox_analysis = self.engine.analyze_text(current_response)
+            analysis_log.append({
+                'iteration': iteration + 1,
+                'response_preview': current_response[:150] + "...",
+                'analysis': paradox_analysis
+            })
+            
+            # If response is good enough, we're done
+            if (paradox_analysis['overall_status'] in ['RESOLVES', 'PARTIAL'] and 
+                len(paradox_analysis['contradictions']) <= 1):
+                print(f"✅ Response validated - logical quality acceptable")
+                break
+            
+            # If issues found and we can still refine
+            if iteration < max_iterations - 1:
+                issues = []
+                if paradox_analysis['contradictions']:
+                    for contradiction in paradox_analysis['contradictions']:
+                        issues.append(f"- {contradiction['type']}: {contradiction['explanation']}")
+                
+                if paradox_analysis['overall_status'] == 'FAILS':
+                    issues.append("- Logical consistency needs improvement")
+                
+                refinement_prompt = f"""
+The following response has some logical issues that need addressing:
+
+ORIGINAL QUERY: {user_query}
+
+RESPONSE WITH ISSUES: {current_response}
+
+LOGICAL CONCERNS:
+{chr(10).join(issues) if issues else 'General logical consistency improvements needed'}
+
+Please provide a revised response that:
+1. Maintains the helpful content from the original response
+2. Resolves any logical contradictions or inconsistencies
+3. Uses clearer, more consistent reasoning
+4. Directly addresses the original query
+
+IMPROVED RESPONSE:
+"""
+                
+                print(f"🔧 Refining response to address {len(paradox_analysis['contradictions'])} issues...")
+                current_response = self.call_claude_api(refinement_prompt)
+            
+            iteration += 1
+        
+        # Final analysis
+        final_analysis = self.engine.analyze_text(current_response)
+        
+        # Update conversation history
+        self.conversation_history.append({"role": "user", "content": user_query})
+        self.conversation_history.append({"role": "assistant", "content": current_response})
+        
+        # Keep conversation history manageable
+        if len(self.conversation_history) > 6:
+            self.conversation_history = self.conversation_history[-6:]
+        
+        return {
+            'query': user_query,
+            'final_response': current_response,
+            'original_response': initial_response,
+            'iterations_used': iteration,
+            'final_analysis': final_analysis,
+            'analysis_log': analysis_log,
+            'was_improved': current_response != initial_response,
+            'logical_quality': final_analysis['confidence'],
+            'status': final_analysis['overall_status']
+        }
+    
+    def compare_perspectives(self, topic: str, perspectives: List[str]) -> Dict[str, Any]:
+        """
+        Analyze multiple perspectives for logical consistency
+        """
+        
+        print(f"🔍 Analyzing {len(perspectives)} perspectives on: {topic}")
+        
+        perspective_analyses = []
+        
+        for i, perspective in enumerate(perspectives, 1):
+            prompt = f"""
+Analyze this perspective on "{topic}":
+
+PERSPECTIVE: {perspective}
+
+Please provide:
+1. The core logical structure and key assumptions
+2. Strengths of this perspective
+3. Potential weaknesses or limitations
+4. Overall assessment of logical consistency
+
+Analysis:
+"""
+            
+            analysis = self.call_claude_api(prompt)
+            paradox_check = self.engine.analyze_text(perspective + " " + analysis)
+            
+            perspective_analyses.append({
+                'perspective': perspective,
+                'ai_analysis': analysis,
+                'paradox_check': paradox_check,
+                'logical_score': paradox_check['confidence']
+            })
+            
+            print(f"   📋 Perspective {i}: {paradox_check['status_icon']} {paradox_check['overall_status']}")
+        
+        # Synthesis
+        synthesis_prompt = f"""
+Topic: {topic}
+
+I've analyzed multiple perspectives. Here's what I found:
+
+{self._format_analyses_for_synthesis(perspective_analyses)}
+
+Please provide a synthesis that:
+1. Compares the logical strength of each perspective
+2. Identifies areas of agreement and disagreement
+3. Highlights the most logically sound elements
+4. Offers a balanced conclusion about the topic
+
+Synthesis:
+"""
+        
+        synthesis = self.call_claude_api(synthesis_prompt, max_tokens=2000)
+        synthesis_analysis = self.engine.analyze_text(synthesis)
+        
+        return {
+            'topic': topic,
+            'perspectives': perspectives,
+            'individual_analyses': perspective_analyses,
+            'synthesis': synthesis,
+            'synthesis_analysis': synthesis_analysis,
+            'best_perspective': max(perspective_analyses, key=lambda x: x['logical_score']),
+            'overall_quality': synthesis_analysis['confidence']
+        }
+    
+    def _format_analyses_for_synthesis(self, analyses: List[Dict]) -> str:
+        """Format analyses for synthesis prompt"""
+        formatted = []
+        for i, analysis in enumerate(analyses, 1):
+            status = analysis['paradox_check']['overall_status']
+            score = analysis['paradox_check']['confidence']
+            formatted.append(f"""
+PERSPECTIVE {i}: {analysis['perspective'][:100]}...
+Logical Quality: {status} (Score: {score:.2f})
+Analysis Summary: {analysis['ai_analysis'][:200]}...
+""")
+        return "\n".join(formatted)
+
+# Initialize the enhanced AI (will be set up after API key is confirmed)
+enhanced_ai = None
+
+#@title 🎯 **Interactive Interface**
+#@markdown ### User-friendly interface for the enhanced AI
+
+def create_enhanced_ai_interface():
+    """Create the main interface for the enhanced AI"""
+    
+    # Query input
+    query_widget = widgets.Textarea(
+        value='',
+        placeholder='Ask me anything! I\'ll check my response for logical consistency and refine it if needed.\n\nExamples:\n• "Explain how blockchain can solve income inequality"\n• "What are the pros and cons of renewable energy?"\n• "How can AI both eliminate and create jobs?"',
+        description='Your Query:',
+        layout=widgets.Layout(width='100%', height='120px'),
+        style={'description_width': 'initial'}
+    )
+    
+    # Analysis mode
+    mode_widget = widgets.Dropdown(
+        options=['Enhanced Response', 'Compare Perspectives'],
+        value='Enhanced Response',
+        description='Mode:',
+        style={'description_width': 'initial'}
+    )
+    
+    # Additional perspectives (for comparison mode)
+    perspectives_widget = widgets.Textarea(
+        value='',
+        placeholder='Enter different perspectives separated by "---"\n\nExample:\nPerspective 1: Technology will solve climate change\n---\nPerspective 2: Policy changes are more important\n---\nPerspective 3: Individual behavior change is key',
+        description='Perspectives:',
+        layout=widgets.Layout(width='100%', height='100px'),
+        style={'description_width': 'initial'}
+    )
+    
+    # Initially hide perspectives widget
+    perspectives_widget.layout.display = 'none'
+    
+    def on_mode_change(change):
+        if change['new'] == 'Compare Perspectives':
+            perspectives_widget.layout.display = 'block'
+        else:
+            perspectives_widget.layout.display = 'none'
+    
+    mode_widget.observe(on_mode_change, names='value')
+    
+    # Process button
+    process_button = widgets.Button(
+        description='🚀 PROCESS WITH AI',
+        button_style='success',
+        layout=widgets.Layout(width='250px', height='50px')
+    )
+    
+    # Output area
+    output = widgets.Output()
+    
+    def on_process_click(b):
+        with output:
+            output.clear_output()
+            
+            if not ANTHROPIC_CLIENT:
+                print("❌ Please set up your API key first using the section above!")
+                return
+            
+            if not query_widget.value.strip():
+                print("❌ Please enter a query!")
+                return
+            
+            global enhanced_ai
+            if enhanced_ai is None:
+                enhanced_ai = ParadoxAwareAI(ANTHROPIC_CLIENT, engine)
+                print("🤖 Enhanced AI initialized!")
+            
+            try:
+                if mode_widget.value == 'Enhanced Response':
+                    print("🧠 Generating enhanced response with logical validation...")
+                    result = enhanced_ai.enhanced_response(query_widget.value)
+                    display_enhanced_result(result)
+                    
+                elif mode_widget.value == 'Compare Perspectives':
+                    if not perspectives_widget.value.strip():
+                        print("❌ Please enter perspectives to compare!")
+                        return
+                    
+                    perspectives = [p.strip() for p in perspectives_widget.value.split('---') if p.strip()]
+                    if len(perspectives) < 2:
+                        print("❌ Please enter at least 2 perspectives separated by '---'")
+                        return
+                    
+                    print(f"🔍 Comparing {len(perspectives)} perspectives...")
+                    result = enhanced_ai.compare_perspectives(query_widget.value, perspectives)
+                    display_comparison_result(result)
+                    
+            except Exception as e:
+                print(f"❌ Error: {str(e)}")
+                print("💡 Make sure your API key is working and try again")
+    
+    process_button.on_click(on_process_click)
+    
+    # Display interface
+    display(HTML("<h2>🤖 Enhanced Paradox-Aware AI Assistant</h2>"))
+    display(HTML("<p>I'll analyze my responses for logical consistency and refine them as needed!</p>"))
+    display(query_widget)
+    display(mode_widget)
+    display(perspectives_widget)
+    display(process_button)
+    display(output)
+
+def display_enhanced_result(result: Dict[str, Any]):
+    """Display the enhanced AI result"""
+    
+    # Header
+    status_colors = {'RESOLVES': '🟢', 'PARTIAL': '🟡', 'FAILS': '🔴'}
+    color = status_colors.get(result['status'], '⚪')
+    
+    display(HTML(f"""
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                color: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
+        <h3>🤖 Enhanced AI Response</h3>
+        <p><strong>Logical Quality:</strong> {result['status']} {color} ({result['logical_quality']:.1%} confidence)</p>
+        <p><strong>Refinement:</strong> {'✅ Response improved through iteration' if result['was_improved'] else '✅ Original response was already good'}</p>
+    </div>
+    """))
+    
+    # Main response
+    display(HTML(f"""
+    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #28a745;">
+        <h4>📝 Final Response:</h4>
+        <div style="line-height: 1.6; color: #333;">
+            {result['final_response'].replace(chr(10), '<br>')}
+        </div>
+    </div>
+    """))
+    
+    # Analysis details
+    final_analysis = result['final_analysis']
+    
+    display(HTML(f"""
+    <div style="background: #fff; padding: 15px; border-radius: 8px; margin: 10px 0; border: 1px solid #ddd;">
+        <h4>📊 Logical Analysis:</h4>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center;">
+            <div><strong>Domain:</strong> {final_analysis['domain'].title()}</div>
+            <div><strong>Claims Analyzed:</strong> {final_analysis['claims']['total']}</div>
+            <div><strong>Evidence Quality:</strong> {final_analysis['evidence_quality']['overall_score']:.2f}/1.0</div>
+        </div>
+    </div>
+    """))
+    
+    # Show improvements if any
+    if result['was_improved']:
+        display(HTML(f"""
+        <details style="margin: 15px 0;">
+            <summary style="cursor: pointer; padding: 10px; background: #e8f5e8; border-radius: 5px;">
+                <strong>🔧 View Improvement Process ({result['iterations_used']} iterations)</strong>
+            </summary>
+            <div style="padding: 15px; background: #f8f9fa; margin-top: 10px; border-radius: 5px;">
+                <p><strong>Original Response Preview:</strong></p>
+                <div style="font-style: italic; color: #666; margin-bottom: 15px;">
+                    {result['original_response'][:300]}...
+                </div>
+                <p><strong>Improvements Made:</strong></p>
+                <ul>
+                    <li>Enhanced logical consistency</li>
+                    <li>Reduced contradictions</li>
+                    <li>Strengthened reasoning</li>
+                </ul>
+            </div>
+        </details>
+        """))
+
+def display_comparison_result(result: Dict[str, Any]):
+    """Display perspective comparison result"""
+    
+    display(HTML(f"""
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                color: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
+        <h3>🔍 Perspective Comparison Analysis</h3>
+        <p><strong>Topic:</strong> {result['topic']}</p>
+        <p><strong>Perspectives Analyzed:</strong> {len(result['perspectives'])}</p>
+        <p><strong>Overall Quality:</strong> {result['overall_quality']:.1%}</p>
+    </div>
+    """))
+    
+    # Individual perspective scores
+    display(HTML("<h4>📊 Individual Perspective Analysis:</h4>"))
+    
+    for i, analysis in enumerate(result['individual_analyses'], 1):
+        status = analysis['paradox_check']['overall_status']
+        score = analysis['paradox_check']['confidence']
+        status_color = {'RESOLVES': 'green', 'PARTIAL': 'orange', 'FAILS': 'red'}[status]
+        
+        display(HTML(f"""
+        <div style="border-left: 4px solid {status_color}; padding: 15px; margin: 10px 0; background: #f8f9fa;">
+            <h5>Perspective {i}: {status} ({score:.1%})</h5>
+            <p><strong>Position:</strong> {analysis['perspective']}</p>
+            <details style="margin-top: 10px;">
+                <summary style="cursor: pointer; color: #007bff;">View AI Analysis</summary>
+                <div style="margin-top: 10px; padding: 10px; background: white; border-radius: 5px;">
+                    {analysis['ai_analysis'].replace(chr(10), '<br>')}
+                </div>
+            </details>
+        </div>
+        """))
+    
+    # Best perspective highlight
+    best = result['best_perspective']
+    display(HTML(f"""
+    <div style="background: #d4edda; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #28a745;">
+        <h4>🏆 Most Logically Consistent Perspective:</h4>
+        <p><strong>Score:</strong> {best['logical_score']:.1%}</p>
+        <p><strong>Position:</strong> {best['perspective']}</p>
+    </div>
+    """))
+    
+    # Synthesis
+    display(HTML(f"""
+    <div style="background: #fff; padding: 20px; border-radius: 8px; margin: 15px 0; border: 1px solid #ddd;">
+        <h4>🔗 AI Synthesis:</h4>
+        <div style="line-height: 1.6; color: #333;">
+            {result['synthesis'].replace(chr(10), '<br>')}
+        </div>
+    </div>
+    """))
+
+#@title 🎮 **Sample Queries & Quick Tests**
+#@markdown ### Pre-loaded examples to test the system
+
+def create_sample_interface():
+    """Create interface with sample queries"""
+    
+    sample_queries = {
+        "Paradoxical Claims": "Artificial intelligence will simultaneously eliminate all human jobs while creating unprecedented employment opportunities. This technological revolution will make human workers obsolete but also indispensable for the new economy.",
+        
+        "Climate Change Solutions": "What are the most effective approaches to addressing climate change, and how do they compare in terms of feasibility and impact?",
+        
+        "Cryptocurrency Analysis": "Cryptocurrency represents both the future of decentralized finance and a speculative bubble that threatens economic stability. How can both perspectives be true?",
+        
+        "Universal Basic Income": "Analyze whether Universal Basic Income would reduce poverty or create economic dependency, considering multiple economic perspectives.",
+        
+        "Social Media Impact": "Social media platforms simultaneously connect people globally while isolating them from meaningful local relationships. How should society respond to this paradox?"
+    }
+    
+    sample_perspectives = {
+        "AI Future": [
+            "AI will enhance human capabilities and create new types of jobs that we can't imagine yet",
+            "AI will replace most human workers, leading to massive unemployment and social upheaval", 
+            "AI development should be slowed down to give society time to adapt to the changes"
+        ],
+        
+        "Education Reform": [
+            "Traditional classroom education with standardized testing is the most effective approach",
+            "Personalized, technology-driven learning adapted to individual students is superior",
+            "Experiential learning through real-world projects should replace theoretical instruction"
+        ],
+        
+        "Healthcare Systems": [
+            "Free market competition leads to the most efficient and innovative healthcare",
+            "Universal government-provided healthcare ensures equal access and better outcomes",
+            "Hybrid public-private systems combine the benefits of both approaches"
+        ]
+    }
+    
+    # Sample query selector
+    query_selector = widgets.Dropdown(
+        options=['Custom Query'] + list(sample_queries.keys()),
+        value='Custom Query',
+        description='Sample Query:',
+        layout=widgets.Layout(width='300px'),
+        style={'description_width': '100px'}
+    )
+    
+    # Sample perspectives selector
+    perspectives_selector = widgets.Dropdown(
+        options=['Custom Perspectives'] + list(sample_perspectives.keys()),
+        value='Custom Perspectives',
+        description='Sample Perspectives:',
+        layout=widgets.Layout(width='300px'),
+        style={'description_width': '130px'}
+    )
+    
+    load_query_button = widgets.Button(
+        description='📝 Load Sample Query',
+        button_style='info',
+        layout=widgets.Layout(width='200px')
+    )
+    
+    load_perspectives_button = widgets.Button(
+        description='📋 Load Sample Perspectives', 
+        button_style='info',
+        layout=widgets.Layout(width='200px')
+    )
+    
+    sample_output = widgets.Output()
+    
+    def load_sample_query(b):
+        with sample_output:
+            sample_output.clear_output()
+            if query_selector.value in sample_queries:
+                selected_query = sample_queries[query_selector.value]
+                print(f"📝 Loaded sample query: {query_selector.value}")
+                print(f"Query: {selected_query}")
+                print("\n💡 Copy this query to the main interface above!")
+                
+                # Try to update the main query widget if available
+                try:
+                    query_widget.value = selected_query
+                    print("✅ Query loaded into main interface!")
+                except:
+                    pass
+            else:
+                print("Please select a sample query first!")
+    
+    def load_sample_perspectives(b):
+        with sample_output:
+            sample_output.clear_output()
+            if perspectives_selector.value in sample_perspectives:
+                selected_perspectives = sample_perspectives[perspectives_selector.value]
+                perspectives_text = "\n---\n".join(selected_perspectives)
+                print(f"📋 Loaded sample perspectives: {perspectives_selector.value}")
+                print("Perspectives:")
+                for i, p in enumerate(selected_perspectives, 1):
+                    print(f"{i}. {p}")
+                print("\n💡 Copy these perspectives to the main interface above!")
+                
+                # Try to update the main perspectives widget if available
+                try:
+                    perspectives_widget.value = perspectives_text
+                    print("✅ Perspectives loaded into main interface!")
+                except:
+                    pass
+            else:
+                print("Please select sample perspectives first!")
+    
+    load_query_button.on_click(load_sample_query)
+    load_perspectives_button.on_click(load_sample_perspectives)
+    
+    display(HTML("<h3>🎮 Sample Queries & Quick Tests</h3>"))
+    display(HTML("<p>Load pre-made examples to test the enhanced AI system:</p>"))
+    
+    display(widgets.HBox([query_selector, load_query_button]))
+    display(widgets.HBox([perspectives_selector, load_perspectives_button]))
+    display(sample_output)
+
+# Create the sample interface
+create_sample_interface()
+
+#@title 💾 **Results Export & History**
+#@markdown ### Save and export your analysis results
+
+class ResultsManager:
+    """Manage and export analysis results"""
+    
+    def __init__(self):
+        self.results_history = []
+        self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    def save_result(self, result: Dict[str, Any], result_type: str = "enhanced_response"):
+        """Save a result to history"""
+        saved_result = {
+            'id': len(self.results_history) + 1,
+            'timestamp': datetime.now().isoformat(),
+            'type': result_type,
+            'data': result,
+            'session_id': self.session_id
+        }
+        
+        self.results_history.append(saved_result)
+        return saved_result['id']
+    
+    def get_results_summary(self) -> pd.DataFrame:
+        """Get summary of all results as DataFrame"""
+        if not self.results_history:
+            return pd.DataFrame()
+        
+        summary_data = []
+        for result in self.results_history:
+            if result['type'] == 'enhanced_response':
+                data = result['data']
+                summary_data.append({
+                    'ID': result['id'],
+                    'Timestamp': result['timestamp'][:19],
+                    'Type': 'Enhanced Response',
+                    'Query': data['query'][:50] + '...' if len(data['query']) > 50 else data['query'],
+                    'Status': data['status'],
+                    'Quality': f"{data['logical_quality']:.1%}",
+                    'Improved': 'Yes' if data['was_improved'] else 'No',
+                    'Iterations': data['iterations_used']
+                })
+            elif result['type'] == 'comparison':
+                data = result['data']
+                summary_data.append({
+                    'ID': result['id'],
+                    'Timestamp': result['timestamp'][:19],
+                    'Type': 'Perspective Comparison',
+                    'Query': data['topic'][:50] + '...' if len(data['topic']) > 50 else data['topic'],
+                    'Status': 'N/A',
+                    'Quality': f"{data['overall_quality']:.1%}",
+                    'Improved': 'N/A',
+                    'Iterations': f"{len(data['perspectives'])} perspectives"
+                })
+        
+        return pd.DataFrame(summary_data)
+    
+    def export_results(self, format_type: str = "json") -> str:
+        """Export results in specified format"""
+        if not self.results_history:
+            return "No results to export"
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        if format_type == "json":
+            filename = f"paradox_ai_results_{timestamp}.json"
+            export_data = {
+                'export_metadata': {
+                    'session_id': self.session_id,
+                    'export_timestamp': datetime.now().isoformat(),
+                    'total_results': len(self.results_history),
+                    'export_type': 'paradox_aware_ai_results'
+                },
+                'results': self.results_history
+            }
+            
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, indent=2, ensure_ascii=False, default=str)
+            
+            return filename
+        
+        elif format_type == "csv":
+            filename = f"paradox_ai_summary_{timestamp}.csv"
+            df = self.get_results_summary()
+            df.to_csv(filename, index=False)
+            return filename
+        
+        else:
+            return "Unsupported format"
+
+# Initialize results manager
+results_manager = ResultsManager()
+
+def create_results_interface():
+    """Create interface for managing results"""
+    
+    export_format = widgets.Dropdown(
+        options=['JSON (Detailed)', 'CSV (Summary)'],
+        value='JSON (Detailed)',
+        description='Export Format:',
+        style={'description_width': 'initial'}
+    )
+    
+    export_button = widgets.Button(
+        description='📤 Export Results',
+        button_style='success',
+        layout=widgets.Layout(width='200px')
+    )
+    
+    view_history_button = widgets.Button(
+        description='📋 View History',
+        button_style='info',
+        layout=widgets.Layout(width='200px')
+    )
+    
+    clear_history_button = widgets.Button(
+        description='🗑️ Clear History',
+        button_style='warning',
+        layout=widgets.Layout(width='200px')
+    )
+    
+    results_output = widgets.Output()
+    
+    def export_results(b):
+        with results_output:
+            if not results_manager.results_history:
+                print("❌ No results to export! Run some analyses first.")
+                return
+            
+            format_type = "json" if "JSON" in export_format.value else "csv"
+            filename = results_manager.export_results(format_type)
+            
+            print(f"✅ Results exported to: {filename}")
+            print(f"📊 Exported {len(results_manager.results_history)} results")
+            
+            # Download the file
+            try:
+                from google.colab import files
+                files.download(filename)
+                print("💾 File downloaded to your computer!")
+            except:
+                print("💾 File saved in Colab environment")
+    
+    def view_history(b):
+        with results_output:
+            results_output.clear_output()
+            
+            if not results_manager.results_history:
+                print("📭 No results in history yet. Run some analyses first!")
+                return
+            
+            print(f"📊 Analysis History ({len(results_manager.results_history)} results):\n")
+            
+            df = results_manager.get_results_summary()
+            if not df.empty:
+                display(HTML(df.to_html(index=False, escape=False)))
+            else:
+                print("No summary data available")
+    
+    def clear_history(b):
+        with results_output:
+            results_output.clear_output()
+            results_manager.results_history.clear()
+            print("🗑️ History cleared!")
+    
+    export_button.on_click(export_results)
+    view_history_button.on_click(view_history)
+    clear_history_button.on_click(clear_history)
+    
+    display(HTML("<h3>💾 Results Management</h3>"))
+    display(widgets.HBox([view_history_button, export_format, export_button, clear_history_button]))
+    display(results_output)
+
+# Create results interface
+create_results_interface()
+
+# Now create the main interface
+create_enhanced_ai_interface()
+
+#@title 🎉 **System Ready!**
+#@markdown ### Your Paradox-Aware AI is now ready to use
+
+print("""
+🎉 **PARADOX-AWARE AI SYSTEM READY!** 🎉
+
+✅ Universal Paradox Engine: Loaded and ready
+🤖 Enhanced AI Integration: Ready (needs API key)
+🎯 Interactive Interface: Created above
+📊 Results Management: Available
+🎮 Sample Queries: Available for testing
+
+🚀 **Quick Start Guide:**
+
+1. **Set API Key**: Enter your Anthropic API key in the section above and test the connection
+2. **Try a Sample**: Use the sample queries to test the system
+3. **Ask Questions**: Use the main interface to ask any question
+4. **Compare Views**: Switch to "Compare Perspectives" mode to analyze multiple viewpoints
+5. **Export Results**: Save your analysis results for later use
+
+💡 **What Makes This Special:**
+
+• **Logical Validation**: Every AI response is checked for contradictions
+• **Automatic Refinement**: Responses are improved if logical issues are found
+• **Multi-Perspective Analysis**: Compare different viewpoints objectively
+• **Domain Detection**: Automatically adapts analysis to different fields
+• **Evidence Assessment**: Evaluates the quality of supporting evidence
+• **Exportable Results**: Save and share your analysis results
+
+🧠 **The AI will now:**
+✓ Check its own responses for logical consistency
+✓ Refine answers to resolve contradictions
+✓ Provide confidence scores for logical quality
+✓ Compare multiple perspectives objectively
+✓ Highlight areas where reasoning could be stronger
+
+Ready to explore paradox-aware reasoning! 🌀
+""")
+
+# Auto-scroll to the interface
+display(HTML("""
+<script>
+setTimeout(function() {
+    // Scroll to the main interface
+    const interfaces = document.querySelectorAll('h2');
+    for (let i = 0; i < interfaces.length; i++) {
+        if (interfaces[i].textContent.includes('Enhanced Paradox-Aware AI Assistant')) {
+            interfaces[i].scrollIntoView({behavior: 'smooth', block: 'start'});
+            break;
+        }
+    }
+}, 1000);
+</script>
+"""))
