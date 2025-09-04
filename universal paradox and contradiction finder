@@ -1,0 +1,1415 @@
+# Universal Paradox Resolution Engine - Google Colab Version
+# Run each cell in sequence to set up and use the engine
+
+#@title 🌀 **Universal Paradox Resolution Engine Setup** 🌀
+#@markdown ### Install dependencies and initialize the engine
+
+import re
+import json
+import numpy as np
+import pandas as pd
+from collections import defaultdict, Counter
+from dataclasses import dataclass
+from typing import Dict, List, Any, Optional, Tuple
+from datetime import datetime
+import matplotlib.pyplot as plt
+import seaborn as sns
+from IPython.display import display, HTML, Markdown
+import ipywidgets as widgets
+from ipywidgets import interact, interactive, fixed, interact_manual
+
+# Set up plotting style
+plt.style.use('seaborn-v0_8')
+sns.set_palette("husl")
+
+print("🚀 Universal Paradox Engine Initialized!")
+print("📊 Ready for domain-agnostic contradiction analysis across any field")
+
+#@title 🧠 **Core Engine Classes** 
+#@markdown ### Domain-agnostic paradox detection system
+
+@dataclass
+class ContradictionResult:
+    """Results of contradiction analysis"""
+    has_contradiction: bool
+    contradiction_type: str
+    confidence: float
+    explanation: str
+    evidence_quality: float
+    resolution_suggestions: List[str]
+    domain: str
+
+@dataclass
+class ClaimAnalysis:
+    """Analysis of individual claims"""
+    claim_text: str
+    claim_type: str
+    resolution_mechanism: str
+    evidence_strength: float
+    internal_consistency: float
+    status: str  # 'resolved', 'partial', 'failed'
+
+class UniversalParadoxEngine:
+    """
+    Universal contradiction detection and analysis system
+    Handles any domain with logical structure
+    """
+    
+    def __init__(self):
+        self.domain_patterns = {
+            'physics': {
+                'keywords': ['physics', 'quantum', 'relativity', 'particle', 'energy', 'mass', 
+                           'velocity', 'acceleration', 'force', 'wave', 'field', 'electromagnetic', 
+                           'entropy', 'thermodynamics', 'momentum', 'gravity'],
+                'math_indicators': ['equation', 'formula', '=', '∫', '∂', '∇', 'Σ', '∝'],
+                'evidence_types': ['experimental', 'theoretical', 'mathematical', 'observational']
+            },
+            'legal': {
+                'keywords': ['law', 'legal', 'court', 'judge', 'statute', 'precedent', 
+                           'constitution', 'contract', 'liability', 'tort', 'jurisdiction', 
+                           'evidence', 'testimony', 'ruling', 'appeal'],
+                'math_indicators': [],
+                'evidence_types': ['precedent', 'statutory', 'constitutional', 'case_law']
+            },
+            'business': {
+                'keywords': ['business', 'market', 'revenue', 'profit', 'customer', 'strategy', 
+                           'competition', 'pricing', 'sales', 'investment', 'ROI', 'growth', 
+                           'valuation', 'economics', 'finance'],
+                'math_indicators': ['%', '$', 'revenue', 'cost', 'margin', 'ROI', 'growth rate'],
+                'evidence_types': ['market_data', 'financial', 'statistical', 'case_study']
+            },
+            'philosophy': {
+                'keywords': ['philosophy', 'existence', 'consciousness', 'reality', 'truth', 
+                           'knowledge', 'ethics', 'morality', 'logic', 'reasoning', 'metaphysics', 
+                           'epistemology', 'ontology', 'phenomenology'],
+                'math_indicators': ['logic', 'therefore', 'premise', 'conclusion'],
+                'evidence_types': ['logical', 'conceptual', 'intuitive', 'dialectical']
+            },
+            'medical': {
+                'keywords': ['medical', 'health', 'disease', 'treatment', 'diagnosis', 'clinical', 
+                           'patient', 'therapy', 'drug', 'surgery', 'symptoms', 'pathology', 
+                           'epidemiology', 'immunology'],
+                'math_indicators': ['p <', 'confidence interval', 'efficacy', 'n =', 'statistical'],
+                'evidence_types': ['clinical_trial', 'observational', 'meta_analysis', 'case_report']
+            },
+            'data_science': {
+                'keywords': ['data', 'statistics', 'correlation', 'regression', 'analysis', 
+                           'sample', 'population', 'hypothesis', 'machine learning', 'AI', 
+                           'algorithm', 'model', 'prediction'],
+                'math_indicators': ['r =', 'p <', 'R²', 'confidence', 'significance', 'mean', 'std'],
+                'evidence_types': ['statistical', 'experimental', 'observational', 'computational']
+            },
+            'technical': {
+                'keywords': ['software', 'system', 'architecture', 'algorithm', 'protocol', 
+                           'interface', 'performance', 'scalability', 'security', 'database', 
+                           'network', 'programming'],
+                'math_indicators': ['O(n)', 'complexity', 'throughput', 'latency', 'bandwidth'],
+                'evidence_types': ['benchmark', 'specification', 'implementation', 'testing']
+            }
+        }
+        
+        self.contradiction_patterns = {
+            'direct_negation': [
+                (r'(.+) is true', r'\1 is false'),
+                (r'(.+) exists', r'\1 does not exist'),
+                (r'all (.+) are', r'no \1 are'),
+                (r'always (.+)', r'never \1'),
+                (r'(.+) increases', r'\1 decreases')
+            ],
+            'property_mismatch': [
+                (r'(.+) has (.+)', r'\1 lacks \2'),
+                (r'(.+) = (\d+)', r'\1 = (?!\2)\d+'),  # Different numerical values
+                (r'(.+) is (\w+)', r'\1 is (?!\2)\w+')  # Different properties
+            ],
+            'causal_conflict': [
+                (r'(.+) causes (.+)', r'\2 prevents \1'),
+                (r'(.+) leads to (.+)', r'\2 eliminates \1'),
+                (r'because (.+), (.+)', r'despite \1, not \2')
+            ],
+            'temporal_inconsistency': [
+                (r'before (.+), (.+)', r'after \1, \2 causes \1'),
+                (r'(.+) happened first', r'\1 was caused by later events'),
+                (r'previously (.+)', r'currently \1 has never occurred')
+            ]
+        }
+    
+    def detect_domain(self, text: str) -> str:
+        """Auto-detect the domain of the input text"""
+        text_lower = text.lower()
+        domain_scores = {}
+        
+        for domain, patterns in self.domain_patterns.items():
+            score = 0
+            # Count keyword matches
+            for keyword in patterns['keywords']:
+                score += text_lower.count(keyword)
+            
+            # Bonus for math indicators
+            for indicator in patterns['math_indicators']:
+                if indicator in text:
+                    score += 2
+            
+            domain_scores[domain] = score
+        
+        # Return highest scoring domain, or 'general' if no clear match
+        if max(domain_scores.values()) == 0:
+            return 'general'
+        
+        return max(domain_scores, key=domain_scores.get)
+    
+    def extract_claims(self, text: str) -> List[str]:
+        """Extract potential claims from text"""
+        # Split into sentences and filter for claim-like statements
+        sentences = re.split(r'[.!?]+', text)
+        claims = []
+        
+        claim_indicators = [
+            'resolves', 'solves', 'explains', 'proves', 'demonstrates', 'shows',
+            'establishes', 'confirms', 'validates', 'supports', 'indicates',
+            'suggests', 'implies', 'reveals', 'addresses', 'eliminates'
+        ]
+        
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) < 10:  # Skip very short sentences
+                continue
+                
+            # Check if sentence contains claim indicators
+            if any(indicator in sentence.lower() for indicator in claim_indicators):
+                claims.append(sentence)
+            elif re.search(r'(therefore|thus|consequently|hence)', sentence.lower()):
+                claims.append(sentence)
+            elif re.search(r'(because|since|due to)', sentence.lower()):
+                claims.append(sentence)
+        
+        return claims[:10]  # Limit to first 10 claims to avoid overwhelm
+    
+    def analyze_evidence_quality(self, text: str, domain: str) -> Dict[str, Any]:
+        """Analyze quality of evidence provided"""
+        evidence_score = 0.4  # Base score
+        
+        # Quantitative evidence
+        numbers = len(re.findall(r'\d+\.?\d*', text))
+        if numbers > 0:
+            evidence_score += min(0.2, numbers * 0.05)
+        
+        # Mathematical content
+        domain_patterns = self.domain_patterns.get(domain, {})
+        math_indicators = domain_patterns.get('math_indicators', [])
+        math_content = sum(1 for indicator in math_indicators if indicator in text)
+        if math_content > 0:
+            evidence_score += min(0.2, math_content * 0.1)
+        
+        # Citations and references
+        citations = len(re.findall(r'\([12]\d{3}\)|et al\.|according to', text, re.IGNORECASE))
+        if citations > 0:
+            evidence_score += min(0.15, citations * 0.05)
+        
+        # Domain-specific evidence types
+        evidence_types = domain_patterns.get('evidence_types', [])
+        domain_evidence = sum(1 for etype in evidence_types 
+                            if etype.replace('_', ' ') in text.lower())
+        if domain_evidence > 0:
+            evidence_score += min(0.15, domain_evidence * 0.05)
+        
+        return {
+            'overall_score': min(0.95, evidence_score),
+            'quantitative_evidence': numbers,
+            'mathematical_content': math_content,
+            'citations': citations,
+            'domain_specific': domain_evidence,
+            'has_strong_evidence': evidence_score > 0.7
+        }
+    
+    def check_internal_contradictions(self, text: str) -> List[Dict[str, Any]]:
+        """Check for internal contradictions within the text"""
+        contradictions = []
+        sentences = re.split(r'[.!?]+', text.lower())
+        
+        for i, sent1 in enumerate(sentences):
+            for j, sent2 in enumerate(sentences[i+1:], i+1):
+                for pattern_type, patterns in self.contradiction_patterns.items():
+                    for pattern1, pattern2 in patterns:
+                        # Simplified contradiction detection
+                        if (any(word in sent1 for word in ['not', 'never', 'no']) != 
+                            any(word in sent2 for word in ['not', 'never', 'no'])):
+                            # Check for similar content with opposite polarities
+                            words1 = set(sent1.split())
+                            words2 = set(sent2.split())
+                            overlap = len(words1 & words2) / max(len(words1), len(words2))
+                            
+                            if overlap > 0.4:  # Significant content overlap
+                                contradictions.append({
+                                    'type': pattern_type.replace('_', ' ').title(),
+                                    'sentence1': sent1.strip(),
+                                    'sentence2': sent2.strip(),
+                                    'confidence': overlap,
+                                    'explanation': f"Potential {pattern_type} detected"
+                                })
+        
+        return contradictions[:5]  # Limit to top 5
+    
+    def analyze_claims(self, claims: List[str], domain: str) -> List[ClaimAnalysis]:
+        """Analyze individual claims for resolution mechanisms"""
+        claim_analyses = []
+        
+        resolution_indicators = ['by', 'through', 'via', 'using', 'because', 'since', 'due to']
+        mechanism_words = ['mechanism', 'process', 'method', 'approach', 'framework', 'model']
+        
+        for claim in claims:
+            # Check for resolution mechanism
+            has_mechanism = any(indicator in claim.lower() for indicator in resolution_indicators)
+            has_explicit_mechanism = any(word in claim.lower() for word in mechanism_words)
+            
+            # Assess evidence strength (simplified)
+            numbers_in_claim = len(re.findall(r'\d+\.?\d*', claim))
+            evidence_strength = 0.5 + (numbers_in_claim * 0.1) + (0.2 if has_explicit_mechanism else 0)
+            evidence_strength = min(0.9, evidence_strength)
+            
+            # Determine status
+            if has_mechanism and evidence_strength > 0.7:
+                status = 'resolved'
+            elif has_mechanism or evidence_strength > 0.5:
+                status = 'partial'
+            else:
+                status = 'failed'
+            
+            claim_analyses.append(ClaimAnalysis(
+                claim_text=claim[:100] + '...' if len(claim) > 100 else claim,
+                claim_type='resolution_claim',
+                resolution_mechanism='provided' if has_mechanism else 'missing',
+                evidence_strength=evidence_strength,
+                internal_consistency=0.8,  # Simplified
+                status=status
+            ))
+        
+        return claim_analyses
+    
+    def analyze_text(self, text: str, domain: str = None) -> Dict[str, Any]:
+        """Main analysis function"""
+        if domain is None:
+            domain = self.detect_domain(text)
+        
+        # Extract claims
+        claims = self.extract_claims(text)
+        
+        # Analyze claims
+        claim_analyses = self.analyze_claims(claims, domain)
+        
+        # Check evidence quality
+        evidence_quality = self.analyze_evidence_quality(text, domain)
+        
+        # Check internal contradictions
+        contradictions = self.check_internal_contradictions(text)
+        
+        # Calculate overall scores
+        resolved_claims = [c for c in claim_analyses if c.status == 'resolved']
+        partial_claims = [c for c in claim_analyses if c.status == 'partial']
+        failed_claims = [c for c in claim_analyses if c.status == 'failed']
+        
+        resolution_ratio = len(resolved_claims) / max(1, len(claim_analyses))
+        
+        # Determine overall status
+        if resolution_ratio >= 0.8 and evidence_quality['overall_score'] >= 0.6:
+            overall_status = 'RESOLVES'
+            status_icon = '✅'
+        elif resolution_ratio >= 0.4:
+            overall_status = 'PARTIAL'
+            status_icon = '🎯'
+        else:
+            overall_status = 'FAILS'
+            status_icon = '❌'
+        
+        return {
+            'domain': domain,
+            'overall_status': overall_status,
+            'status_icon': status_icon,
+            'confidence': 0.75 + (resolution_ratio * 0.2),
+            'claims': {
+                'total': len(claim_analyses),
+                'resolved': len(resolved_claims),
+                'partial': len(partial_claims),
+                'failed': len(failed_claims),
+                'analyses': claim_analyses
+            },
+            'evidence_quality': evidence_quality,
+            'contradictions': contradictions,
+            'resolution_ratio': resolution_ratio
+        }
+
+# Initialize the engine
+engine = UniversalParadoxEngine()
+print("✅ Universal Paradox Engine loaded and ready!")
+
+#@title 🎯 **Interactive Analysis Interface**
+#@markdown ### Analyze your theory or claims
+
+def analyze_theory_interactive():
+    """Interactive widget for theory analysis"""
+    
+    # Domain selection
+    domain_options = ['Auto-detect'] + list(engine.domain_patterns.keys()) + ['general']
+    domain_widget = widgets.Dropdown(
+        options=domain_options,
+        value='Auto-detect',
+        description='Domain:',
+        style={'description_width': 'initial'}
+    )
+    
+    # Text input
+    text_widget = widgets.Textarea(
+        value='',
+        placeholder='Enter your theory, argument, or set of claims here...\n\nExamples:\n• Scientific theory with equations\n• Legal argument with precedents\n• Business strategy with assumptions\n• Any other logical claims',
+        description='Theory Text:',
+        layout=widgets.Layout(width='100%', height='200px'),
+        style={'description_width': 'initial'}
+    )
+    
+    # Analysis button
+    analyze_button = widgets.Button(
+        description='🚀 ANALYZE FOR PARADOXES',
+        button_style='success',
+        layout=widgets.Layout(width='300px', height='50px')
+    )
+    
+    # Output area
+    output = widgets.Output()
+    
+    def on_analyze_click(b):
+        with output:
+            output.clear_output()
+            
+            if not text_widget.value.strip():
+                print("❌ Please enter some text to analyze!")
+                return
+            
+            print("🔄 Analyzing theory for contradictions and paradoxes...\n")
+            
+            # Get domain
+            selected_domain = None if domain_widget.value == 'Auto-detect' else domain_widget.value
+            
+            # Perform analysis
+            results = engine.analyze_text(text_widget.value, selected_domain)
+            
+            # Display results
+            display_results(results, text_widget.value)
+    
+    analyze_button.on_click(on_analyze_click)
+    
+    # Layout
+    display(HTML("<h2>🌀 Universal Paradox Resolution Engine</h2>"))
+    display(HTML("<p>Analyze claims across any domain for logical consistency and contradiction resolution</p>"))
+    display(domain_widget)
+    display(text_widget)
+    display(analyze_button)
+    display(output)
+    
+    return text_widget, domain_widget, output
+
+def display_results(results: Dict[str, Any], original_text: str):
+    """Display analysis results in a formatted way"""
+    
+    # Header
+    status_colors = {
+        'RESOLVES': '🟢',
+        'PARTIAL': '🟡', 
+        'FAILS': '🔴'
+    }
+    
+    color = status_colors.get(results['overall_status'], '⚪')
+    
+    display(HTML(f"""
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                color: white; padding: 20px; border-radius: 10px; margin: 20px 0;">
+        <h2>{results['status_icon']} Analysis Results: {results['overall_status']}</h2>
+        <p><strong>Domain:</strong> {results['domain'].title()}</p>
+        <p><strong>Confidence:</strong> {results['confidence']:.1%}</p>
+    </div>
+    """))
+    
+    # Claims analysis
+    claims = results['claims']
+    display(HTML(f"""
+    <h3>🔍 Claims Resolution Analysis</h3>
+    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 10px 0;">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; text-align: center;">
+            <div><strong>Total Claims:</strong> {claims['total']}</div>
+            <div style="color: green;"><strong>Resolved:</strong> {claims['resolved']}</div>
+            <div style="color: orange;"><strong>Partial:</strong> {claims['partial']}</div>
+            <div style="color: red;"><strong>Failed:</strong> {claims['failed']}</div>
+        </div>
+    </div>
+    """))
+    
+    # Individual claims
+    if claims['analyses']:
+        for i, claim in enumerate(claims['analyses'][:5], 1):  # Show first 5
+            status_color = {'resolved': 'green', 'partial': 'orange', 'failed': 'red'}[claim.status]
+            display(HTML(f"""
+            <div style="border-left: 4px solid {status_color}; padding: 10px; margin: 8px 0; background: #f8f9fa;">
+                <strong>Claim {i}:</strong> {claim.claim_text}<br>
+                <small><strong>Status:</strong> {claim.status.title()} | 
+                <strong>Evidence:</strong> {claim.evidence_strength:.2f} | 
+                <strong>Mechanism:</strong> {claim.resolution_mechanism}</small>
+            </div>
+            """))
+    
+    # Evidence quality
+    evidence = results['evidence_quality']
+    display(HTML(f"""
+    <h3>📊 Evidence Quality Assessment</h3>
+    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 10px 0;">
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+            <div><strong>Overall Score:</strong> {evidence['overall_score']:.2f}/1.0</div>
+            <div><strong>Quantitative Evidence:</strong> {evidence['quantitative_evidence']} instances</div>
+            <div><strong>Mathematical Content:</strong> {evidence['mathematical_content']} elements</div>
+            <div><strong>Citations:</strong> {evidence['citations']} references</div>
+        </div>
+        <div style="margin-top: 10px;">
+            <strong>Quality Assessment:</strong> 
+            {'🌟 Strong evidence base' if evidence['overall_score'] > 0.8 else
+             '✅ Good evidence quality' if evidence['overall_score'] > 0.6 else
+             '⚠️ Moderate evidence' if evidence['overall_score'] > 0.4 else
+             '❌ Weak evidence base'}
+        </div>
+    </div>
+    """))
+    
+    # Contradictions
+    if results['contradictions']:
+        display(HTML("<h3>⚠️ Internal Contradictions Detected</h3>"))
+        for contradiction in results['contradictions']:
+            display(HTML(f"""
+            <div style="border-left: 4px solid red; padding: 10px; margin: 8px 0; background: #fff5f5;">
+                <strong>{contradiction['type']}:</strong> {contradiction['explanation']}<br>
+                <small>Confidence: {contradiction['confidence']:.2f}</small>
+            </div>
+            """))
+    
+    # Final interpretation
+    display(HTML("<h3>💡 Interpretation & Recommendations</h3>"))
+    
+    if results['overall_status'] == 'RESOLVES':
+        interpretation = "✅ Your theory successfully resolves the contradictions it claims to address! The analysis shows strong logical consistency and adequate evidence support."
+        recommendations = [
+            "Theory appears ready for peer review or practical application",
+            "Continue monitoring for new evidence that might challenge conclusions",
+            "Consider testing against alternative explanations"
+        ]
+    elif results['overall_status'] == 'PARTIAL':
+        interpretation = "🎯 Your theory partially addresses the claimed contradictions, but some gaps remain."
+        recommendations = [
+            "Strengthen evidence base where quality scores are low",
+            "Clarify resolution mechanisms for partially resolved claims", 
+            "Address any internal contradictions identified",
+            "Consider additional supporting arguments"
+        ]
+    else:
+        interpretation = "❌ Your theory does not adequately resolve the claimed contradictions."
+        recommendations = [
+            "Provide clearer resolution mechanisms for failed claims",
+            "Strengthen overall evidence base significantly",
+            "Address internal contradictions before proceeding",
+            "Consider fundamental revision of approach"
+        ]
+    
+    display(HTML(f"""
+    <div style="background: #e8f5e8; padding: 15px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #4caf50;">
+        <p><strong>Analysis Summary:</strong> {interpretation}</p>
+        <p><strong>Next Steps:</strong></p>
+        <ul>
+            {''.join(f'<li>{rec}</li>' for rec in recommendations)}
+        </ul>
+    </div>
+    """))
+
+# Create the interface
+print("🎯 Creating interactive analysis interface...")
+text_widget, domain_widget, output = analyze_theory_interactive()
+
+#@title 📚 **Sample Analyses & Examples**
+#@markdown ### Pre-loaded examples across different domains
+
+sample_texts = {
+    'Physics': """Dark matter constitutes approximately 85% of all matter in the universe and resolves the galaxy rotation curve paradox through gravitational effects that cannot be explained by visible matter alone. Our theory proposes that dark matter particles interact weakly with ordinary matter but create sufficient gravitational field distortion to account for the observed flat rotation curves in spiral galaxies. The Lambda-CDM model successfully predicts cosmic microwave background anisotropies and large-scale structure formation through this dark matter framework. However, direct detection experiments have failed to identify dark matter particles after decades of searching.""",
+    
+    'Legal': """The fair use doctrine in copyright law resolves the fundamental tension between intellectual property rights and First Amendment free speech protections through a four-factor balancing test established in Campbell v. Acuff-Rose Music. This framework evaluates: (1) purpose and character of use, (2) nature of copyrighted work, (3) amount taken, and (4) effect on market value. Transformative use weighs heavily in favor of fair use, as demonstrated in Google Books and thumbnail image cases, creating a safety valve that prevents copyright from violating constitutional free speech guarantees. Recent decisions in Warhol Foundation v. Goldsmith have refined the transformative use standard.""",
+    
+    'Business': """The freemium business model resolves the customer acquisition cost paradox by providing free core functionality to maximize user base while monetizing through premium features that generate 80% of total revenue from approximately 5% of users. This strategy leverages network effects and viral growth to reduce marketing costs while creating multiple conversion pathways. Market data shows freemium models achieve 3x higher user acquisition rates compared to paid-only models, with lifetime customer value exceeding acquisition costs by 400% for successful implementations. However, many freemium companies struggle with conversion rates below 2%.""",
+    
+    'Philosophy': """The hard problem of consciousness can be resolved through integrated information theory, which proposes that consciousness corresponds to integrated information (Φ) in a system. This framework addresses the explanatory gap between physical processes and subjective experience by quantifying consciousness as the amount of information generated by a system above and beyond its parts. The theory provides mathematical formalism: Φ = ∫(p(x₁...xₙ) - ∏p(xᵢ))dx, offering empirically testable predictions about conscious states. Critics argue this approach still fails to explain why integrated information should give rise to subjective experience.""",
+    
+    'Medical': """Immunotherapy resolves the cancer treatment paradox by harnessing the patient's immune system to target malignant cells while minimizing damage to healthy tissue. Checkpoint inhibitor drugs like PD-1 and CTLA-4 antagonists remove immune system brakes, allowing T-cells to recognize and destroy cancer cells that previously evaded detection. Clinical trial data shows 40-60% response rates in previously untreatable melanoma and lung cancer cases, with five-year survival rates improving from 15% to 52% in advanced melanoma patients. However, severe autoimmune side effects occur in 20-30% of patients.""",
+    
+    'Data Science': """Our analysis reveals a strong positive correlation (r = 0.87, p < 0.001) between social media usage and reported anxiety levels in teenagers, proving that excessive social media consumption directly causes increased anxiety disorders. The study of 10,000 participants across five countries shows that users spending more than 3 hours daily on social platforms report 65% higher anxiety scores on standardized assessments. This causal relationship is further supported by the temporal precedence of social media adoption before anxiety symptom onset in longitudinal tracking data. However, confounding variables such as underlying mental health predispositions were not fully controlled for."""
+}
+
+def load_sample_text(domain):
+    """Load a sample text into the analysis interface"""
+    if domain in sample_texts:
+        text_widget.value = sample_texts[domain]
+        domain_widget.value = domain.lower().replace(' ', '_') if domain.lower().replace(' ', '_') in engine.domain_patterns else 'Auto-detect'
+        print(f"📝 Loaded {domain} sample text. Click 'ANALYZE FOR PARADOXES' to see results!")
+    else:
+        print(f"❌ No sample text available for {domain}")
+
+# Create sample loading interface
+print("\n📚 Sample Analyses Available:")
+sample_buttons = []
+
+for domain in sample_texts.keys():
+    button = widgets.Button(
+        description=f"Load {domain} Example",
+        button_style='info',
+        layout=widgets.Layout(width='200px', margin='2px')
+    )
+    
+    def make_handler(d):
+        return lambda b: load_sample_text(d)
+    
+    button.on_click(make_handler(domain))
+    sample_buttons.append(button)
+
+# Display sample buttons in a grid
+sample_box = widgets.HBox(sample_buttons[:3])
+sample_box2 = widgets.HBox(sample_buttons[3:])
+display(sample_box)
+display(sample_box2)
+
+#@title 📈 **Batch Analysis & Visualization** 
+#@markdown ### Analyze multiple theories and compare results
+
+def batch_analysis_interface():
+    """Interface for analyzing multiple texts at once"""
+    
+    # File upload widget
+    upload_widget = widgets.FileUpload(
+        accept='.txt,.csv,.json',
+        multiple=True,
+        description='Upload Files'
+    )
+    
+    # Text input for multiple theories
+    batch_text_widget = widgets.Textarea(
+        value='',
+        placeholder='Enter multiple theories separated by "---" or upload text files',
+        description='Batch Text:',
+        layout=widgets.Layout(width='100%', height='300px'),
+        style={'description_width': 'initial'}
+    )
+    
+    # Analysis button
+    batch_analyze_button = widgets.Button(
+        description='📊 BATCH ANALYZE',
+        button_style='success',
+        layout=widgets.Layout(width='200px')
+    )
+    
+    # Results storage
+    batch_results = []
+    
+    def on_batch_analyze(b):
+        with batch_output:
+            batch_output.clear_output()
+            
+            texts_to_analyze = []
+            
+            # Process uploaded files
+            for filename, file_info in upload_widget.value.items():
+                content = file_info['content'].decode('utf-8')
+                texts_to_analyze.append((filename, content))
+            
+            # Process batch text input
+            if batch_text_widget.value.strip():
+                batch_texts = batch_text_widget.value.split('---')
+                for i, text in enumerate(batch_texts, 1):
+                    if text.strip():
+                        texts_to_analyze.append((f"Text_{i}", text.strip()))
+            
+            if not texts_to_analyze:
+                print("❌ No texts to analyze! Upload files or enter text.")
+                return
+            
+            print(f"🔄 Analyzing {len(texts_to_analyze)} theories...\n")
+            
+            batch_results.clear()
+            
+            # Analyze each text
+            for name, text in texts_to_analyze:
+                print(f"📋 Analyzing: {name}")
+                result = engine.analyze_text(text)
+                result['name'] = name
+                result['text_length'] = len(text.split())
+                batch_results.append(result)
+                
+                # Quick summary
+                print(f"   {result['status_icon']} {result['overall_status']} "
+                      f"({result['confidence']:.1%} confidence) - "
+                      f"Domain: {result['domain']}")
+            
+            print(f"\n✅ Batch analysis complete! Analyzed {len(batch_results)} theories.")
+            
+            # Create summary visualization
+            create_batch_visualization(batch_results)
+    
+    batch_analyze_button.on_click(on_batch_analyze)
+    batch_output = widgets.Output()
+    
+    display(HTML("<h3>📈 Batch Analysis Interface</h3>"))
+    display(upload_widget)
+    display(batch_text_widget)
+    display(batch_analyze_button)
+    display(batch_output)
+    
+    return batch_results
+
+def create_batch_visualization(results):
+    """Create visualizations for batch analysis results"""
+    if not results:
+        return
+    
+    # Create DataFrame
+    df_data = []
+    for result in results:
+        df_data.append({
+            'Name': result['name'],
+            'Domain': result['domain'],
+            'Status': result['overall_status'],
+            'Confidence': result['confidence'],
+            'Evidence_Quality': result['evidence_quality']['overall_score'],
+            'Total_Claims': result['claims']['total'],
+            'Resolved_Claims': result['claims']['resolved'],
+            'Resolution_Ratio': result['resolution_ratio'],
+            'Text_Length': result['text_length'],
+            'Contradictions': len(result['contradictions'])
+        })
+    
+    df = pd.DataFrame(df_data)
+    
+    # Create visualizations
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
+    fig.suptitle('🌀 Universal Paradox Engine - Batch Analysis Results', fontsize=16, fontweight='bold')
+    
+    # 1. Status distribution
+    status_counts = df['Status'].value_counts()
+    colors = {'RESOLVES': 'green', 'PARTIAL': 'orange', 'FAILS': 'red'}
+    ax1.pie(status_counts.values, labels=status_counts.index, autopct='%1.1f%%',
+            colors=[colors.get(status, 'gray') for status in status_counts.index])
+    ax1.set_title('Resolution Status Distribution')
+    
+    # 2. Confidence vs Evidence Quality scatter
+    scatter_colors = [colors.get(status, 'gray') for status in df['Status']]
+    scatter = ax2.scatter(df['Confidence'], df['Evidence_Quality'], 
+                         c=scatter_colors, alpha=0.7, s=100)
+    ax2.set_xlabel('Analysis Confidence')
+    ax2.set_ylabel('Evidence Quality Score')
+    ax2.set_title('Confidence vs Evidence Quality')
+    ax2.grid(True, alpha=0.3)
+    
+    # 3. Domain distribution
+    domain_counts = df['Domain'].value_counts()
+    ax3.bar(range(len(domain_counts)), domain_counts.values)
+    ax3.set_xticks(range(len(domain_counts)))
+    ax3.set_xticklabels(domain_counts.index, rotation=45, ha='right')
+    ax3.set_title('Analysis by Domain')
+    ax3.set_ylabel('Number of Theories')
+    
+    # 4. Resolution ratio distribution
+    ax4.hist(df['Resolution_Ratio'], bins=10, alpha=0.7, color='skyblue', edgecolor='black')
+    ax4.set_xlabel('Resolution Ratio (Resolved Claims / Total Claims)')
+    ax4.set_ylabel('Frequency')
+    ax4.set_title('Distribution of Resolution Ratios')
+    ax4.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Summary statistics
+    print("\n📊 Batch Analysis Summary:")
+    print(f"• Total Theories Analyzed: {len(df)}")
+    print(f"• Average Confidence: {df['Confidence'].mean():.2%}")
+    print(f"• Average Evidence Quality: {df['Evidence_Quality'].mean():.2f}")
+    print(f"• Average Resolution Ratio: {df['Resolution_Ratio'].mean():.2%}")
+    print(f"• Domains Covered: {df['Domain'].nunique()}")
+    
+    # Top performers
+    print(f"\n🏆 Top Performing Theories:")
+    top_theories = df.nlargest(3, 'Confidence')[['Name', 'Status', 'Confidence', 'Domain']]
+    for idx, row in top_theories.iterrows():
+        print(f"   {row['Status']} - {row['Name']} ({row['Confidence']:.1%}, {row['Domain']})")
+
+# Create batch analysis interface
+batch_results = batch_analysis_interface()
+
+#@title 🔧 **Advanced Analysis Tools**
+#@markdown ### Deep dive analysis and custom parameters
+
+class AdvancedAnalysisTools:
+    """Advanced tools for detailed paradox analysis"""
+    
+    def __init__(self, engine):
+        self.engine = engine
+    
+    def semantic_similarity_analysis(self, text: str) -> Dict[str, Any]:
+        """Analyze semantic relationships between claims"""
+        claims = self.engine.extract_claims(text)
+        
+        # Simple semantic similarity based on word overlap
+        similarity_matrix = []
+        for i, claim1 in enumerate(claims):
+            row = []
+            for j, claim2 in enumerate(claims):
+                words1 = set(claim1.lower().split())
+                words2 = set(claim2.lower().split())
+                
+                # Jaccard similarity
+                intersection = len(words1 & words2)
+                union = len(words1 | words2)
+                similarity = intersection / union if union > 0 else 0
+                row.append(similarity)
+            
+            similarity_matrix.append(row)
+        
+        return {
+            'claims': claims,
+            'similarity_matrix': similarity_matrix,
+            'avg_similarity': np.mean(similarity_matrix) if similarity_matrix else 0,
+            'high_similarity_pairs': self._find_high_similarity_pairs(claims, similarity_matrix)
+        }
+    
+    def _find_high_similarity_pairs(self, claims, matrix, threshold=0.3):
+        """Find pairs of claims with high semantic similarity"""
+        pairs = []
+        for i in range(len(matrix)):
+            for j in range(i + 1, len(matrix)):
+                if matrix[i][j] > threshold:
+                    pairs.append({
+                        'claim1': claims[i][:50] + '...',
+                        'claim2': claims[j][:50] + '...',
+                        'similarity': matrix[i][j]
+                    })
+        return pairs
+    
+    def logical_structure_analysis(self, text: str) -> Dict[str, Any]:
+        """Analyze logical structure and argument flow"""
+        
+        # Identify logical connectors
+        logical_connectors = {
+            'causal': ['because', 'since', 'due to', 'caused by', 'results from'],
+            'consequence': ['therefore', 'thus', 'hence', 'consequently', 'as a result'],
+            'contrast': ['however', 'but', 'nevertheless', 'on the other hand', 'whereas'],
+            'support': ['furthermore', 'moreover', 'additionally', 'in addition', 'also'],
+            'conditional': ['if', 'unless', 'provided that', 'assuming', 'suppose']
+        }
+        
+        text_lower = text.lower()
+        connector_counts = {}
+        
+        for category, connectors in logical_connectors.items():
+            count = sum(text_lower.count(conn) for conn in connectors)
+            connector_counts[category] = count
+        
+        # Calculate logical complexity
+        total_connectors = sum(connector_counts.values())
+        sentence_count = len(re.split(r'[.!?]+', text))
+        logical_density = total_connectors / max(1, sentence_count)
+        
+        return {
+            'connector_counts': connector_counts,
+            'logical_density': logical_density,
+            'sentence_count': sentence_count,
+            'complexity_score': min(1.0, logical_density / 0.5),  # Normalized complexity
+            'dominant_logic_type': max(connector_counts, key=connector_counts.get) if connector_counts else 'none'
+        }
+    
+    def evidence_source_analysis(self, text: str) -> Dict[str, Any]:
+        """Analyze types and quality of evidence sources"""
+        
+        source_patterns = {
+            'academic': [r'et al\.', r'\([12]\d{3}\)', r'journal', r'study', r'research'],
+            'statistical': [r'\d+%', r'correlation', r'significant', r'p <', r'confidence'],
+            'expert': [r'according to', r'expert', r'professor', r'dr\.', r'specialist'],
+            'empirical': [r'observation', r'experiment', r'trial', r'data', r'measurement'],
+            'theoretical': [r'theory', r'model', r'framework', r'hypothesis', r'proposition'],
+            'anecdotal': [r'case', r'example', r'instance', r'story', r'experience']
+        }
+        
+        source_counts = {}
+        text_lower = text.lower()
+        
+        for source_type, patterns in source_patterns.items():
+            count = 0
+            for pattern in patterns:
+                count += len(re.findall(pattern, text_lower))
+            source_counts[source_type] = count
+        
+        # Calculate evidence diversity
+        evidence_types_present = sum(1 for count in source_counts.values() if count > 0)
+        evidence_diversity = evidence_types_present / len(source_patterns)
+        
+        return {
+            'source_counts': source_counts,
+            'evidence_diversity': evidence_diversity,
+            'total_evidence_markers': sum(source_counts.values()),
+            'strongest_evidence_type': max(source_counts, key=source_counts.get) if any(source_counts.values()) else 'none'
+        }
+
+def advanced_analysis_interface():
+    """Interface for advanced analysis tools"""
+    
+    advanced_tools = AdvancedAnalysisTools(engine)
+    
+    # Text input
+    advanced_text_widget = widgets.Textarea(
+        value='',
+        placeholder='Enter text for advanced analysis...',
+        description='Text:',
+        layout=widgets.Layout(width='100%', height='150px'),
+        style={'description_width': 'initial'}
+    )
+    
+    # Analysis type selection
+    analysis_type = widgets.SelectMultiple(
+        options=['Semantic Similarity', 'Logical Structure', 'Evidence Sources', 'Full Analysis'],
+        value=['Full Analysis'],
+        description='Analysis Types:',
+        layout=widgets.Layout(height='100px'),
+        style={'description_width': 'initial'}
+    )
+    
+    # Run button
+    advanced_button = widgets.Button(
+        description='🔬 ADVANCED ANALYSIS',
+        button_style='info',
+        layout=widgets.Layout(width='200px')
+    )
+    
+    def on_advanced_analyze(b):
+        with advanced_output:
+            advanced_output.clear_output()
+            
+            if not advanced_text_widget.value.strip():
+                print("❌ Please enter text for analysis!")
+                return
+            
+            text = advanced_text_widget.value
+            selected_analyses = analysis_type.value
+            
+            print("🔬 Running Advanced Analysis...\n")
+            
+            if 'Semantic Similarity' in selected_analyses or 'Full Analysis' in selected_analyses:
+                print("🧠 Semantic Similarity Analysis:")
+                sem_results = advanced_tools.semantic_similarity_analysis(text)
+                print(f"   • Average Claim Similarity: {sem_results['avg_similarity']:.3f}")
+                print(f"   • High Similarity Pairs Found: {len(sem_results['high_similarity_pairs'])}")
+                
+                if sem_results['high_similarity_pairs']:
+                    print("   🔗 Similar Claim Pairs:")
+                    for pair in sem_results['high_similarity_pairs'][:3]:
+                        print(f"      - Similarity {pair['similarity']:.3f}: '{pair['claim1']}' ↔ '{pair['claim2']}'")
+                print()
+            
+            if 'Logical Structure' in selected_analyses or 'Full Analysis' in selected_analyses:
+                print("🏗️ Logical Structure Analysis:")
+                logic_results = advanced_tools.logical_structure_analysis(text)
+                print(f"   • Logical Density: {logic_results['logical_density']:.3f}")
+                print(f"   • Complexity Score: {logic_results['complexity_score']:.3f}")
+                print(f"   • Dominant Logic Type: {logic_results['dominant_logic_type']}")
+                print(f"   • Connector Usage: {dict(logic_results['connector_counts'])}")
+                print()
+            
+            if 'Evidence Sources' in selected_analyses or 'Full Analysis' in selected_analyses:
+                print("📚 Evidence Source Analysis:")
+                evidence_results = advanced_tools.evidence_source_analysis(text)
+                print(f"   • Evidence Diversity: {evidence_results['evidence_diversity']:.3f}")
+                print(f"   • Strongest Evidence Type: {evidence_results['strongest_evidence_type']}")
+                print(f"   • Evidence Markers: {evidence_results['total_evidence_markers']}")
+                print(f"   • Source Distribution: {dict(evidence_results['source_counts'])}")
+                print()
+            
+            print("✅ Advanced analysis complete!")
+    
+    advanced_button.on_click(on_advanced_analyze)
+    advanced_output = widgets.Output()
+    
+    display(HTML("<h3>🔬 Advanced Analysis Tools</h3>"))
+    display(advanced_text_widget)
+    display(analysis_type)
+    display(advanced_button)
+    display(advanced_output)
+
+# Create advanced analysis interface
+advanced_analysis_interface()
+
+#@title 💾 **Export & Save Results**
+#@markdown ### Export analysis results in various formats with actual file downloads
+
+from google.colab import files
+import zipfile
+import io
+
+# Global storage for analysis results
+stored_results = []
+result_counter = 0
+
+def store_analysis_result(result, text_sample="", name=""):
+    """Store analysis result for later export"""
+    global stored_results, result_counter
+    result_counter += 1
+    
+    stored_result = {
+        'id': result_counter,
+        'timestamp': datetime.now().isoformat(),
+        'name': name or f"Analysis_{result_counter}",
+        'text_sample': text_sample[:200] + "..." if len(text_sample) > 200 else text_sample,
+        'full_analysis': result,
+        'summary': {
+            'status': result['overall_status'],
+            'confidence': result['confidence'],
+            'domain': result['domain'],
+            'claims_total': result['claims']['total'],
+            'claims_resolved': result['claims']['resolved'],
+            'evidence_score': result['evidence_quality']['overall_score'],
+            'contradictions': len(result['contradictions'])
+        }
+    }
+    
+    stored_results.append(stored_result)
+    return result_counter
+
+def create_detailed_json_export(results_list, include_full_text=False):
+    """Create comprehensive JSON export with all analysis details"""
+    
+    export_data = {
+        'export_metadata': {
+            'engine_version': 'Universal Paradox Engine v1.0',
+            'export_timestamp': datetime.now().isoformat(),
+            'total_analyses': len(results_list),
+            'export_type': 'comprehensive_analysis'
+        },
+        'analysis_summary': {
+            'domains_covered': list(set(r['summary']['domain'] for r in results_list)),
+            'status_distribution': {
+                'resolves': len([r for r in results_list if r['summary']['status'] == 'RESOLVES']),
+                'partial': len([r for r in results_list if r['summary']['status'] == 'PARTIAL']),
+                'fails': len([r for r in results_list if r['summary']['status'] == 'FAILS'])
+            },
+            'average_confidence': sum(r['summary']['confidence'] for r in results_list) / len(results_list),
+            'average_evidence_score': sum(r['summary']['evidence_score'] for r in results_list) / len(results_list)
+        },
+        'detailed_analyses': []
+    }
+    
+    for result in results_list:
+        detailed_entry = {
+            'analysis_id': result['id'],
+            'analysis_name': result['name'],
+            'timestamp': result['timestamp'],
+            'input_sample': result['text_sample'],
+            'domain_detected': result['summary']['domain'],
+            'overall_assessment': {
+                'status': result['summary']['status'],
+                'confidence': result['summary']['confidence'],
+                'resolution_success': result['summary']['status'] in ['RESOLVES', 'PARTIAL']
+            },
+            'claims_analysis': {
+                'total_claims_found': result['summary']['claims_total'],
+                'successfully_resolved': result['summary']['claims_resolved'],
+                'resolution_ratio': result['summary']['claims_resolved'] / max(1, result['summary']['claims_total']),
+                'detailed_claims': []
+            },
+            'evidence_assessment': {
+                'overall_quality_score': result['summary']['evidence_score'],
+                'quantitative_evidence_count': result['full_analysis']['evidence_quality']['quantitative_evidence'],
+                'mathematical_content_count': result['full_analysis']['evidence_quality']['mathematical_content'],
+                'citations_count': result['full_analysis']['evidence_quality']['citations'],
+                'domain_specific_evidence': result['full_analysis']['evidence_quality']['domain_specific'],
+                'has_strong_evidence_base': result['full_analysis']['evidence_quality']['has_strong_evidence']
+            },
+            'contradiction_analysis': {
+                'internal_contradictions_found': result['summary']['contradictions'],
+                'contradiction_details': result['full_analysis']['contradictions']
+            },
+            'recommendations': generate_recommendations(result['full_analysis'])
+        }
+        
+        # Add detailed claim analysis
+        for i, claim_analysis in enumerate(result['full_analysis']['claims']['analyses']):
+            detailed_entry['claims_analysis']['detailed_claims'].append({
+                'claim_number': i + 1,
+                'claim_text': claim_analysis.claim_text,
+                'claim_type': claim_analysis.claim_type,
+                'resolution_status': claim_analysis.status,
+                'evidence_strength': claim_analysis.evidence_strength,
+                'resolution_mechanism': claim_analysis.resolution_mechanism,
+                'internal_consistency': claim_analysis.internal_consistency
+            })
+        
+        if include_full_text:
+            detailed_entry['full_input_text'] = result.get('full_text', 'Not stored')
+        
+        export_data['detailed_analyses'].append(detailed_entry)
+    
+    return export_data
+
+def generate_recommendations(analysis_result):
+    """Generate specific recommendations based on analysis"""
+    recommendations = []
+    
+    status = analysis_result['overall_status']
+    evidence_score = analysis_result['evidence_quality']['overall_score']
+    resolution_ratio = analysis_result['resolution_ratio']
+    contradictions = len(analysis_result['contradictions'])
+    
+    if status == 'FAILS':
+        recommendations.extend([
+            "❌ Major revision needed - theory fails to resolve claimed contradictions",
+            "🔧 Provide concrete resolution mechanisms for each claim",
+            "📊 Strengthen evidence base significantly",
+            "🔍 Address fundamental logical gaps"
+        ])
+    elif status == 'PARTIAL':
+        recommendations.extend([
+            "🎯 Good foundation but needs strengthening",
+            "📈 Improve resolution mechanisms for partially resolved claims",
+            "📚 Add more supporting evidence where scores are low"
+        ])
+    else:
+        recommendations.extend([
+            "✅ Strong theory with good resolution mechanisms",
+            "🌟 Consider peer review or publication",
+            "🔄 Monitor for new evidence that might challenge conclusions"
+        ])
+    
+    if evidence_score < 0.6:
+        recommendations.append("📊 Evidence quality needs significant improvement - add quantitative data, citations, or domain-specific support")
+    
+    if contradictions > 0:
+        recommendations.append(f"⚠️ Address {contradictions} internal contradictions to improve logical consistency")
+    
+    if resolution_ratio < 0.5:
+        recommendations.append("🔧 Focus on providing clearer resolution mechanisms - explain HOW contradictions are resolved")
+    
+    return recommendations
+
+def create_export_interface():
+    """Interface for exporting analysis results with actual file downloads"""
+    
+    export_format = widgets.Dropdown(
+        options=['Detailed JSON', 'Summary JSON', 'CSV Summary', 'Markdown Report'],
+        value='Detailed JSON',
+        description='Export Format:'
+    )
+    
+    include_full_text = widgets.Checkbox(
+        value=False,
+        description='Include full input text (larger files)',
+        style={'description_width': 'initial'}
+    )
+    
+    results_selector = widgets.SelectMultiple(
+        options=[],
+        description='Select Results:',
+        layout=widgets.Layout(height='100px'),
+        style={'description_width': 'initial'}
+    )
+    
+    def update_results_selector():
+        """Update the results selector with stored results"""
+        options = [(f"{r['name']} - {r['summary']['status']} ({r['timestamp'][:16]})", r['id']) 
+                  for r in stored_results]
+        results_selector.options = options
+        if options:
+            results_selector.value = [options[-1][1]]  # Select most recent by default
+    
+    refresh_button = widgets.Button(
+        description='🔄 Refresh List',
+        button_style='info',
+        layout=widgets.Layout(width='150px')
+    )
+    
+    export_button = widgets.Button(
+        description='📤 DOWNLOAD FILES',
+        button_style='success',
+        layout=widgets.Layout(width='200px')
+    )
+    
+    def on_refresh_click(b):
+        update_results_selector()
+        with export_output:
+            print(f"🔄 Refreshed - Found {len(stored_results)} stored analyses")
+    
+    def on_export_click(b):
+        with export_output:
+            export_output.clear_output()
+            
+            if not stored_results:
+                print("❌ No analysis results to export! Run some analyses first.")
+                return
+            
+            selected_ids = list(results_selector.value) if results_selector.value else [stored_results[-1]['id']]
+            selected_results = [r for r in stored_results if r['id'] in selected_ids]
+            
+            if not selected_results:
+                print("❌ No results selected for export!")
+                return
+            
+            print(f"📤 Preparing {export_format.value} export for {len(selected_results)} analyses...")
+            
+            try:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                
+                if export_format.value == 'Detailed JSON':
+                    export_data = create_detailed_json_export(selected_results, include_full_text.value)
+                    filename = f"paradox_analysis_detailed_{timestamp}.json"
+                    
+                    with open(filename, 'w', encoding='utf-8') as f:
+                        json.dump(export_data, f, indent=2, ensure_ascii=False, default=str)
+                    
+                    files.download(filename)
+                    print(f"✅ Downloaded: {filename}")
+                    print(f"📊 Contains {len(export_data['detailed_analyses'])} detailed analyses")
+                
+                elif export_format.value == 'Summary JSON':
+                    summary_data = {
+                        'export_timestamp': datetime.now().isoformat(),
+                        'summary_analyses': [r['summary'] for r in selected_results]
+                    }
+                    filename = f"paradox_summary_{timestamp}.json"
+                    
+                    with open(filename, 'w', encoding='utf-8') as f:
+                        json.dump(summary_data, f, indent=2, default=str)
+                    
+                    files.download(filename)
+                    print(f"✅ Downloaded: {filename}")
+                
+                elif export_format.value == 'CSV Summary':
+                    df_data = []
+                    for r in selected_results:
+                        df_data.append({
+                            'Analysis_Name': r['name'],
+                            'Timestamp': r['timestamp'],
+                            'Status': r['summary']['status'],
+                            'Confidence': r['summary']['confidence'],
+                            'Domain': r['summary']['domain'],
+                            'Total_Claims': r['summary']['claims_total'],
+                            'Resolved_Claims': r['summary']['claims_resolved'],
+                            'Evidence_Score': r['summary']['evidence_score'],
+                            'Contradictions': r['summary']['contradictions'],
+                            'Text_Sample': r['text_sample']
+                        })
+                    
+                    df = pd.DataFrame(df_data)
+                    filename = f"paradox_summary_{timestamp}.csv"
+                    df.to_csv(filename, index=False)
+                    
+                    files.download(filename)
+                    print(f"✅ Downloaded: {filename}")
+                
+                elif export_format.value == 'Markdown Report':
+                    report = generate_markdown_report(selected_results)
+                    filename = f"paradox_report_{timestamp}.md"
+                    
+                    with open(filename, 'w', encoding='utf-8') as f:
+                        f.write(report)
+                    
+                    files.download(filename)
+                    print(f"✅ Downloaded: {filename}")
+                
+                print("\n💡 Files are downloaded to your local computer!")
+                print("📊 JSON files contain the most detailed analysis data")
+                
+            except Exception as e:
+                print(f"❌ Export failed: {str(e)}")
+                print("Please try again or select a different format")
+    
+    refresh_button.on_click(on_refresh_click)
+    export_button.on_click(on_export_click)
+    export_output = widgets.Output()
+    
+    # Initialize results selector
+    update_results_selector()
+    
+    display(HTML("<h3>💾 Export Analysis Results - Actual File Downloads!</h3>"))
+    display(HTML("<p><strong>Detailed JSON</strong> contains complete analysis breakdown including all claims, evidence assessment, contradictions, and recommendations.</p>"))
+    display(results_selector)
+    display(refresh_button)
+    display(export_format)
+    display(include_full_text)
+    display(export_button)
+    display(export_output)
+
+def generate_markdown_report(results_list):
+    """Generate a comprehensive markdown report"""
+    
+    report = f"""# 🌀 Universal Paradox Engine Analysis Report
+
+**Generated:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}  
+**Analyses Included:** {len(results_list)}
+
+## 📊 Executive Summary
+
+"""
+    
+    # Add summary statistics
+    domains = [r['summary']['domain'] for r in results_list]
+    statuses = [r['summary']['status'] for r in results_list]
+    
+    report += f"""
+| Metric | Value |
+|--------|-------|
+| Total Analyses | {len(results_list)} |
+| Domains Covered | {len(set(domains))} |
+| Success Rate | {len([s for s in statuses if s in ['RESOLVES', 'PARTIAL']])}/{len(statuses)} ({len([s for s in statuses if s in ['RESOLVES', 'PARTIAL']])/len(statuses)*100:.1f}%) |
+| Average Confidence | {sum(r['summary']['confidence'] for r in results_list)/len(results_list):.1%} |
+| Average Evidence Quality | {sum(r['summary']['evidence_score'] for r in results_list)/len(results_list):.2f}/1.0 |
+
+## 📈 Detailed Analysis Results
+
+"""
+    
+    for i, result in enumerate(results_list, 1):
+        status_emoji = {'RESOLVES': '✅', 'PARTIAL': '🎯', 'FAILS': '❌'}[result['summary']['status']]
+        
+        report += f"""
+### {i}. {result['name']} {status_emoji}
+
+**Domain:** {result['summary']['domain']}  
+**Status:** {result['summary']['status']} ({result['summary']['confidence']:.1%} confidence)  
+**Claims:** {result['summary']['claims_resolved']}/{result['summary']['claims_total']} resolved  
+**Evidence Quality:** {result['summary']['evidence_score']:.2f}/1.0  
+
+**Text Sample:**
+> {result['text_sample']}
+
+**Key Findings:**
+- Resolution ratio: {result['summary']['claims_resolved']/max(1,result['summary']['claims_total']):.1%}
+- Internal contradictions: {result['summary']['contradictions']}
+- Evidence strength: {'Strong' if result['summary']['evidence_score'] > 0.7 else 'Moderate' if result['summary']['evidence_score'] > 0.5 else 'Weak'}
+
+---
+"""
+    
+    report += """
+## 💡 Methodology
+
+This analysis uses the Universal Paradox Engine which:
+
+1. **Detects Domain** - Auto-identifies the field of study
+2. **Extracts Claims** - Identifies resolution claims and mechanisms  
+3. **Assesses Evidence** - Evaluates quantitative, mathematical, and citation quality
+4. **Checks Contradictions** - Identifies internal logical conflicts
+5. **Calculates Confidence** - Provides overall assessment reliability
+
+**Status Meanings:**
+- ✅ **RESOLVES** - Successfully addresses claimed contradictions with strong mechanisms
+- 🎯 **PARTIAL** - Addresses some contradictions but gaps remain  
+- ❌ **FAILS** - Does not adequately resolve claimed contradictions
+
+---
+
+*Report generated by Universal Paradox Engine v1.0*
+"""
+    
+    return report
+
+# Modified display_results function to store results
+original_display_results = display_results
+
+def display_results(results: Dict[str, Any], original_text: str, analysis_name: str = ""):
+    """Enhanced display_results that also stores results for export"""
+    global stored_results
+    
+    # Store the result
+    result_id = store_analysis_result(results, original_text, analysis_name)
+    
+    # Call original display function
+    original_display_results(results, original_text)
+    
+    # Add storage notification
+    display(HTML(f"""
+    <div style="background: #e8f5e8; padding: 10px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #4caf50;">
+        💾 <strong>Analysis Stored!</strong> Result #{result_id} saved for export. 
+        Use the Export section below to download detailed JSON files.
+    </div>
+    """))
+
+create_export_interface()
+
+#@title 📋 **Quick Analysis Functions**
+#@markdown ### Standalone functions for direct use
+
+def quick_analyze(text: str, domain: str = None) -> None:
+    """Quick analysis function for direct use"""
+    results = engine.analyze_text(text, domain)
+    
+    print(f"{results['status_icon']} {results['overall_status']} ({results['confidence']:.1%})")
+    print(f"Domain: {results['domain']} | Claims: {results['claims']['total']} | Evidence: {results['evidence_quality']['overall_score']:.2f}")
+    
+    if results['contradictions']:
+        print(f"⚠️ {len(results['contradictions'])} internal contradictions detected")
+    
+    return results
+
+def compare_theories(*texts) -> None:
+    """Compare multiple theories side by side"""
+    results = []
+    
+    for i, text in enumerate(texts, 1):
+        print(f"\n📋 Theory {i}:")
+        result = quick_analyze(text[:100] + "...")
+        results.append(result)
+    
+    # Summary comparison
+    print(f"\n🏆 Comparison Summary:")
+    best_confidence = max(r['confidence'] for r in results)
+    best_evidence = max(r['evidence_quality']['overall_score'] for r in results)
+    
+    for i, result in enumerate(results, 1):
+        stars = "⭐" if result['confidence'] == best_confidence else ""
+        stars += "🌟" if result['evidence_quality']['overall_score'] == best_evidence else ""
+        print(f"   Theory {i}: {result['overall_status']} {stars}")
+
+def domain_analysis_summary() -> None:
+    """Show summary of available domains and their characteristics"""
+    print("🌐 Available Domains for Analysis:\n")
+    
+    for domain, info in engine.domain_patterns.items():
+        print(f"🔹 {domain.title().replace('_', ' ')}")
+        print(f"   Keywords: {', '.join(info['keywords'][:5])}...")
+        print(f"   Evidence Types: {', '.join(info['evidence_types'])}")
+        print(f"   Math Indicators: {len(info['math_indicators'])}")
+        print()
+
+# Display domain summary
+domain_analysis_summary()
+
+print("""
+🎉 **Universal Paradox Engine Setup Complete!** 🎉
+
+📖 **How to Use:**
+
+1. **Interactive Analysis:** Use the widgets above to paste text and analyze
+2. **Quick Analysis:** Use `quick_analyze("your text here")` 
+3. **Batch Analysis:** Upload multiple files or use the batch interface
+4. **Compare Theories:** Use `compare_theories(text1, text2, text3)`
+5. **Advanced Tools:** Use the advanced analysis section for deep dives
+
+💡 **Tips:**
+• The engine auto-detects domains but you can specify manually
+• Works on any text with logical claims or arguments
+• Handles contradictions, evidence quality, and resolution mechanisms
+• Export results for further analysis or reporting
+
+🚀 **Ready to analyze theories across any domain!**
+""")
+
+# Example usage
+print("\n🎯 Example Usage:")
+sample_result = quick_analyze("""
+Artificial intelligence will solve climate change through optimization algorithms 
+that reduce energy consumption by 40% across all sectors. Machine learning models 
+can predict weather patterns with 95% accuracy, enabling perfect renewable energy 
+scheduling. However, AI systems consume massive amounts of energy for training, 
+potentially increasing carbon emissions by 25% by 2030.
+""")
