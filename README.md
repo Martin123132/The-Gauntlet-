@@ -1,44 +1,61 @@
-# The-Gauntlet-
-Only theories that walk the paradox crucible survive 
-# 🔮 The Physics Paradox Engine
+🧩 The Gauntlet: Universal Paradox Engine
 
-**Welcome to the Crystal Maze for your physics theories.** 
-If you dare to enter, your work will be stress-tested against paradoxes, contradictions, and evidence gaps. 
-No bias, no mercy — just logic, math, and consistency checks. 
 
----
 
-## 🚀 What is this?
 
-The **Paradox Engine** is a meta-review tool. 
-Feed it your theory text + equations, and it will:
 
-- Identify **claims** 
-- Demand your **math and evidence** 
-- Test for **internal contradictions** 
-- Flag **counterpoints and paradoxes** you didn’t resolve 
-- Score your **evidence quality** 
+Welcome to The Gauntlet — an automated contradiction and paradox detection engine.
 
-If your theory survives, it earns bragging rights. 
-If it fails… at least you get the breadcrumbs back.
+Drop in your theory, paper, argument, or idea. The engine will shred it for logical consistency.
 
----
 
-## 🧩 How to Use
 
-1. Fork or clone this repo 
-2. Put your theory text into a `.txt` file (claims, equations, evidence) 
-3. Run the paradox engine on it (see `examples/`) 
-4. Collect your JSON verdict and cry/celebrate accordingly 
----
+🔥 Domains supported:
 
-## ⚠️ Disclaimer
 
-This repo isn’t peer review. 
-It’s harsher. 
-The engine can’t be lied to, and it doesn’t care about reputations. 
-If your theory passes here, it means it’s paradox-tight. If it fails, well… join the club. 
 
----
+⚛️ Physics (cosmology, quantum gravity, relativity, etc.)
+⚖️ Legal arguments (case law, precedents, statutes)
+💼 Business strategies & economic models
+🧠 Philosophy & metaphysics
+🧬 Medical & biological claims
+📊 Data science & AI ethics
 
-💡 *"Paradox-proof or paradox-toast — there is no middle ground."*
+
+
+
+🛠 Features:
+
+
+
+Claim-by-claim analysis (resolved / partial / failed)
+Contradiction detection (direct negations, circular logic, inconsistencies)
+Evidence quality scoring (0–1 scale with citations & counts)
+JSON export with full breakdown
+Batch mode: upload multiple arguments at once
+Interactive menu for quick tests OR deep dives
+
+
+
+
+⚔️ Why The Gauntlet?
+
+Because most people think their ideas are bulletproof — until they put them through here.
+
+
+
+Some survive. ✅
+Most don’t. ❌
+
+
+
+
+🚀 How to Use:
+
+
+
+Run the notebook in Colab or locally.
+Choose your domain or leave on auto-detect.
+Paste in your theory / argument OR upload a text file.
+Hit ANALYZE.
+Read the roast. 🔥
