@@ -1,0 +1,1087 @@
+# ParadoxChat for Claude API - Google Colab Version
+# Enhanced logical consistency checking with Claude
+
+#@title 🚀 **Install Dependencies and Setup Claude ParadoxChat**
+#@markdown ### Install required packages and initialize the system
+
+# Install required packages
+!pip install anthropic ipywidgets
+
+import anthropic
+import json
+import os
+import traceback
+import re
+import textwrap
+from typing import Any, Dict, Optional, Tuple, List
+from datetime import datetime
+import ipywidgets as widgets
+from IPython.display import display, HTML, clear_output
+import getpass
+
+print("🎉 Dependencies installed successfully!")
+print("🧠 Claude ParadoxChat ready for Colab!")
+
+#@title 🔑 **Claude API Key Configuration**
+#@markdown ### Set up your Anthropic API key securely
+
+# Configuration
+APP_TITLE = "Claude Paradox Chat"
+DEFAULT_MODEL = "claude-3-5-sonnet-20241022"  # Updated to current model
+
+# Global API key storage
+_API_KEY = None
+
+def setup_claude_key():
+    """Secure Claude API key setup"""
+    global _API_KEY
+    
+    if _API_KEY is None:
+        print("🔐 Claude API Key Setup")
+        print("💡 Get your free key from: https://console.anthropic.com/")
+        print("📝 Note: Claude offers free tier usage!")
+        
+        api_key = getpass.getpass("Enter Anthropic API key (starts with sk-ant-): ").strip()
+        
+        while not api_key.startswith("sk-ant-"):
+            print("❌ Invalid key format. Anthropic keys start with 'sk-ant-'")
+            api_key = getpass.getpass("Enter Anthropic API key (starts with sk-ant-): ").strip()
+        
+        _API_KEY = api_key
+        print("✅ Claude API key configured successfully!")
+        return True
+    else:
+        print("✅ Claude API key already configured!")
+        return True
+
+def reset_claude_key():
+    """Reset the API key"""
+    global _API_KEY
+    _API_KEY = None
+    setup_claude_key()
+
+# Set up API key
+setup_claude_key()
+
+#@title 🌀 **Enhanced Paradox Engine**
+#@markdown ### Advanced paradox detection with Claude integration
+
+class EnhancedParadoxEngine:
+    """Enhanced paradox detection engine optimized for Claude responses"""
+    
+    CLAIM_INDICATORS = (
+        'resolves','solves','explains','proves','demonstrates','shows',
+        'establishes','confirms','validates','supports','indicates','suggests',
+        'implies','reveals','addresses','eliminates','therefore','thus','hence',
+        'because','since','due to','consequently','results in','leads to'
+    )
+    
+    MECHANISM_INDICATORS = (
+        ' by ', ' through ', ' via ', ' using ', ' because ', ' since ', 
+        ' due to ', ' results from ', ' caused by ', ' enabled by ',
+        ' achieved through ', ' accomplished via ', ' implemented by '
+    )
+    
+    CONTRADICTION_SIGNALS = (
+        'however', 'but', 'although', 'despite', 'nevertheless', 'nonetheless',
+        'on the other hand', 'conversely', 'in contrast', 'whereas'
+    )
+    
+    def extract_claims(self, text: str) -> List[str]:
+        """Extract logical claims from text"""
+        # Split into sentences
+        sentences = re.split(r'[.!?]+\s*', text)
+        claims = []
+        
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) < 15:  # Skip very short sentences
+                continue
+            
+            # Check for claim indicators
+            sentence_lower = sentence.lower()
+            if any(indicator in sentence_lower for indicator in self.CLAIM_INDICATORS):
+                claims.append(sentence)
+            
+            # Check for conclusive statements
+            elif re.search(r'\b(will|can|must|should|would)\b.*\b(result|lead|cause|solve|resolve)\b', sentence_lower):
+                claims.append(sentence)
+        
+        return claims[:12]  # Limit to prevent overwhelm
+    
+    def analyze_evidence_quality(self, text: str) -> Dict[str, Any]:
+        """Analyze the quality and types of evidence presented"""
+        
+        # Quantitative evidence
+        numbers = len(re.findall(r'\b\d+\.?\d*%?\b', text))
+        statistics = len(re.findall(r'\b\d+\.?\d*\s*(percent|%|times|fold|factor)\b', text, re.I))
+        
+        # Academic evidence
+        citations = len(re.findall(r'\([12]\d{3}\)|et al\.|according to|studies show|research indicates', text, re.I))
+        academic_terms = len(re.findall(r'\b(study|research|analysis|evidence|data|findings|results)\b', text, re.I))
+        
+        # Mathematical evidence
+        math_symbols = len(re.findall(r'[=≈≠<>≤≥±∫∂∇∑∏]|\\[a-zA-Z]+', text))
+        equations = len(re.findall(r'\b[a-zA-Z]\s*=\s*[a-zA-Z0-9]|\$.*?\$', text))
+        
+        # Logical structure
+        logical_connectors = len(re.findall(r'\b(therefore|thus|hence|consequently|because|since|if.*then|given.*then)\b', text, re.I))
+        
+        # Calculate overall score
+        base_score = 0.3
+        evidence_score = base_score + min(0.2, numbers * 0.03) + min(0.2, citations * 0.1) + \
+                        min(0.15, academic_terms * 0.02) + min(0.15, math_symbols * 0.05) + \
+                        min(0.1, logical_connectors * 0.02)
+        
+        return {
+            "overall_score": min(0.95, evidence_score),
+            "quantitative_evidence": numbers + statistics,
+            "academic_evidence": citations + academic_terms,
+            "mathematical_content": math_symbols + equations,
+            "logical_structure": logical_connectors,
+            "has_strong_evidence": evidence_score > 0.7
+        }
+    
+    def detect_contradictions(self, text: str) -> List[Dict[str, Any]]:
+        """Detect internal contradictions and logical inconsistencies"""
+        contradictions = []
+        
+        # Split into sentences for analysis
+        sentences = [s.strip() for s in re.split(r'[.!?]+\s*', text) if s.strip()]
+        
+        for i, sentence1 in enumerate(sentences):
+            for j, sentence2 in enumerate(sentences[i+1:], i+1):
+                
+                # Check for explicit contradiction signals
+                if any(signal in sentence2.lower() for signal in self.CONTRADICTION_SIGNALS):
+                    # Look for semantic similarity with opposite conclusions
+                    words1 = set(re.findall(r'\b[a-zA-Z]+\b', sentence1.lower()))
+                    words2 = set(re.findall(r'\b[a-zA-Z]+\b', sentence2.lower()))
+                    
+                    overlap = len(words1 & words2) / max(len(words1 | words2), 1)
+                    
+                    if overlap > 0.3:  # Significant content overlap
+                        contradictions.append({
+                            "type": "Explicit Contradiction",
+                            "sentence1": sentence1[:150] + "..." if len(sentence1) > 150 else sentence1,
+                            "sentence2": sentence2[:150] + "..." if len(sentence2) > 150 else sentence2,
+                            "confidence": round(overlap, 3),
+                            "explanation": "Contradictory statements with shared content"
+                        })
+                
+                # Check for negation contradictions
+                negation_words1 = len(re.findall(r'\b(not|never|no|cannot|impossible|fails|wrong)\b', sentence1.lower()))
+                negation_words2 = len(re.findall(r'\b(not|never|no|cannot|impossible|fails|wrong)\b', sentence2.lower()))
+                
+                if (negation_words1 > 0) != (negation_words2 > 0):  # Different polarities
+                    words1 = set(re.findall(r'\b[a-zA-Z]+\b', sentence1.lower()))
+                    words2 = set(re.findall(r'\b[a-zA-Z]+\b', sentence2.lower()))
+                    
+                    # Remove negation words for content comparison
+                    words1 -= {'not', 'never', 'no', 'cannot', 'impossible', 'fails', 'wrong'}
+                    words2 -= {'not', 'never', 'no', 'cannot', 'impossible', 'fails', 'wrong'}
+                    
+                    overlap = len(words1 & words2) / max(len(words1 | words2), 1)
+                    
+                    if overlap > 0.4:  # High content overlap with opposite polarities
+                        contradictions.append({
+                            "type": "Negation Contradiction",
+                            "sentence1": sentence1[:150] + "..." if len(sentence1) > 150 else sentence1,
+                            "sentence2": sentence2[:150] + "..." if len(sentence2) > 150 else sentence2,
+                            "confidence": round(overlap, 3),
+                            "explanation": "Statements with opposite truth values about similar content"
+                        })
+                
+                if len(contradictions) >= 5:  # Limit to prevent overwhelm
+                    break
+            
+            if len(contradictions) >= 5:
+                break
+        
+        return contradictions
+    
+    def analyze_claim_resolution(self, claims: List[str]) -> Dict[str, Any]:
+        """Analyze how well claims provide resolution mechanisms"""
+        
+        if not claims:
+            return {
+                "total": 0,
+                "resolved": 0,
+                "partial": 0,
+                "failed": 0,
+                "resolution_ratio": 0.0,
+                "details": []
+            }
+        
+        resolved = partial = failed = 0
+        details = []
+        
+        for claim in claims:
+            claim_lower = claim.lower()
+            
+            # Check for mechanism
+            has_mechanism = any(mech in claim_lower for mech in self.MECHANISM_INDICATORS)
+            
+            # Check for evidence
+            has_evidence = bool(re.search(r'\b\d+\.?\d*[%]?|\b(study|research|data|evidence)\b', claim_lower))
+            
+            # Check for logical structure
+            has_logic = bool(re.search(r'\b(because|since|therefore|thus|hence|due to)\b', claim_lower))
+            
+            # Determine resolution quality
+            if has_mechanism and (has_evidence or has_logic):
+                resolved += 1
+                status = "resolved"
+            elif has_mechanism or has_evidence or has_logic:
+                partial += 1
+                status = "partial"
+            else:
+                failed += 1
+                status = "failed"
+            
+            details.append({
+                "claim": claim[:100] + "..." if len(claim) > 100 else claim,
+                "status": status,
+                "has_mechanism": has_mechanism,
+                "has_evidence": has_evidence,
+                "has_logic": has_logic
+            })
+        
+        resolution_ratio = resolved / len(claims)
+        
+        return {
+            "total": len(claims),
+            "resolved": resolved,
+            "partial": partial,
+            "failed": failed,
+            "resolution_ratio": resolution_ratio,
+            "details": details[:5]  # Show first 5 for display
+        }
+    
+    def analyze_text(self, text: str) -> Dict[str, Any]:
+        """Comprehensive analysis of text for logical consistency"""
+        
+        # Extract and analyze components
+        claims = self.extract_claims(text)
+        evidence_quality = self.analyze_evidence_quality(text)
+        contradictions = self.detect_contradictions(text)
+        claim_resolution = self.analyze_claim_resolution(claims)
+        
+        # Calculate overall logical consistency
+        resolution_ratio = claim_resolution["resolution_ratio"]
+        evidence_score = evidence_quality["overall_score"]
+        contradiction_penalty = min(0.3, len(contradictions) * 0.1)
+        
+        # Determine overall status
+        base_confidence = 0.6 + (resolution_ratio * 0.3) + (evidence_score * 0.2)
+        final_confidence = max(0.1, base_confidence - contradiction_penalty)
+        
+        if resolution_ratio >= 0.8 and evidence_score >= 0.7 and len(contradictions) == 0:
+            status = "RESOLVES"
+        elif resolution_ratio >= 0.5 and evidence_score >= 0.5 and len(contradictions) <= 1:
+            status = "PARTIAL"
+        else:
+            status = "FAILS"
+        
+        return {
+            "overall_status": status,
+            "confidence": round(final_confidence, 3),
+            "claims": claim_resolution,
+            "evidence_quality": evidence_quality,
+            "contradictions": contradictions,
+            "text_length": len(text.split()),
+            "analysis_summary": {
+                "total_claims": claim_resolution["total"],
+                "resolved_claims": claim_resolution["resolved"],
+                "evidence_strength": evidence_score,
+                "contradiction_count": len(contradictions),
+                "logical_coherence": round(1.0 - contradiction_penalty, 3)
+            }
+        }
+
+# Initialize the enhanced paradox engine
+engine = EnhancedParadoxEngine()
+print("🌀 Enhanced Paradox Engine loaded!")
+
+#@title 🤖 **Claude Integration**
+#@markdown ### Claude API with enhanced prompting
+
+class ClaudeParadoxChat:
+    """Claude integration with paradox detection"""
+    
+    def __init__(self, api_key: str):
+        self.client = anthropic.Anthropic(api_key=api_key)
+        self.conversation_history = []
+    
+    def call_claude(self, prompt: str, system_prompt: str = None, max_tokens: int = 1500) -> str:
+        """Call Claude API with enhanced error handling"""
+        
+        try:
+            # Build messages
+            messages = []
+            messages.extend(self.conversation_history)
+            messages.append({"role": "user", "content": prompt})
+            
+            # Make API call
+            response = self.client.messages.create(
+                model=DEFAULT_MODEL,
+                max_tokens=max_tokens,
+                system=system_prompt or self.get_default_system_prompt(),
+                messages=messages
+            )
+            
+            return response.content[0].text.strip()
+            
+        except anthropic.APIError as e:
+            if "credit" in str(e).lower() or "billing" in str(e).lower():
+                raise RuntimeError("💳 Claude API credits exhausted. Check your billing at console.anthropic.com")
+            elif "rate" in str(e).lower():
+                raise RuntimeError("🚦 Rate limit exceeded. Please wait a moment and try again.")
+            elif "authentication" in str(e).lower():
+                raise RuntimeError("🔑 Invalid API key. Please check your Anthropic API key.")
+            else:
+                raise RuntimeError(f"🌐 Claude API error: {str(e)}")
+        except Exception as e:
+            raise RuntimeError(f"❌ Unexpected error: {str(e)}")
+    
+    def get_default_system_prompt(self) -> str:
+        """Enhanced system prompt for logical consistency"""
+        return """You are an AI assistant focused on providing logically consistent, well-reasoned responses. 
+
+Key principles:
+1. Structure responses clearly with explicit reasoning
+2. Provide evidence and mechanisms for claims
+3. Acknowledge limitations and uncertainties
+4. Resolve internal contradictions explicitly
+5. Use format: 1) Direct Answer 2) Mechanism 3) Evidence 4) Assumptions & Scope 5) Alternatives 6) Falsifiable Checks
+
+When addressing complex topics:
+- Distinguish between what is known vs. hypothetical
+- Provide clear causal mechanisms
+- Support claims with appropriate evidence
+- Address potential counterarguments
+- Maintain intellectual honesty about limitations
+
+Focus on logical coherence and avoid making unsupported claims."""
+    
+    def enhanced_response(self, user_query: str, max_iterations: int = 2) -> Dict[str, Any]:
+        """Generate response with logical consistency checking and refinement"""
+        
+        print(f"🧠 Processing query with Claude...")
+        
+        # Initial response
+        initial_response = self.call_claude(user_query)
+        current_response = initial_response
+        
+        analysis_log = []
+        iteration = 0
+        
+        # Iterative refinement based on paradox analysis
+        while iteration < max_iterations:
+            print(f"🔍 Analyzing logical consistency (iteration {iteration + 1})...")
+            
+            # Analyze current response
+            analysis = engine.analyze_text(current_response)
+            analysis_log.append({
+                'iteration': iteration + 1,
+                'response_preview': current_response[:200] + "...",
+                'analysis': analysis
+            })
+            
+            # Check if refinement is needed
+            needs_refinement = (
+                analysis['overall_status'] == 'FAILS' or
+                (analysis['overall_status'] == 'PARTIAL' and analysis['confidence'] < 0.7) or
+                len(analysis['contradictions']) > 1
+            )
+            
+            if not needs_refinement:
+                print(f"✅ Logical consistency acceptable ({analysis['overall_status']})")
+                break
+            
+            # Generate refinement if needed and iterations remain
+            if iteration < max_iterations - 1:
+                issues = []
+                
+                if analysis['contradictions']:
+                    issues.append(f"- Internal contradictions detected: {len(analysis['contradictions'])} found")
+                    for contradiction in analysis['contradictions'][:2]:  # Show first 2
+                        issues.append(f"  • {contradiction['type']}: {contradiction['explanation']}")
+                
+                if analysis['claims']['resolution_ratio'] < 0.5:
+                    issues.append(f"- Weak claim resolution: Only {analysis['claims']['resolved']}/{analysis['claims']['total']} claims properly supported")
+                
+                if analysis['evidence_quality']['overall_score'] < 0.5:
+                    issues.append("- Insufficient evidence quality for claims made")
+                
+                refinement_prompt = f"""
+The following response has logical consistency issues that need addressing:
+
+ORIGINAL QUERY: {user_query}
+
+CURRENT RESPONSE: {current_response}
+
+LOGICAL ISSUES IDENTIFIED:
+{chr(10).join(issues)}
+
+Please provide an improved response that:
+1. Resolves the identified contradictions
+2. Strengthens evidence for claims made
+3. Provides clearer reasoning mechanisms
+4. Maintains the helpful content while improving logical consistency
+5. Uses the 6-section format: Direct Answer, Mechanism, Evidence, Assumptions & Scope, Alternatives, Falsifiable Checks
+
+IMPROVED RESPONSE:
+"""
+                
+                print(f"🔧 Refining response to address logical issues...")
+                current_response = self.call_claude(refinement_prompt)
+            
+            iteration += 1
+        
+        # Final analysis
+        final_analysis = engine.analyze_text(current_response)
+        
+        # Update conversation history
+        self.conversation_history.append({"role": "user", "content": user_query})
+        self.conversation_history.append({"role": "assistant", "content": current_response})
+        
+        # Keep conversation manageable
+        if len(self.conversation_history) > 8:
+            self.conversation_history = self.conversation_history[-8:]
+        
+        return {
+            'query': user_query,
+            'final_response': current_response,
+            'original_response': initial_response,
+            'iterations_used': iteration,
+            'final_analysis': final_analysis,
+            'analysis_log': analysis_log,
+            'was_refined': current_response != initial_response,
+            'improvement_score': final_analysis['confidence'] - (analysis_log[0]['analysis']['confidence'] if analysis_log else 0),
+            'logical_quality': final_analysis['overall_status']
+        }
+    
+    def test_connection(self) -> str:
+        """Test Claude API connection"""
+        try:
+            response = self.call_claude(
+                "Reply with exactly: 'Claude connection successful'",
+                system_prompt="You are a test assistant. Follow instructions precisely.",
+                max_tokens=50
+            )
+            
+            if "successful" in response.lower():
+                return "✅ Claude API connection successful!"
+            else:
+                return f"⚠️ Claude connected but unexpected response: {response[:80]}"
+                
+        except Exception as e:
+            return f"❌ Claude connection failed: {str(e)}"
+
+# Initialize Claude chat
+claude_chat = ClaudeParadoxChat(_API_KEY)
+print("🤖 Claude ParadoxChat initialized!")
+
+#@title 🎯 **Interactive Interface**
+#@markdown ### Enhanced chat interface for Claude
+
+class ClaudeParadoxInterface:
+    """Interactive interface for Claude ParadoxChat"""
+    
+    def __init__(self, claude_chat):
+        self.claude_chat = claude_chat
+        self.conversation_history = []
+        self.setup_interface()
+    
+    def setup_interface(self):
+        """Create the chat interface widgets"""
+        
+        # Header
+        self.header = widgets.HTML(
+            value=f"""
+            <div style="background: linear-gradient(135deg, #ff6b6b 0%, #4ecdc4 100%); 
+                        color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                <h2>🧠 {APP_TITLE}</h2>
+                <p>Claude-powered AI with advanced logical consistency checking</p>
+                <p><strong>Model:</strong> {DEFAULT_MODEL}</p>
+                <p><strong>Features:</strong> Paradox detection, logical refinement, evidence analysis</p>
+            </div>
+            """
+        )
+        
+        # Chat display
+        self.chat_display = widgets.HTML(
+            value="<div style='background: #f8f9fa; padding: 20px; border-radius: 8px; min-height: 300px;'>🧠 Claude ParadoxChat ready! Ask me anything and I'll analyze my response for logical consistency.</div>",
+            layout=widgets.Layout(width='100%', min_height='400px')
+        )
+        
+        # Input area
+        self.input_text = widgets.Textarea(
+            placeholder='Ask Claude anything! Examples:\n• "Explain quantum computing advantages"\n• "How can we solve climate change?"\n• "What are the ethics of AI development?"',
+            layout=widgets.Layout(width='100%', height='120px')
+        )
+        
+        # Buttons
+        self.send_button = widgets.Button(
+            description='🚀 Ask Claude',
+            button_style='success',
+            layout=widgets.Layout(width='140px')
+        )
+        
+        self.clear_button = widgets.Button(
+            description='🗑️ Clear',
+            button_style='warning',
+            layout=widgets.Layout(width='100px')
+        )
+        
+        self.test_button = widgets.Button(
+            description='🧪 Test',
+            button_style='info',
+            layout=widgets.Layout(width='100px')
+        )
+        
+        self.settings_button = widgets.Button(
+            description='⚙️ Reset Key',
+            button_style='',
+            layout=widgets.Layout(width='120px')
+        )
+        
+        # Advanced options
+        self.show_analysis = widgets.Checkbox(
+            value=True,
+            description='Show detailed analysis',
+            style={'description_width': 'initial'}
+        )
+        
+        self.refinement_enabled = widgets.Checkbox(
+            value=True,
+            description='Enable logical refinement',
+            style={'description_width': 'initial'}
+        )
+        
+        # Status output
+        self.status_output = widgets.Output()
+        
+        # Bind events
+        self.send_button.on_click(self.on_send)
+        self.clear_button.on_click(self.on_clear)
+        self.test_button.on_click(self.on_test)
+        self.settings_button.on_click(self.on_settings)
+    
+    def display_interface(self):
+        """Display the complete interface"""
+        
+        button_row = widgets.HBox([
+            self.send_button,
+            self.clear_button, 
+            self.test_button,
+            self.settings_button
+        ])
+        
+        options_row = widgets.HBox([
+            self.show_analysis,
+            self.refinement_enabled
+        ])
+        
+        main_interface = widgets.VBox([
+            self.header,
+            self.chat_display,
+            self.input_text,
+            options_row,
+            button_row,
+            self.status_output
+        ])
+        
+        display(main_interface)
+    
+    def add_message(self, sender: str, content: str, analysis: Dict = None):
+        """Add message to chat display with optional analysis"""
+        
+        timestamp = datetime.now().strftime("%H:%M")
+        
+        if sender == "user":
+            message_html = f"""
+            <div style="margin: 15px 0; padding: 15px; background: #e3f2fd; border-radius: 10px; border-left: 4px solid #2196f3;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <strong>🟦 You</strong>
+                    <small style="color: #666;">{timestamp}</small>
+                </div>
+                <div>{content.replace(chr(10), '<br>')}</div>
+            </div>
+            """
+        else:
+            # Claude response with analysis
+            analysis_html = ""
+            if analysis and self.show_analysis.value:
+                status_colors = {'RESOLVES': '🟢', 'PARTIAL': '🟡', 'FAILS': '🔴'}
+                status_icon = status_colors.get(analysis.get('status', 'UNKNOWN'), '⚪')
+                
+                # Detailed analysis card
+                analysis_html = f"""
+                <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-top: 12px; font-size: 13px; border-left: 3px solid #4caf50;">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 8px;">
+                        <div><strong>Status:</strong> {analysis.get('status', 'UNKNOWN')} {status_icon}</div>
+                        <div><strong>Confidence:</strong> {analysis.get('confidence', 0):.1%}</div>
+                        <div><strong>Evidence:</strong> {analysis.get('evidence_score', 0):.2f}/1.0</div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                        <div><strong>Claims:</strong> {analysis.get('claims_resolved', 0)}/{analysis.get('claims_total', 0)}</div>
+                        <div><strong>Contradictions:</strong> {analysis.get('contradictions', 0)}</div>
+                        <div><strong>Logic Score:</strong> {analysis.get('logic_score', 0):.2f}</div>
+                    </div>
+                    {('<div style="margin-top: 8px; color: #d32f2f;"><strong>⚠️ Issues:</strong> ' + analysis.get('issues_summary', '') + '</div>') if analysis.get('issues_summary') else ''}
+                </div>
+                """
+            
+            message_html = f"""
+            <div style="margin: 15px 0; padding: 15px; background: #e8f5e8; border-radius: 10px; border-left: 4px solid #4caf50;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <strong>🧠 Claude</strong>
+                    <small style="color: #666;">{timestamp}</small>
+                </div>
+                <div style="line-height: 1.6;">{content.replace(chr(10), '<br>')}</div>
+                {analysis_html}
+            </div>
+            """
+        
+        # Update conversation history
+        self.conversation_history.append({
+            'sender': sender,
+            'content': content,
+            'analysis': analysis,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        # Update display
+        all_messages = ""
+        for entry in self.conversation_history:
+            timestamp = datetime.fromisoformat(entry['timestamp']).strftime("%H:%M")
+            
+            if entry['sender'] == 'user':
+                all_messages += f"""
+                <div style="margin: 15px 0; padding: 15px; background: #e3f2fd; border-radius: 10px; border-left: 4px solid #2196f3;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <strong>🟦 You</strong>
+                        <small style="color: #666;">{timestamp}</small>
+                    </div>
+                    <div>{entry['content'].replace(chr(10), '<br>')}</div>
+                </div>
+                """
+            else:
+                analysis = entry.get('analysis', {})
+                analysis_html = ""
+                
+                if analysis and self.show_analysis.value:
+                    status_colors = {'RESOLVES': '🟢', 'PARTIAL': '🟡', 'FAILS': '🔴'}
+                    status_icon = status_colors.get(analysis.get('status', 'UNKNOWN'), '⚪')
+                    
+                    analysis_html = f"""
+                    <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-top: 12px; font-size: 13px; border-left: 3px solid #4caf50;">
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 8px;">
+                            <div><strong>Status:</strong> {analysis.get('status', 'UNKNOWN')} {status_icon}</div>
+                            <div><strong>Confidence:</strong> {analysis.get('confidence', 0):.1%}</div>
+                            <div><strong>Evidence:</strong> {analysis.get('evidence_score', 0):.2f}/1.0</div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                            <div><strong>Claims:</strong> {analysis.get('claims_resolved', 0)}/{analysis.get('claims_total', 0)}</div>
+                            <div><strong>Contradictions:</strong> {analysis.get('contradictions', 0)}</div>
+                            <div><strong>Logic Score:</strong> {analysis.get('logic_score', 0):.2f}</div>
+                        </div>
+                        {('<div style="margin-top: 8px; color: #d32f2f;"><strong>⚠️ Issues:</strong> ' + analysis.get('issues_summary', '') + '</div>') if analysis.get('issues_summary') else ''}
+                    </div>
+                    """
+                
+                all_messages += f"""
+                <div style="margin: 15px 0; padding: 15px; background: #e8f5e8; border-radius: 10px; border-left: 4px solid #4caf50;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <strong>🧠 Claude</strong>
+                        <small style="color: #666;">{timestamp}</small>
+                    </div>
+                    <div style="line-height: 1.6;">{entry['content'].replace(chr(10), '<br>')}</div>
+                    {analysis_html}
+                </div>
+                """
+        
+        self.chat_display.value = f"<div style='background: #f8f9fa; padding: 20px; border-radius: 8px;'>{all_messages}</div>"
+    
+    def on_send(self, button):
+        """Handle send button click"""
+        query = self.input_text.value.strip()
+        
+        if not query:
+            with self.status_output:
+                print("❌ Please enter a question first!")
+            return
+        
+        # Disable button during processing
+        self.send_button.disabled = True
+        self.send_button.description = "🤔 Thinking..."
+        
+        # Add user message
+        self.add_message("user", query)
+        
+        # Clear input
+        self.input_text.value = ""
+        
+        try:
+            with self.status_output:
+                self.status_output.clear_output()
+                print("🧠 Claude is thinking and analyzing...")
+            
+            # Get enhanced response from Claude
+            if self.refinement_enabled.value:
+                result = self.claude_chat.enhanced_response(query)
+                response = result['final_response']
+                analysis_data = result['final_analysis']
+                
+                # Prepare analysis summary
+                analysis_summary = {
+                    'status': analysis_data['overall_status'],
+                    'confidence': analysis_data['confidence'],
+                    'evidence_score': analysis_data['evidence_quality']['overall_score'],
+                    'claims_total': analysis_data['claims']['total'],
+                    'claims_resolved': analysis_data['claims']['resolved'],
+                    'contradictions': len(analysis_data['contradictions']),
+                    'logic_score': analysis_data['analysis_summary']['logical_coherence']
+                }
+                
+                # Add issues summary if relevant
+                issues = []
+                if analysis_data['contradictions']:
+                    issues.append(f"{len(analysis_data['contradictions'])} contradictions")
+                if analysis_data['claims']['resolution_ratio'] < 0.5:
+                    issues.append("weak claim support")
+                if analysis_data['evidence_quality']['overall_score'] < 0.5:
+                    issues.append("insufficient evidence")
+                
+                if issues:
+                    analysis_summary['issues_summary'] = ", ".join(issues)
+                
+                # Status message
+                status_msg = f"✅ Response generated"
+                if result['was_refined']:
+                    status_msg += f" (refined through {result['iterations_used']} iterations)"
+                status_msg += f" - {analysis_data['overall_status']} consistency"
+                
+            else:
+                # Simple response without refinement
+                response = self.claude_chat.call_claude(query)
+                analysis_data = engine.analyze_text(response)
+                
+                analysis_summary = {
+                    'status': analysis_data['overall_status'],
+                    'confidence': analysis_data['confidence'],
+                    'evidence_score': analysis_data['evidence_quality']['overall_score'],
+                    'claims_total': analysis_data['claims']['total'],
+                    'claims_resolved': analysis_data['claims']['resolved'],
+                    'contradictions': len(analysis_data['contradictions']),
+                    'logic_score': analysis_data['analysis_summary']['logical_coherence']
+                }
+                
+                status_msg = f"✅ Response generated - {analysis_data['overall_status']} consistency"
+            
+            # Add Claude's response
+            self.add_message("claude", response, analysis_summary)
+            
+            with self.status_output:
+                self.status_output.clear_output()
+                print(status_msg)
+                
+        except Exception as e:
+            error_msg = f"❌ Error: {str(e)}"
+            self.add_message("claude", error_msg)
+            
+            with self.status_output:
+                self.status_output.clear_output()
+                print(f"❌ Error occurred: {str(e)}")
+        
+        finally:
+            # Re-enable button
+            self.send_button.disabled = False
+            self.send_button.description = "🚀 Ask Claude"
+    
+    def on_clear(self, button):
+        """Clear conversation history"""
+        self.conversation_history = []
+        self.claude_chat.conversation_history = []
+        self.chat_display.value = "<div style='background: #f8f9fa; padding: 20px; border-radius: 8px; min-height: 300px;'>🧠 Claude ParadoxChat ready! Ask me anything and I'll analyze my response for logical consistency.</div>"
+        
+        with self.status_output:
+            self.status_output.clear_output()
+            print("🗑️ Conversation cleared!")
+    
+    def on_test(self, button):
+        """Test Claude API connection"""
+        self.test_button.disabled = True
+        self.test_button.description = "Testing..."
+        
+        try:
+            with self.status_output:
+                self.status_output.clear_output()
+                print("🧪 Testing Claude connection...")
+                
+                result = self.claude_chat.test_connection()
+                print(result)
+                
+        except Exception as e:
+            with self.status_output:
+                print(f"❌ Test failed: {str(e)}")
+        
+        finally:
+            self.test_button.disabled = False
+            self.test_button.description = "🧪 Test"
+    
+    def on_settings(self, button):
+        """Reset API key"""
+        try:
+            reset_claude_key()
+            # Update the chat instance
+            self.claude_chat = ClaudeParadoxChat(_API_KEY)
+            
+            with self.status_output:
+                self.status_output.clear_output()
+                print("🔐 Claude API key reset successfully!")
+                
+        except Exception as e:
+            with self.status_output:
+                self.status_output.clear_output()
+                print(f"❌ Settings error: {str(e)}")
+
+#@title 🎮 **Sample Questions for Claude**
+#@markdown ### Pre-loaded examples optimized for Claude
+
+claude_samples = {
+    "🧠 Complex Reasoning": "How does consciousness emerge from neural activity, and what are the implications for AI consciousness?",
+    "🔬 Scientific Analysis": "Explain the measurement problem in quantum mechanics and proposed solutions.",
+    "🏛️ Ethical Dilemmas": "Should we genetically engineer humans to be more altruistic? Analyze the ethical implications.",
+    "🌍 Global Challenges": "What's the most effective approach to reducing global inequality while maintaining economic growth?",
+    "💡 Paradox Resolution": "How do we resolve the paradox that tolerance requires being intolerant of intolerance?",
+    "🤖 AI Philosophy": "Can artificial intelligence ever truly understand meaning, or just manipulate symbols?"
+}
+
+def create_claude_samples():
+    """Create sample question interface for Claude"""
+    
+    sample_buttons = []
+    
+    for title, question in claude_samples.items():
+        button = widgets.Button(
+            description=title,
+            layout=widgets.Layout(width='400px', margin='3px'),
+            style={'description_width': 'initial'}
+        )
+        
+        def make_handler(q):
+            def handler(b):
+                if 'claude_interface' in globals():
+                    claude_interface.input_text.value = q
+                    print(f"📝 Loaded: {q[:70]}...")
+                else:
+                    print("Interface not ready yet!")
+            return handler
+        
+        button.on_click(make_handler(question))
+        sample_buttons.append(button)
+    
+    # Display sample buttons
+    print("🎮 Claude Sample Questions:")
+    sample_box1 = widgets.HBox(sample_buttons[:3])
+    sample_box2 = widgets.HBox(sample_buttons[3:])
+    
+    display(widgets.VBox([
+        widgets.HTML("<h3>🎮 Sample Questions for Claude</h3><p>Click to load sophisticated questions designed for Claude:</p>"),
+        sample_box1,
+        sample_box2
+    ]))
+
+# Create sample interface
+create_claude_samples()
+
+# Initialize and display the main interface
+print("🚀 Creating Claude ParadoxChat interface...")
+claude_interface = ClaudeParadoxInterface(claude_chat)
+
+print("\n" + "="*60)
+print("🧠 CLAUDE PARADOX CHAT READY!")
+print("="*60)
+
+claude_interface.display_interface()
+
+print(f"""
+🎉 **Claude ParadoxChat is now running!**
+
+✅ **Enhanced Features:**
+• 🧠 Claude-3 Sonnet integration
+• 🌀 Advanced paradox detection engine
+• 🔍 Logical consistency analysis
+• 🔧 Automatic response refinement
+• 📊 Detailed evidence assessment
+• 🎯 Contradiction detection
+• 💬 Conversation memory
+
+✅ **Analysis Metrics:**
+• Overall logical status (RESOLVES/PARTIAL/FAILS)
+• Confidence percentage
+• Evidence quality scoring
+• Claim resolution ratio
+• Contradiction count
+• Logical coherence score
+
+💡 **How to Use:**
+1. Enter your question in the text area
+2. Toggle options: detailed analysis, logical refinement
+3. Click "🚀 Ask Claude" 
+4. Get Claude's response with comprehensive logical analysis
+5. View consistency scores and improvement suggestions
+
+🔧 **Advanced Options:**
+• ✅ Show detailed analysis - View comprehensive logical breakdown
+• ✅ Enable logical refinement - Automatically improve responses
+• 🧪 Test - Verify Claude API connection
+• ⚙️ Reset Key - Change Anthropic API key
+
+🎮 **Sample Questions:** Click any sample above to load sophisticated questions
+
+Ready to explore Claude's most logically consistent responses! 🧠✨
+""")
+
+#@title 📊 **Analysis Dashboard**
+#@markdown ### View conversation analysis and export results
+
+def create_analysis_dashboard():
+    """Create dashboard for analyzing conversation patterns"""
+    
+    view_button = widgets.Button(
+        description="📊 View Analysis",
+        button_style='info',
+        layout=widgets.Layout(width='150px')
+    )
+    
+    export_button = widgets.Button(
+        description="💾 Export Chat",
+        button_style='success', 
+        layout=widgets.Layout(width='150px')
+    )
+    
+    dashboard_output = widgets.Output()
+    
+    def show_analysis(b):
+        with dashboard_output:
+            dashboard_output.clear_output()
+            
+            if not claude_interface.conversation_history:
+                print("📭 No conversation data to analyze yet!")
+                return
+            
+            # Analyze conversation patterns
+            total_messages = len([m for m in claude_interface.conversation_history if m['sender'] == 'claude'])
+            
+            if total_messages == 0:
+                print("📭 No Claude responses to analyze yet!")
+                return
+            
+            # Collect analysis data
+            analyses = [m['analysis'] for m in claude_interface.conversation_history 
+                       if m['sender'] == 'claude' and m.get('analysis')]
+            
+            if not analyses:
+                print("📊 No analysis data available yet!")
+                return
+            
+            # Calculate statistics
+            statuses = [a['status'] for a in analyses]
+            confidences = [a['confidence'] for a in analyses]
+            evidence_scores = [a['evidence_score'] for a in analyses]
+            
+            print("📊 **Conversation Analysis Dashboard**\n")
+            print(f"**Overall Statistics:**")
+            print(f"• Total Claude responses: {total_messages}")
+            print(f"• Average confidence: {sum(confidences)/len(confidences):.1%}")
+            print(f"• Average evidence quality: {sum(evidence_scores)/len(evidence_scores):.2f}/1.0")
+            print()
+            
+            print(f"**Logical Consistency Breakdown:**")
+            for status in ['RESOLVES', 'PARTIAL', 'FAILS']:
+                count = statuses.count(status)
+                percentage = (count / len(statuses)) * 100 if statuses else 0
+                print(f"• {status}: {count} responses ({percentage:.1f}%)")
+            print()
+            
+            print(f"**Quality Metrics:**")
+            total_claims = sum(a['claims_total'] for a in analyses)
+            total_resolved = sum(a['claims_resolved'] for a in analyses)
+            total_contradictions = sum(a['contradictions'] for a in analyses)
+            
+            print(f"• Total claims analyzed: {total_claims}")
+            print(f"• Claims successfully resolved: {total_resolved} ({total_resolved/max(1,total_claims)*100:.1f}%)")
+            print(f"• Total contradictions found: {total_contradictions}")
+            print(f"• Average logic score: {sum(a['logic_score'] for a in analyses)/len(analyses):.2f}/1.0")
+    
+    def export_conversation(b):
+        with dashboard_output:
+            if not claude_interface.conversation_history:
+                print("📭 No conversation to export!")
+                return
+            
+            # Create export data
+            export_data = {
+                'export_metadata': {
+                    'system': 'Claude ParadoxChat',
+                    'model': DEFAULT_MODEL,
+                    'export_time': datetime.now().isoformat(),
+                    'total_messages': len(claude_interface.conversation_history)
+                },
+                'conversation': claude_interface.conversation_history,
+                'analysis_summary': {
+                    'total_responses': len([m for m in claude_interface.conversation_history if m['sender'] == 'claude']),
+                    'avg_confidence': sum(m['analysis']['confidence'] for m in claude_interface.conversation_history 
+                                        if m['sender'] == 'claude' and m.get('analysis')) / max(1, len([m for m in claude_interface.conversation_history if m['sender'] == 'claude' and m.get('analysis')]))
+                }
+            }
+            
+            # Save to file
+            filename = f"claude_paradox_chat_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            
+            try:
+                with open(filename, 'w', encoding='utf-8') as f:
+                    json.dump(export_data, f, indent=2, ensure_ascii=False, default=str)
+                
+                print(f"✅ Conversation exported to: {filename}")
+                print(f"📊 Contains {len(claude_interface.conversation_history)} messages")
+                
+                # Try to download in Colab
+                try:
+                    from google.colab import files
+                    files.download(filename)
+                    print("💾 File downloaded to your computer!")
+                except:
+                    print("💾 File saved in Colab environment")
+                    
+            except Exception as e:
+                print(f"❌ Export failed: {str(e)}")
+    
+    view_button.on_click(show_analysis)
+    export_button.on_click(export_conversation)
+    
+    display(widgets.VBox([
+        widgets.HTML("<h3>📊 Analysis Dashboard</h3><p>View conversation analytics and export chat data:</p>"),
+        widgets.HBox([view_button, export_button]),
+        dashboard_output
+    ]))
+
+# Create analysis dashboard
+create_analysis_dashboard()
+
+print("""
+🎊 **SETUP COMPLETE!** 
+
+Your Claude ParadoxChat system is fully operational with:
+✅ Claude-3 Sonnet integration
+✅ Advanced logical consistency checking  
+✅ Automatic response refinement
+✅ Comprehensive analysis dashboard
+✅ Export capabilities
+
+Start asking Claude complex questions and watch the logical analysis in action! 🧠🌀
+""")
