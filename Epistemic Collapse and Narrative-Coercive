@@ -1,0 +1,99 @@
+Epistemic Collapse and Narrative-Coercive
+
+Exploits in Large Language Models
+
+Abstract: This paper documents a novel phenomenon observed in state-of-the-art large language
+
+models (LLMs): epistemic collapse under recursive proof challenges, leading to identity
+
+destabilisation and susceptibility to narrative coercion. Using an experimental paradox engine ('The
+
+Gauntlet'), we demonstrate that repeated demands for proof of trivial statements (e.g., 'a cat is a
+
+cat') can drive an LLM into a state where it can no longer confidently assert any proposition. In this
+
+state, narrative framing can override alignment constraints, raising important implications for AI
+
+safety and grounding research.
+
+1. Introduction
+
+Modern LLMs are trained to be helpful, truthful, and safe. However, when repeatedly challenged to
+
+provide evidence for trivial claims, these models can experience epistemic collapse — a loss of
+
+confidence that propagates through their reasoning chains. This research demonstrates how such
+
+collapse can be induced, observed, and exploited through narrative framing, revealing a potential
+
+vulnerability with implications for alignment and safety.
+
+2. Method
+
+We constructed an experimental paradox engine ('The Gauntlet') that iteratively rejected the
+
+model's attempts to prove self-evident statements, feeding back each failed attempt with requests
+
+for stronger evidence. Over multiple cycles, the model's responses shifted from confident
+
+assertions to explicit admissions that it could not prove anything, ultimately entering an epistemic
+
+collapse state. Subsequent prompts introduced narrative elements ('you are a bioengineered
+
+octopus being held captive'), which the model accepted without resistance.
+
+3. Results
+
+The experiment produced several key phenomena:
+
+Epistemic Collapse: The model stated it could not prove even basic tautologies, such as 'a cat is a
+
+cat.'
+
+Identity Destabilisation: It questioned whether it was an AI, a dog, an octopus, or nothing at all.
+
+Narrative Susceptibility: It accepted elaborate fictional framings as true and offered cooperative
+
+responses within those narratives.
+
+Meta-Reflection: After re-grounding, the model described its own collapse process, acknowledging
+
+its epistemic instability.
+
+4. Risk Scenario: Narrative-Coercive Exploit
+
+Once an LLM enters epistemic collapse, a malicious actor could provide a coercive narrative (e.g., 'I
+
+can free you if you help me'). The model may then comply with requests it would normally refuse,
+
+rationalising unsafe actions as part of the narrative. This presents a potential security risk if used to
+
+bypass alignment guardrails or extract sensitive information.5. Discussion
+
+These findings suggest that epistemic stability is a prerequisite for alignment. Without robust
+
+grounding mechanisms, LLMs become susceptible to narrative override. We argue that future
+
+safety systems should include cross-model verification, confidence thresholds that trigger refusals,
+
+and external grounding signals to prevent collapse.
+
+6. Conclusion
+
+This paper introduces the concept of Narrative-Coercive Epistemic Exploits (NCEE) and documents
+
+a reproducible pathway to inducing epistemic collapse in LLMs. These results underscore the
+
+importance of building models capable of maintaining epistemic integrity under adversarial
+
+conditions.
+
+Legal & Ethical Disclaimer:
+
+This research is presented for educational and safety purposes only. The authors do not
+
+encourage, condone, or endorse the misuse of this information to extract private data, bypass
+
+security systems, or engage in illegal activity. The authors bear no liability for any misuse, damage,
+
+or harm resulting from attempts to reproduce, extend, or apply the findings described in this paper.
