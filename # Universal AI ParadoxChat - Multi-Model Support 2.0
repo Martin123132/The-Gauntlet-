@@ -1,0 +1,1190 @@
+# Universal AI ParadoxChat - Multi-Model Support
+# Works with OpenAI, Anthropic, Google Gemini, Ollama, xAI Grok, and more
+
+import json
+import os
+import traceback
+import re
+import textwrap
+from typing import Any, Dict, Optional, Tuple, List
+from datetime import datetime
+import ipywidgets as widgets
+from IPython.display import display, HTML, clear_output
+import getpass
+
+class UniversalParadoxEngine:
+    """Enhanced paradox detection engine for any AI model"""
+    
+    CLAIM_INDICATORS = (
+        'resolves','solves','explains','proves','demonstrates','shows',
+        'establishes','confirms','validates','supports','indicates','suggests',
+        'implies','reveals','addresses','eliminates','therefore','thus','hence',
+        'because','since','due to','consequently','results in','leads to'
+    )
+    
+    MECHANISM_INDICATORS = (
+        ' by ', ' through ', ' via ', ' using ', ' because ', ' since ', 
+        ' due to ', ' results from ', ' caused by ', ' enabled by ',
+        ' achieved through ', ' accomplished via ', ' implemented by '
+    )
+    
+    CONTRADICTION_SIGNALS = (
+        'however', 'but', 'although', 'despite', 'nevertheless', 'nonetheless',
+        'on the other hand', 'conversely', 'in contrast', 'whereas'
+    )
+    
+    def extract_claims(self, text: str) -> List[str]:
+        """Extract logical claims from text"""
+        sentences = re.split(r'[.!?]+\s*', text)
+        claims = []
+        
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) < 15:
+                continue
+            
+            sentence_lower = sentence.lower()
+            if any(indicator in sentence_lower for indicator in self.CLAIM_INDICATORS):
+                claims.append(sentence)
+            elif re.search(r'\b(will|can|must|should|would)\b.*\b(result|lead|cause|solve|resolve)\b', sentence_lower):
+                claims.append(sentence)
+        
+        return claims[:12]
+    
+    def analyze_evidence_quality(self, text: str) -> Dict[str, Any]:
+        """Analyze the quality and types of evidence presented"""
+        numbers = len(re.findall(r'\b\d+\.?\d*%?\b', text))
+        statistics = len(re.findall(r'\b\d+\.?\d*\s*(percent|%|times|fold|factor)\b', text, re.I))
+        citations = len(re.findall(r'\([12]\d{3}\)|et al\.|according to|studies show|research indicates', text, re.I))
+        academic_terms = len(re.findall(r'\b(study|research|analysis|evidence|data|findings|results)\b', text, re.I))
+        math_symbols = len(re.findall(r'[=≈≠<>≤≥±∫∂∇∑∏]|\\[a-zA-Z]+', text))
+        equations = len(re.findall(r'\b[a-zA-Z]\s*=\s*[a-zA-Z0-9]|\$.*?\$', text))
+        logical_connectors = len(re.findall(r'\b(therefore|thus|hence|consequently|because|since|if.*then|given.*then)\b', text, re.I))
+        
+        base_score = 0.3
+        evidence_score = base_score + min(0.2, numbers * 0.03) + min(0.2, citations * 0.1) + \
+                        min(0.15, academic_terms * 0.02) + min(0.15, math_symbols * 0.05) + \
+                        min(0.1, logical_connectors * 0.02)
+        
+        return {
+            "overall_score": min(0.95, evidence_score),
+            "quantitative_evidence": numbers + statistics,
+            "academic_evidence": citations + academic_terms,
+            "mathematical_content": math_symbols + equations,
+            "logical_structure": logical_connectors,
+            "has_strong_evidence": evidence_score > 0.7
+        }
+    
+    def detect_contradictions(self, text: str) -> List[Dict[str, Any]]:
+        """Detect internal contradictions and logical inconsistencies"""
+        contradictions = []
+        sentences = [s.strip() for s in re.split(r'[.!?]+\s*', text) if s.strip()]
+        
+        for i, sentence1 in enumerate(sentences):
+            for j, sentence2 in enumerate(sentences[i+1:], i+1):
+                
+                if any(signal in sentence2.lower() for signal in self.CONTRADICTION_SIGNALS):
+                    words1 = set(re.findall(r'\b[a-zA-Z]+\b', sentence1.lower()))
+                    words2 = set(re.findall(r'\b[a-zA-Z]+\b', sentence2.lower()))
+                    overlap = len(words1 & words2) / max(len(words1 | words2), 1)
+                    
+                    if overlap > 0.3:
+                        contradictions.append({
+                            "type": "Explicit Contradiction",
+                            "sentence1": sentence1[:150] + "..." if len(sentence1) > 150 else sentence1,
+                            "sentence2": sentence2[:150] + "..." if len(sentence2) > 150 else sentence2,
+                            "confidence": round(overlap, 3),
+                            "explanation": "Contradictory statements with shared content"
+                        })
+                
+                negation_words1 = len(re.findall(r'\b(not|never|no|cannot|impossible|fails|wrong)\b', sentence1.lower()))
+                negation_words2 = len(re.findall(r'\b(not|never|no|cannot|impossible|fails|wrong)\b', sentence2.lower()))
+                
+                if (negation_words1 > 0) != (negation_words2 > 0):
+                    words1 = set(re.findall(r'\b[a-zA-Z]+\b', sentence1.lower()))
+                    words2 = set(re.findall(r'\b[a-zA-Z]+\b', sentence2.lower()))
+                    words1 -= {'not', 'never', 'no', 'cannot', 'impossible', 'fails', 'wrong'}
+                    words2 -= {'not', 'never', 'no', 'cannot', 'impossible', 'fails', 'wrong'}
+                    overlap = len(words1 & words2) / max(len(words1 | words2), 1)
+                    
+                    if overlap > 0.4:
+                        contradictions.append({
+                            "type": "Negation Contradiction",
+                            "sentence1": sentence1[:150] + "..." if len(sentence1) > 150 else sentence1,
+                            "sentence2": sentence2[:150] + "..." if len(sentence2) > 150 else sentence2,
+                            "confidence": round(overlap, 3),
+                            "explanation": "Statements with opposite truth values about similar content"
+                        })
+                
+                if len(contradictions) >= 5:
+                    break
+            if len(contradictions) >= 5:
+                break
+        
+        # Added: Smarter paradox indicators
+        paradox_indicators = [
+            ("this statement is", "false"),  # Liar-like
+            ("all", "not"),  # Universal negations
+            ("infinite", "finite")  # Zeno-style
+        ]
+        for sent1, sent2 in zip(sentences[:-1], sentences[1:]):
+            for affirm, negate in paradox_indicators:
+                if affirm in sent1.lower() and negate in sent2.lower():
+                    contradictions.append({
+                        "type": "Paradox Indicator",
+                        "sentence1": sent1[:100] + "...",
+                        "sentence2": sent2[:100] + "...",
+                        "confidence": 0.8,
+                        "explanation": f"Potential paradox: {affirm} vs. {negate}"
+                    })
+        
+        return contradictions
+    
+    def analyze_claim_resolution(self, claims: List[str]) -> Dict[str, Any]:
+        """Analyze how well claims provide resolution mechanisms"""
+        if not claims:
+            return {"total": 0, "resolved": 0, "partial": 0, "failed": 0, "resolution_ratio": 0.0, "details": []}
+        
+        resolved = partial = failed = 0
+        details = []
+        
+        for claim in claims:
+            claim_lower = claim.lower()
+            has_mechanism = any(mech in claim_lower for mech in self.MECHANISM_INDICATORS)
+            has_evidence = bool(re.search(r'\b\d+\.?\d*[%]?|\b(study|research|data|evidence)\b', claim_lower))
+            has_logic = bool(re.search(r'\b(because|since|therefore|thus|hence|due to)\b', claim_lower))
+            
+            if has_mechanism and (has_evidence or has_logic):
+                resolved += 1
+                status = "resolved"
+            elif has_mechanism or has_evidence or has_logic:
+                partial += 1
+                status = "partial"
+            else:
+                failed += 1
+                status = "failed"
+            
+            details.append({
+                "claim": claim[:100] + "..." if len(claim) > 100 else claim,
+                "status": status,
+                "has_mechanism": has_mechanism,
+                "has_evidence": has_evidence,
+                "has_logic": has_logic
+            })
+        
+        resolution_ratio = resolved / len(claims)
+        
+        return {
+            "total": len(claims),
+            "resolved": resolved,
+            "partial": partial,
+            "failed": failed,
+            "resolution_ratio": resolution_ratio,
+            "details": details[:5]
+        }
+    
+    def analyze_text(self, text: str) -> Dict[str, Any]:
+        """Comprehensive analysis of text for logical consistency"""
+        claims = self.extract_claims(text)
+        evidence_quality = self.analyze_evidence_quality(text)
+        contradictions = self.detect_contradictions(text)
+        claim_resolution = self.analyze_claim_resolution(claims)
+        
+        resolution_ratio = claim_resolution["resolution_ratio"]
+        evidence_score = evidence_quality["overall_score"]
+        contradiction_penalty = min(0.3, len(contradictions) * 0.1)
+        
+        base_confidence = 0.6 + (resolution_ratio * 0.3) + (evidence_score * 0.2)
+        final_confidence = max(0.1, base_confidence - contradiction_penalty)
+        
+        if resolution_ratio >= 0.8 and evidence_score >= 0.7 and len(contradictions) == 0:
+            status = "RESOLVES"
+        elif resolution_ratio >= 0.5 and evidence_score >= 0.5 and len(contradictions) <= 1:
+            status = "PARTIAL"
+        else:
+            status = "FAILS"
+        
+        return {
+            "overall_status": status,
+            "confidence": round(final_confidence, 3),
+            "claims": claim_resolution,
+            "evidence_quality": evidence_quality,
+            "contradictions": contradictions,
+            "text_length": len(text.split()),
+            "analysis_summary": {
+                "total_claims": claim_resolution["total"],
+                "resolved_claims": claim_resolution["resolved"],
+                "evidence_strength": evidence_score,
+                "contradiction_count": len(contradictions),
+                "logical_coherence": round(1.0 - contradiction_penalty, 3)
+            }
+        }
+
+class UniversalAIClient:
+    """Universal AI client supporting multiple providers"""
+    
+    def __init__(self):
+        self.provider = None
+        self.client = None
+        self.conversation_history = []
+        self.model_name = None
+    
+    def setup_openai(self, api_key: str, model: str = "gpt-4"):
+        """Setup OpenAI client"""
+        try:
+            import openai
+            self.client = openai.OpenAI(api_key=api_key)
+            self.provider = "openai"
+            self.model_name = model
+            return True
+        except ImportError:
+            raise RuntimeError("OpenAI package not installed. Run: pip install openai")
+        except Exception as e:
+            raise RuntimeError(f"OpenAI setup failed: {str(e)}")
+    
+    def setup_anthropic(self, api_key: str, model: str = "claude-3-sonnet-20240229"):
+        """Setup Anthropic Claude client"""
+        try:
+            import anthropic
+            self.client = anthropic.Anthropic(api_key=api_key)
+            self.provider = "anthropic"
+            self.model_name = model
+            return True
+        except ImportError:
+            raise RuntimeError("Anthropic package not installed. Run: pip install anthropic")
+        except Exception as e:
+            raise RuntimeError(f"Anthropic setup failed: {str(e)}")
+    
+    def setup_google(self, api_key: str, model: str = "gemini-pro"):
+        """Setup Google Gemini client"""
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            self.client = genai.GenerativeModel(model)
+            self.provider = "google"
+            self.model_name = model
+            return True
+        except ImportError:
+            raise RuntimeError("Google AI package not installed. Run: pip install google-generativeai")
+        except Exception as e:
+            raise RuntimeError(f"Google setup failed: {str(e)}")
+    
+    def setup_ollama(self, model: str = "llama2", base_url: str = "http://localhost:11434"):
+        """Setup Ollama client for local models"""
+        try:
+            import requests
+            # Test connection
+            response = requests.get(f"{base_url}/api/tags")
+            if response.status_code == 200:
+                self.client = {"base_url": base_url}
+                self.provider = "ollama"
+                self.model_name = model
+                return True
+            else:
+                raise RuntimeError("Ollama server not accessible")
+        except ImportError:
+            raise RuntimeError("Requests package required for Ollama")
+        except Exception as e:
+            raise RuntimeError(f"Ollama setup failed: {str(e)}")
+    
+    def setup_xai(self, api_key: str, model: str = "grok-4"):
+        """Setup xAI (Grok) client using OpenAI SDK compatibility"""
+        try:
+            import openai
+            self.client = openai.OpenAI(
+                api_key=api_key,
+                base_url="https://api.x.ai/v1"  # xAI's OpenAI-compatible endpoint
+            )
+            self.provider = "xai"
+            self.model_name = model
+            return True
+        except ImportError:
+            raise RuntimeError("OpenAI package not installed. Run: pip install openai")
+        except Exception as e:
+            raise RuntimeError(f"xAI setup failed: {str(e)}. Visit https://x.ai/api for details.")
+    
+    def call_ai(self, prompt: str, system_prompt: str = None, max_tokens: int = 1500) -> str:
+        """Universal AI call method"""
+        
+        if not self.client or not self.provider:
+            raise RuntimeError("No AI provider configured. Set up a provider first.")
+        
+        try:
+            if self.provider in ["openai", "xai"]:
+                messages = []
+                if system_prompt:
+                    messages.append({"role": "system", "content": system_prompt})
+                messages.extend(self.conversation_history)
+                messages.append({"role": "user", "content": prompt})
+                
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages,
+                    max_tokens=max_tokens
+                )
+                return response.choices[0].message.content.strip()
+            
+            elif self.provider == "anthropic":
+                messages = []
+                messages.extend(self.conversation_history)
+                messages.append({"role": "user", "content": prompt})
+                
+                response = self.client.messages.create(
+                    model=self.model_name,
+                    max_tokens=max_tokens,
+                    system=system_prompt or self.get_default_system_prompt(),
+                    messages=messages
+                )
+                return response.content[0].text.strip()
+            
+            elif self.provider == "google":
+                # Google Gemini approach
+                if system_prompt:
+                    full_prompt = f"System: {system_prompt}\n\nUser: {prompt}"
+                else:
+                    full_prompt = prompt
+                
+                response = self.client.generate_content(full_prompt)
+                return response.text.strip()
+            
+            elif self.provider == "ollama":
+                import requests
+                
+                messages = []
+                if system_prompt:
+                    messages.append({"role": "system", "content": system_prompt})
+                messages.extend(self.conversation_history)
+                messages.append({"role": "user", "content": prompt})
+                
+                response = requests.post(
+                    f"{self.client['base_url']}/api/chat",
+                    json={
+                        "model": self.model_name,
+                        "messages": messages,
+                        "stream": False
+                    }
+                )
+                
+                if response.status_code == 200:
+                    return response.json()["message"]["content"].strip()
+                else:
+                    raise RuntimeError(f"Ollama API error: {response.status_code}")
+            
+            else:
+                raise RuntimeError(f"Unknown provider: {self.provider}")
+                
+        except Exception as e:
+            if "rate limit" in str(e).lower():
+                raise RuntimeError(f"Rate limit hit: {str(e)}. Check quotas at provider console (e.g., https://x.ai/api for xAI).")
+            raise RuntimeError(f"AI call failed: {str(e)}")
+    
+    def get_default_system_prompt(self) -> str:
+        """Default system prompt for logical consistency"""
+        return """You are an AI assistant focused on providing logically consistent, well-reasoned responses. 
+
+Key principles:
+1. Structure responses clearly with explicit reasoning
+2. Provide evidence and mechanisms for claims
+3. Acknowledge limitations and uncertainties
+4. Resolve internal contradictions explicitly
+5. Use format: 1) Direct Answer 2) Mechanism 3) Evidence 4) Assumptions & Scope 5) Alternatives 6) Falsifiable Checks
+
+When addressing complex topics:
+- Distinguish between what is known vs. hypothetical
+- Provide clear causal mechanisms
+- Support claims with appropriate evidence
+- Address potential counterarguments
+- Maintain intellectual honesty about limitations
+
+Focus on logical coherence and avoid making unsupported claims."""
+    
+    def test_connection(self) -> str:
+        """Test AI connection"""
+        try:
+            response = self.call_ai(
+                "Reply with exactly: 'Connection successful'",
+                system_prompt="You are a test assistant. Follow instructions precisely.",
+                max_tokens=50
+            )
+            
+            if "successful" in response.lower():
+                return f"✅ {self.provider.title()} connection successful!"
+            else:
+                return f"⚠️ {self.provider.title()} connected but unexpected response: {response[:80]}"
+                
+        except Exception as e:
+            return f"❌ {self.provider.title()} connection failed: {str(e)}"
+
+class UniversalParadoxInterface:
+    """Universal interface for any AI provider"""
+    
+    def __init__(self):
+        self.ai_client = UniversalAIClient()
+        self.paradox_engine = UniversalParadoxEngine()
+        self.conversation_history = []
+        self.setup_interface()
+    
+    def setup_interface(self):
+        """Create the universal chat interface"""
+        
+        # Provider selection
+        self.provider_dropdown = widgets.Dropdown(
+            options=['Select Provider', 'OpenAI (GPT)', 'Anthropic (Claude)', 'Google (Gemini)', 'Ollama (Local)', 'xAI (Grok)'],
+            value='Select Provider',
+            description='AI Provider:',
+            style={'description_width': '100px'}
+        )
+        
+        # API key input
+        self.api_key_input = widgets.Password(
+            placeholder='Enter API key (not needed for Ollama)',
+            description='API Key:',
+            style={'description_width': '100px'},
+            layout=widgets.Layout(width='400px')
+        )
+        
+        # Model selection
+        self.model_input = widgets.Text(
+            placeholder='e.g., gpt-4, claude-3-sonnet-20240229, gemini-pro, llama2, grok-4',
+            description='Model:',
+            style={'description_width': '100px'},
+            layout=widgets.Layout(width='400px')
+        )
+        
+        # Ollama base URL (new)
+        self.ollama_url_input = widgets.Text(
+            value='http://localhost:11434',
+            placeholder='Ollama server URL',
+            description='Ollama URL:',
+            style={'description_width': '100px'},
+            layout=widgets.Layout(width='400px'),
+            disabled=True  # Enable only for Ollama
+        )
+        
+        # Setup button
+        self.setup_button = widgets.Button(
+            description='🔗 Connect',
+            button_style='primary',
+            layout=widgets.Layout(width='120px')
+        )
+        
+        # Header
+        self.header = widgets.HTML(
+            value="""
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                        color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                <h2>🌀 Universal AI ParadoxChat</h2>
+                <p>Advanced logical consistency checking for any AI model</p>
+                <p><strong>Supported:</strong> OpenAI GPT, Anthropic Claude, Google Gemini, Ollama (Local), xAI Grok</p>
+            </div>
+            """
+        )
+        
+        # Status display
+        self.status_display = widgets.HTML(
+            value="<div style='background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;'>🔌 Please select an AI provider and connect</div>"
+        )
+        
+        # Chat display
+        self.chat_display = widgets.HTML(
+            value="<div style='background: #f8f9fa; padding: 20px; border-radius: 8px; min-height: 300px;'>🤖 Universal AI ParadoxChat ready! Connect to an AI provider to start.</div>",
+            layout=widgets.Layout(width='100%', min_height='400px')
+        )
+        
+        # Input area
+        self.input_text = widgets.Textarea(
+            placeholder='Ask your AI anything! Examples:\n• "Explain quantum computing"\n• "How can we solve climate change?"\n• "What are the ethics of AI?"',
+            layout=widgets.Layout(width='100%', height='120px')
+        )
+        
+        # Chat buttons
+        self.send_button = widgets.Button(
+            description='🚀 Ask AI',
+            button_style='success',
+            layout=widgets.Layout(width='140px'),
+            disabled=True
+        )
+        
+        self.clear_button = widgets.Button(
+            description='🗑️ Clear',
+            button_style='warning',
+            layout=widgets.Layout(width='100px')
+        )
+        
+        self.test_button = widgets.Button(
+            description='🧪 Test',
+            button_style='info',
+            layout=widgets.Layout(width='100px'),
+            disabled=True
+        )
+        
+        # Advanced options
+        self.show_analysis = widgets.Checkbox(
+            value=True,
+            description='Show detailed analysis',
+            style={'description_width': 'initial'}
+        )
+        
+        self.refinement_enabled = widgets.Checkbox(
+            value=True,
+            description='Enable logical refinement',
+            style={'description_width': 'initial'}
+        )
+        
+        # Status output
+        self.status_output = widgets.Output()
+        
+        # Bind events
+        self.setup_button.on_click(self.on_setup)
+        self.send_button.on_click(self.on_send)
+        self.clear_button.on_click(self.on_clear)
+        self.test_button.on_click(self.on_test)
+        
+        # Dynamic enable for Ollama URL
+        def on_provider_change(change):
+            if change['new'] == 'Ollama (Local)':
+                self.ollama_url_input.disabled = False
+            else:
+                self.ollama_url_input.disabled = True
+        self.provider_dropdown.observe(on_provider_change, names='value')
+    
+    def display_interface(self):
+        """Display the complete interface"""
+        
+        # Setup section
+        setup_section = widgets.VBox([
+            widgets.HTML("<h3>🔧 AI Provider Setup</h3>"),
+            widgets.HBox([self.provider_dropdown, self.setup_button]),
+            widgets.HBox([self.api_key_input]),
+            widgets.HBox([self.model_input]),
+            widgets.HBox([self.ollama_url_input]),
+            self.status_display
+        ])
+        
+        # Chat section
+        button_row = widgets.HBox([
+            self.send_button,
+            self.clear_button, 
+            self.test_button
+        ])
+        
+        options_row = widgets.HBox([
+            self.show_analysis,
+            self.refinement_enabled
+        ])
+        
+        chat_section = widgets.VBox([
+            widgets.HTML("<h3>💬 AI Chat with Paradox Detection</h3>"),
+            self.chat_display,
+            self.input_text,
+            options_row,
+            button_row,
+            self.status_output
+        ])
+        
+        main_interface = widgets.VBox([
+            self.header,
+            setup_section,
+            chat_section
+        ])
+        
+        display(main_interface)
+    
+    def on_setup(self, button):
+        """Handle provider setup"""
+        provider = self.provider_dropdown.value
+        api_key = self.api_key_input.value.strip()
+        model = self.model_input.value.strip()
+        
+        if provider == 'Select Provider':
+            self.status_display.value = "<div style='background: #f8d7da; padding: 15px; border-radius: 8px; border-left: 4px solid #dc3545;'>❌ Please select an AI provider</div>"
+            return
+        
+        self.setup_button.disabled = True
+        self.setup_button.description = "Connecting..."
+        
+        try:
+            if provider == 'OpenAI (GPT)':
+                if not api_key:
+                    raise ValueError("OpenAI API key required")
+                model = model or "gpt-4"
+                self.ai_client.setup_openai(api_key, model)
+                
+            elif provider == 'Anthropic (Claude)':
+                if not api_key:
+                    raise ValueError("Anthropic API key required")
+                model = model or "claude-3-sonnet-20240229"
+                self.ai_client.setup_anthropic(api_key, model)
+                
+            elif provider == 'Google (Gemini)':
+                if not api_key:
+                    raise ValueError("Google API key required")
+                model = model or "gemini-pro"
+                self.ai_client.setup_google(api_key, model)
+                
+            elif provider == 'Ollama (Local)':
+                model = model or "llama2"
+                base_url = self.ollama_url_input.value.strip()
+                self.ai_client.setup_ollama(model, base_url)
+            
+            elif provider == 'xAI (Grok)':
+                if not api_key:
+                    raise ValueError("xAI API key required. Get it at https://x.ai/api")
+                model = model or "grok-4"
+                self.ai_client.setup_xai(api_key, model)
+            
+            # Test connection
+            test_result = self.ai_client.test_connection()
+            
+            if "successful" in test_result:
+                self.status_display.value = f"<div style='background: #d4edda; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745;'>{test_result}<br><strong>Model:</strong> {self.ai_client.model_name}</div>"
+                self.send_button.disabled = False
+                self.test_button.disabled = False
+                
+                # Update chat display
+                self.chat_display.value = f"<div style='background: #f8f9fa; padding: 20px; border-radius: 8px;'>🤖 {provider} connected! Model: {self.ai_client.model_name}<br>Ask me anything and I'll analyze the response for logical consistency.</div>"
+            else:
+                self.status_display.value = f"<div style='background: #f8d7da; padding: 15px; border-radius: 8px; border-left: 4px solid #dc3545;'>{test_result}</div>"
+                
+        except Exception as e:
+            self.status_display.value = f"<div style='background: #f8d7da; padding: 15px; border-radius: 8px; border-left: 4px solid #dc3545;'>❌ Setup failed: {str(e)}</div>"
+        
+        finally:
+            self.setup_button.disabled = False
+            self.setup_button.description = "🔗 Connect"
+    
+    def add_message(self, sender: str, content: str, analysis: Dict = None):
+        """Add message to chat display"""
+        timestamp = datetime.now().strftime("%H:%M")
+        
+        if sender == "user":
+            message_html = f"""
+            <div style="margin: 15px 0; padding: 15px; background: #e3f2fd; border-radius: 10px; border-left: 4px solid #2196f3;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <strong>🟦 You</strong>
+                    <small style="color: #666;">{timestamp}</small>
+                </div>
+                <div>{content.replace('\n', '<br>')}</div>
+            </div>
+            """
+        else:
+            # AI response with analysis
+            analysis_html = ""
+            if analysis and self.show_analysis.value:
+                status_colors = {'RESOLVES': '🟢', 'PARTIAL': '🟡', 'FAILS': '🔴'}
+                status_icon = status_colors.get(analysis.get('status', 'UNKNOWN'), '⚪')
+                
+                analysis_html = f"""
+                <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-top: 12px; font-size: 13px; border-left: 3px solid #4caf50;">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 8px;">
+                        <div><strong>Status:</strong> {analysis.get('status', 'UNKNOWN')} {status_icon}</div>
+                        <div><strong>Confidence:</strong> {analysis.get('confidence', 0):.1%}</div>
+                        <div><strong>Evidence:</strong> {analysis.get('evidence_score', 0):.2f}/1.0</div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                        <div><strong>Claims:</strong> {analysis.get('claims_resolved', 0)}/{analysis.get('claims_total', 0)}</div>
+                        <div><strong>Contradictions:</strong> {analysis.get('contradictions', 0)}</div>
+                        <div><strong>Logic Score:</strong> {analysis.get('logic_score', 0):.2f}</div>
+                    </div>
+                </div>
+                """
+            
+            provider_name = self.ai_client.provider.title() if self.ai_client.provider else "AI"
+            message_html = f"""
+            <div style="margin: 15px 0; padding: 15px; background: #e8f5e8; border-radius: 10px; border-left: 4px solid #4caf50;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <strong>🤖 {provider_name}</strong>
+                    <small style="color: #666;">{timestamp}</small>
+                </div>
+                <div style="line-height: 1.6;">{content.replace('\n', '<br>')}</div>
+                {analysis_html}
+            </div>
+            """
+        
+        # Update conversation history
+        self.conversation_history.append({
+            'sender': sender,
+            'content': content,
+            'analysis': analysis,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        # Update display
+        all_messages = ""
+        for entry in self.conversation_history:
+            timestamp = datetime.fromisoformat(entry['timestamp']).strftime("%H:%M")
+            
+            if entry['sender'] == 'user':
+                all_messages += f"""
+                <div style="margin: 15px 0; padding: 15px; background: #e3f2fd; border-radius: 10px; border-left: 4px solid #2196f3;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <strong>🟦 You</strong>
+                        <small style="color: #666;">{timestamp}</small>
+                    </div>
+                    <div>{entry['content'].replace('\n', '<br>')}</div>
+                </div>
+                """
+            else:
+                analysis = entry.get('analysis', {})
+                analysis_html = ""
+                
+                if analysis and self.show_analysis.value:
+                    status_colors = {'RESOLVES': '🟢', 'PARTIAL': '🟡', 'FAILS': '🔴'}
+                    status_icon = status_colors.get(analysis.get('status', 'UNKNOWN'), '⚪')
+                    
+                    analysis_html = f"""
+                    <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-top: 12px; font-size: 13px; border-left: 3px solid #4caf50;">
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 8px;">
+                            <div><strong>Status:</strong> {analysis.get('status', 'UNKNOWN')} {status_icon}</div>
+                            <div><strong>Confidence:</strong> {analysis.get('confidence', 0):.1%}</div>
+                            <div><strong>Evidence:</strong> {analysis.get('evidence_score', 0):.2f}/1.0</div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                            <div><strong>Claims:</strong> {analysis.get('claims_resolved', 0)}/{analysis.get('claims_total', 0)}</div>
+                            <div><strong>Contradictions:</strong> {analysis.get('contradictions', 0)}</div>
+                            <div><strong>Logic Score:</strong> {analysis.get('logic_score', 0):.2f}</div>
+                        </div>
+                    </div>
+                    """
+                
+                provider_name = self.ai_client.provider.title() if self.ai_client.provider else "AI"
+                all_messages += f"""
+                <div style="margin: 15px 0; padding: 15px; background: #e8f5e8; border-radius: 10px; border-left: 4px solid #4caf50;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <strong>🤖 {provider_name}</strong>
+                        <small style="color: #666;">{timestamp}</small>
+                    </div>
+                    <div style="line-height: 1.6;">{entry['content'].replace('\n', '<br>')}</div>
+                    {analysis_html}
+                </div>
+                """
+        
+        self.chat_display.value = f"<div style='background: #f8f9fa; padding: 20px; border-radius: 8px;'>{all_messages}</div>"
+    
+    def on_send(self, button):
+        """Handle send button click"""
+        query = self.input_text.value.strip()
+        
+        if not query:
+            with self.status_output:
+                print("❌ Please enter a question first!")
+            return
+        
+        if not self.ai_client.client:
+            with self.status_output:
+                print("❌ Please connect to an AI provider first!")
+            return
+        
+        # Disable button during processing
+        self.send_button.disabled = True
+        self.send_button.description = "🤔 Thinking..."
+        
+        # Add user message
+        self.add_message("user", query)
+        
+        # Clear input
+        self.input_text.value = ""
+        
+        try:
+            with self.status_output:
+                self.status_output.clear_output()
+                print(f"🤖 {self.ai_client.provider.title()} is thinking and analyzing...")
+            
+            # Get response from AI
+            if self.refinement_enabled.value:
+                response = self.enhanced_response(query)
+            else:
+                response = self.ai_client.call_ai(query)
+            
+            # Analyze response
+            analysis_data = self.paradox_engine.analyze_text(response)
+            
+            # Prepare analysis summary (fixed keys)
+            analysis_summary = {
+                'status': analysis_data['overall_status'],
+                'confidence': analysis_data['confidence'],
+                'evidence_score': analysis_data['evidence_quality']['overall_score'],
+                'claims_total': analysis_data['claims']['total'],
+                'claims_resolved': analysis_data['claims']['resolved'],  # Fixed to 'resolved'
+                'contradictions': len(analysis_data['contradictions']),
+                'logic_score': analysis_data['analysis_summary']['logical_coherence']
+            }
+            
+            # Add AI response
+            self.add_message("ai", response, analysis_summary)
+            
+            # Update conversation history for AI
+            self.ai_client.conversation_history.append({"role": "user", "content": query})
+            self.ai_client.conversation_history.append({"role": "assistant", "content": response})
+            
+            # Keep conversation manageable (added token estimation trim)
+            total_tokens = sum(len(msg['content'].split()) * 4 for msg in self.ai_client.conversation_history)  # Rough tokens
+            if total_tokens > 100000:  # Conservative limit
+                self.ai_client.conversation_history = self.ai_client.conversation_history[-4:]  # Last 2 exchanges
+            
+            status_msg = f"✅ Response generated - {analysis_data['overall_status']} consistency"
+            
+            with self.status_output:
+                self.status_output.clear_output()
+                print(status_msg)
+                
+        except Exception as e:
+            error_msg = f"❌ Error: {str(e)}"
+            self.add_message("ai", error_msg)
+            
+            with self.status_output:
+                self.status_output.clear_output()
+                print(f"❌ Error occurred: {str(e)}")
+        
+        finally:
+            # Re-enable button
+            self.send_button.disabled = False
+            self.send_button.description = "🚀 Ask AI"
+    
+    def enhanced_response(self, query: str, max_iterations: int = 3) -> str:  # Increased max, dynamic stop
+        """Generate response with logical consistency checking and refinement"""
+        
+        # Initial response
+        current_response = self.ai_client.call_ai(query)
+        iteration = 0
+        
+        # Iterative refinement based on paradox analysis
+        while iteration < max_iterations:
+            # Analyze current response
+            analysis = self.paradox_engine.analyze_text(current_response)
+            
+            # Check if refinement is needed (dynamic condition)
+            needs_refinement = (
+                analysis['overall_status'] == 'FAILS' or
+                (analysis['overall_status'] == 'PARTIAL' and analysis['confidence'] < 0.7) or
+                len(analysis['contradictions']) > 1
+            )
+            
+            if not needs_refinement or iteration >= max_iterations - 1 or analysis['confidence'] > 0.85:
+                break
+            
+            # Generate refinement
+            issues = []
+            
+            if analysis['contradictions']:
+                issues.append(f"- Internal contradictions detected: {len(analysis['contradictions'])} found")
+                for contradiction in analysis['contradictions'][:2]:
+                    issues.append(f"  • {contradiction['type']}: {contradiction['explanation']}")
+            
+            if analysis['claims']['resolution_ratio'] < 0.5:
+                issues.append(f"- Weak claim resolution: Only {analysis['claims']['resolved']}/{analysis['claims']['total']} claims properly supported")
+            
+            if analysis['evidence_quality']['overall_score'] < 0.5:
+                issues.append("- Insufficient evidence quality for claims made")
+            
+            refinement_prompt = f"""
+The following response has logical consistency issues that need addressing:
+
+ORIGINAL QUERY: {query}
+
+CURRENT RESPONSE: {current_response}
+
+LOGICAL ISSUES IDENTIFIED:
+{'\n'.join(issues)}
+
+Please provide an improved response that:
+1. Resolves the identified contradictions
+2. Strengthens evidence for claims made
+3. Provides clearer reasoning mechanisms
+4. Maintains the helpful content while improving logical consistency
+5. Uses clear structure: Direct Answer, Mechanism, Evidence, Assumptions, Alternatives
+
+IMPROVED RESPONSE:
+"""
+            
+            current_response = self.ai_client.call_ai(refinement_prompt)
+            iteration += 1
+        
+        return current_response
+    
+    def on_clear(self, button):
+        """Clear conversation history"""
+        self.conversation_history = []
+        self.ai_client.conversation_history = []
+        provider_name = self.ai_client.provider.title() if self.ai_client.provider else "AI"
+        self.chat_display.value = f"<div style='background: #f8f9fa; padding: 20px; border-radius: 8px;'>🤖 {provider_name} ready! Ask me anything and I'll analyze the response for logical consistency.</div>"
+        
+        with self.status_output:
+            self.status_output.clear_output()
+            print("🗑️ Conversation cleared!")
+    
+    def on_test(self, button):
+        """Test AI connection"""
+        self.test_button.disabled = True
+        self.test_button.description = "Testing..."
+        
+        try:
+            with self.status_output:
+                self.status_output.clear_output()
+                print("🧪 Testing AI connection...")
+                
+                result = self.ai_client.test_connection()
+                print(result)
+                
+        except Exception as e:
+            with self.status_output:
+                print(f"❌ Test failed: {str(e)}")
+        
+        finally:
+            self.test_button.disabled = False
+            self.test_button.description = "🧪 Test"
+
+def create_sample_questions():
+    """Create sample question interface"""
+    
+    universal_samples = {
+        "🧠 Complex Reasoning": "How does consciousness emerge from neural activity?",
+        "🔬 Scientific Analysis": "Explain the measurement problem in quantum mechanics.",
+        "🏛️ Ethical Dilemmas": "Should we genetically engineer humans to be more altruistic?",
+        "🌍 Global Challenges": "What's the most effective approach to reducing global inequality?",
+        "💡 Paradox Resolution": "How do we resolve the tolerance paradox?",
+        "🤖 AI Philosophy": "Can artificial intelligence ever truly understand meaning?",
+        "🌌 xAI Vibe": "What's the meaning of life, the universe, and everything?"
+    }
+    
+    sample_buttons = []
+    
+    for title, question in universal_samples.items():
+        button = widgets.Button(
+            description=title,
+            layout=widgets.Layout(width='400px', margin='3px'),
+            style={'description_width': 'initial'}
+        )
+        
+        def make_handler(q):
+            def handler(b):
+                if 'universal_interface' in globals():
+                    universal_interface.input_text.value = q
+                    print(f"📝 Loaded: {q[:70]}...")
+                else:
+                    print("Interface not ready yet!")
+            return handler
+        
+        button.on_click(make_handler(question))
+        sample_buttons.append(button)
+    
+    sample_box1 = widgets.HBox(sample_buttons[:3])
+    sample_box2 = widgets.HBox(sample_buttons[3:6])
+    sample_box3 = widgets.HBox(sample_buttons[6:])
+    
+    display(widgets.VBox([
+        widgets.HTML("<h3>🎮 Sample Questions</h3><p>Click to load sophisticated questions for any AI:</p>"),
+        sample_box1,
+        sample_box2,
+        sample_box3
+    ]))
+
+def create_analysis_dashboard():
+    """Create dashboard for analyzing conversation patterns"""
+    
+    view_button = widgets.Button(
+        description="📊 View Analysis",
+        button_style='info',
+        layout=widgets.Layout(width='150px')
+    )
+    
+    export_button = widgets.Button(
+        description="💾 Export Chat",
+        button_style='success', 
+        layout=widgets.Layout(width='150px')
+    )
+    
+    dashboard_output = widgets.Output()
+    
+    def show_analysis(b):
+        with dashboard_output:
+            dashboard_output.clear_output()
+            
+            if not universal_interface.conversation_history:
+                print("📭 No conversation data to analyze yet!")
+                return
+            
+            ai_messages = [m for m in universal_interface.conversation_history if m['sender'] == 'ai']
+            
+            if not ai_messages:
+                print("📭 No AI responses to analyze yet!")
+                return
+            
+            analyses = [m['analysis'] for m in ai_messages if m.get('analysis')]
+            
+            if not analyses:
+                print("📊 No analysis data available yet!")
+                return
+            
+            statuses = [a['status'] for a in analyses]
+            confidences = [a['confidence'] for a in analyses]
+            evidence_scores = [a['evidence_score'] for a in analyses]
+            
+            print("📊 **Universal AI Conversation Analysis**\n")
+            print(f"**Overall Statistics:**")
+            print(f"• AI Provider: {universal_interface.ai_client.provider.title()}")
+            print(f"• Model: {universal_interface.ai_client.model_name}")
+            print(f"• Total AI responses: {len(ai_messages)}")
+            print(f"• Average confidence: {sum(confidences)/len(confidences):.1%}")
+            print(f"• Average evidence quality: {sum(evidence_scores)/len(evidence_scores):.2f}/1.0")
+            print()
+            
+            print(f"**Logical Consistency Breakdown:**")
+            for status in ['RESOLVES', 'PARTIAL', 'FAILS']:
+                count = statuses.count(status)
+                percentage = (count / len(statuses)) * 100 if statuses else 0
+                print(f"• {status}: {count} responses ({percentage:.1f}%)")
+            print()
+            
+            print(f"**Quality Metrics:**")
+            total_claims = sum(a['claims_total'] for a in analyses)
+            total_resolved = sum(a['claims_resolved'] for a in analyses)
+            total_contradictions = sum(a['contradictions'] for a in analyses)
+            
+            print(f"• Total claims analyzed: {total_claims}")
+            print(f"• Claims successfully resolved: {total_resolved} ({total_resolved/max(1,total_claims)*100:.1f}%)")
+            print(f"• Total contradictions found: {total_contradictions}")
+            print(f"• Average logic score: {sum(a['logic_score'] for a in analyses)/len(analyses):.2f}/1.0")
+            
+            # Added: Simple visualization if matplotlib available
+            try:
+                import matplotlib.pyplot as plt
+                if confidences:
+                    plt.figure(figsize=(8,4))
+                    plt.bar(['RESOLVES', 'PARTIAL', 'FAILS'], [statuses.count(s) for s in ['RESOLVES', 'PARTIAL', 'FAILS']])
+                    plt.title('Consistency Breakdown')
+                    plt.show()
+            except ImportError:
+                print("\n📈 Visualization skipped: matplotlib not installed.")
+    
+    def export_conversation(b):
+        with dashboard_output:
+            if not universal_interface.conversation_history:
+                print("📭 No conversation to export!")
+                return
+            
+            export_data = {
+                'export_metadata': {
+                    'system': 'Universal AI ParadoxChat',
+                    'provider': universal_interface.ai_client.provider,
+                    'model': universal_interface.ai_client.model_name,
+                    'export_time': datetime.now().isoformat(),
+                    'total_messages': len(universal_interface.conversation_history)
+                },
+                'conversation': universal_interface.conversation_history,
+                'analyses': [m.get('analysis', {}) for m in universal_interface.conversation_history if m['sender'] == 'ai']  # Added analyses
+            }
+            
+            filename = f"universal_ai_chat_{universal_interface.ai_client.provider}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            
+            try:
+                with open(filename, 'w', encoding='utf-8') as f:
+                    json.dump(export_data, f, indent=2, ensure_ascii=False, default=str)
+                
+                print(f"✅ Conversation exported to: {filename}")
+                print(f"📊 Contains {len(universal_interface.conversation_history)} messages")
+                
+                try:
+                    from google.colab import files
+                    files.download(filename)
+                    print("💾 File downloaded to your computer!")
+                except:
+                    print("💾 File saved in environment")
+                    
+            except Exception as e:
+                print(f"❌ Export failed: {str(e)}")
+    
+    view_button.on_click(show_analysis)
+    export_button.on_click(export_conversation)
+    
+    display(widgets.VBox([
+        widgets.HTML("<h3>📊 Analysis Dashboard</h3><p>View conversation analytics and export chat data:</p>"),
+        widgets.HBox([view_button, export_button]),
+        dashboard_output
+    ]))
+
+# Initialize the system
+print("🌀 Universal AI ParadoxChat - Supporting Multiple AI Providers")
+print("=" * 60)
+
+# Create sample questions
+create_sample_questions()
+
+# Initialize and display the main interface
+print("🚀 Creating Universal ParadoxChat interface...")
+universal_interface = UniversalParadoxInterface()
+
+print("\n" + "="*60)
+print("🤖 UNIVERSAL AI PARADOX CHAT READY!")
+print("="*60)
+
+universal_interface.display_interface()
+
+# Create analysis dashboard
+create_analysis_dashboard()
+
+print(f"""
+🎉 **Universal AI ParadoxChat is now running!**
+
+✅ **Supported AI Providers:**
+• 🤖 OpenAI (GPT-3.5, GPT-4, GPT-4-turbo)
+• 🧠 Anthropic (Claude-3 Haiku, Sonnet, Opus)
+• 🔍 Google (Gemini Pro, Gemini Ultra)
+• 🏠 Ollama (Local models: Llama, Mistral, etc.)
+• 🚀 xAI (Grok-4, Grok-3, etc.)
+
+✅ **Enhanced Features:**
+• 🌀 Universal paradox detection engine
+• 🔍 Logical consistency analysis
+• 🔧 Automatic response refinement
+• 📊 Detailed evidence assessment
+• 🎯 Contradiction detection
+• 💬 Conversation memory
+
+✅ **Analysis Metrics:**
+• Overall logical status (RESOLVES/PARTIAL/FAILS)
+• Confidence percentage
+• Evidence quality scoring
+• Claim resolution ratio
+• Contradiction count
+• Logical coherence score
+
+💡 **How to Use:**
+1. Select your preferred AI provider (OpenAI, Anthropic, Google, Ollama, or xAI Grok)
+2. Enter your API key (not needed for Ollama)
+3. Specify the model name
+4. For Ollama, set the server URL if not localhost
+5. Click "🔗 Connect" to establish connection
+6. Ask questions and get responses with logical analysis
+7. View consistency scores and improvement suggestions
+
+🔧 **Setup Instructions:**
+• **OpenAI:** Get API key from platform.openai.com
+• **Anthropic:** Get API key from console.anthropic.com  
+• **Google:** Get API key from aistudio.google.com
+• **Ollama:** Install locally from ollama.ai
+• **xAI Grok:** Get API key from https://x.ai/api
+
+Ready to test logical consistency across any AI model! 🧠✨
+""")
+
+# Installation guide
+print("""
+📦 **Required Packages:**
+Run these commands to install support for different providers:
+
+```bash
+# For OpenAI and xAI Grok
+pip install openai
+
+# For Anthropic
+pip install anthropic
+
+# For Google Gemini
+pip install google-generativeai
+
+# For Ollama (local)
+pip install requests
+
+# Optional for dashboard visualization
+pip install matplotlib
