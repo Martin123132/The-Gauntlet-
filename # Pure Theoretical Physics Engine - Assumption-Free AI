@@ -1,0 +1,980 @@
+# Pure Theoretical Physics Engine - Assumption-Free AI
+# Removes theoretical bias and treats all physics as testable models
+
+import json
+import os
+import traceback
+import re
+import textwrap
+from typing import Any, Dict, Optional, Tuple, List
+from datetime import datetime
+import ipywidgets as widgets
+from IPython.display import display, HTML, clear_output
+import getpass
+
+class TheoreticalBiasDetector:
+    """Detects when AI responses contain theoretical bias or treat models as absolute truth"""
+    
+    # Common physics theories that get treated as gospel
+    SACRED_COW_THEORIES = [
+        'general relativity', 'GR', 'einstein', 'spacetime curvature', 'metric tensor',
+        'standard model', 'quantum field theory', 'QFT', 'gauge theory',
+        'dark matter', 'dark energy', 'lambda CDM', 'ΛCDM', 'cosmological constant',
+        'big bang', 'inflation', 'higgs mechanism', 'supersymmetry', 'SUSY',
+        'string theory', 'M-theory', 'loop quantum gravity', 'LQG'
+    ]
+    
+    # Bias indicators - phrases that suggest treating theory as fact
+    BIAS_INDICATORS = [
+        'according to general relativity', 'GR tells us', 'einstein showed that',
+        'the standard model proves', 'we know from QFT', 'physics requires',
+        'this violates', 'this contradicts established physics', 'impossible because',
+        'cannot work because', 'proven by relativity', 'established fact',
+        'fundamental principle', 'basic physics shows', 'textbook physics'
+    ]
+    
+    # Evidence-based language (good)
+    EVIDENCE_LANGUAGE = [
+        'observational data shows', 'experimental results indicate', 'measurements suggest',
+        'data supports', 'fits the observations', 'mathematical analysis reveals',
+        'calculation demonstrates', 'empirical evidence', 'test predictions',
+        'compare with data', 'verify against measurements', 'statistical analysis'
+    ]
+    
+    # Theory-neutral language (good)
+    NEUTRAL_LANGUAGE = [
+        'current models suggest', 'one interpretation is', 'this framework predicts',
+        'alternative explanation', 'different approach', 'competing theory',
+        'model assumes', 'if we accept', 'under this paradigm', 'working hypothesis'
+    ]
+    
+    def detect_theoretical_bias(self, text: str) -> Dict[str, Any]:
+        """Detect bias toward established theories"""
+        text_lower = text.lower()
+        
+        # Count bias indicators
+        bias_phrases = []
+        for indicator in self.BIAS_INDICATORS:
+            if indicator in text_lower:
+                bias_phrases.append(indicator)
+        
+        # Count sacred cow references
+        sacred_cow_mentions = []
+        for theory in self.SACRED_COW_THEORIES:
+            if theory in text_lower:
+                sacred_cow_mentions.append(theory)
+        
+        # Count evidence-based language
+        evidence_phrases = []
+        for phrase in self.EVIDENCE_LANGUAGE:
+            if phrase in text_lower:
+                evidence_phrases.append(phrase)
+        
+        # Count theory-neutral language
+        neutral_phrases = []
+        for phrase in self.NEUTRAL_LANGUAGE:
+            if phrase in text_lower:
+                neutral_phrases.append(phrase)
+        
+        # Calculate bias score (0 = no bias, 1 = maximum bias)
+        bias_score = len(bias_phrases) * 0.2 + len(sacred_cow_mentions) * 0.1
+        evidence_bonus = len(evidence_phrases) * 0.1 + len(neutral_phrases) * 0.05
+        
+        final_bias_score = max(0, min(1, bias_score - evidence_bonus))
+        
+        return {
+            'bias_score': final_bias_score,
+            'bias_phrases': bias_phrases[:5],  # Top 5
+            'sacred_cow_mentions': sacred_cow_mentions[:5],
+            'evidence_phrases': evidence_phrases[:3],
+            'neutral_phrases': neutral_phrases[:3],
+            'has_significant_bias': final_bias_score > 0.3,
+            'assessment': self._assess_bias_level(final_bias_score)
+        }
+    
+    def _assess_bias_level(self, score: float) -> str:
+        """Assess the level of theoretical bias"""
+        if score < 0.2:
+            return "EVIDENCE_BASED"
+        elif score < 0.4:
+            return "MILD_BIAS"
+        elif score < 0.7:
+            return "SIGNIFICANT_BIAS"
+        else:
+            return "THEORY_DOGMA"
+    
+    def detect_assumption_problems(self, text: str) -> List[Dict[str, Any]]:
+        """Detect problematic assumptions being treated as facts"""
+        problems = []
+        sentences = re.split(r'[.!?]+', text)
+        
+        problem_patterns = [
+            {
+                'pattern': r'(impossible|cannot|forbidden|violates) (because|due to) (.+)',
+                'type': 'Absolute Prohibition',
+                'explanation': 'Treating theoretical limitation as absolute fact'
+            },
+            {
+                'pattern': r'(proves|shows|demonstrates) that (.+) (is|are) (true|false|correct|wrong)',
+                'type': 'Theory as Proof',
+                'explanation': 'Using theory to prove facts rather than test predictions'
+            },
+            {
+                'pattern': r'(established|known|accepted|proven) (fact|principle|law) (that|of)',
+                'type': 'Appeal to Authority',
+                'explanation': 'Treating theoretical consensus as unchangeable fact'
+            },
+            {
+                'pattern': r'(basic|fundamental) physics (requires|demands|shows|proves)',
+                'type': 'Physics Fundamentalism',
+                'explanation': 'Appealing to "fundamental" physics to shut down alternatives'
+            }
+        ]
+        
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) < 10:
+                continue
+                
+            for pattern_info in problem_patterns:
+                if re.search(pattern_info['pattern'], sentence.lower()):
+                    problems.append({
+                        'type': pattern_info['type'],
+                        'sentence': sentence[:150] + "..." if len(sentence) > 150 else sentence,
+                        'explanation': pattern_info['explanation'],
+                        'pattern_matched': pattern_info['pattern']
+                    })
+                    break
+        
+        return problems[:5]  # Top 5 problems
+    
+    def analyze_response(self, text: str) -> Dict[str, Any]:
+        """Complete analysis of theoretical bias in AI response"""
+        bias_analysis = self.detect_theoretical_bias(text)
+        assumption_problems = self.detect_assumption_problems(text)
+        
+        # Overall assessment
+        if bias_analysis['bias_score'] > 0.5 or len(assumption_problems) > 2:
+            needs_refinement = True
+            status = "THEORY_BIASED"
+        elif bias_analysis['bias_score'] > 0.3 or len(assumption_problems) > 0:
+            needs_refinement = True
+            status = "MILD_BIAS"
+        else:
+            needs_refinement = False
+            status = "EVIDENCE_BASED"
+        
+        return {
+            'status': status,
+            'needs_refinement': needs_refinement,
+            'bias_analysis': bias_analysis,
+            'assumption_problems': assumption_problems,
+            'overall_bias_score': bias_analysis['bias_score'],
+            'evidence_ratio': len(bias_analysis['evidence_phrases']) / max(1, len(bias_analysis['bias_phrases']))
+        }
+
+class UniversalAIClient:
+    """Universal AI client supporting multiple providers"""
+    
+    def __init__(self):
+        self.provider = None
+        self.client = None
+        self.conversation_history = []
+        self.model_name = None
+    
+    def setup_openai(self, api_key: str, model: str = "gpt-4"):
+        """Setup OpenAI client"""
+        try:
+            import openai
+            self.client = openai.OpenAI(api_key=api_key)
+            self.provider = "openai"
+            self.model_name = model
+            return True
+        except ImportError:
+            raise RuntimeError("OpenAI package not installed. Run: pip install openai")
+        except Exception as e:
+            raise RuntimeError(f"OpenAI setup failed: {str(e)}")
+    
+    def setup_anthropic(self, api_key: str, model: str = "claude-3-5-sonnet-20241022"):
+        """Setup Anthropic Claude client"""
+        try:
+            import anthropic
+            self.client = anthropic.Anthropic(api_key=api_key)
+            self.provider = "anthropic"
+            self.model_name = model
+            return True
+        except ImportError:
+            raise RuntimeError("Anthropic package not installed. Run: pip install anthropic")
+        except Exception as e:
+            raise RuntimeError(f"Anthropic setup failed: {str(e)}")
+    
+    def setup_google(self, api_key: str, model: str = "gemini-pro"):
+        """Setup Google Gemini client"""
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            self.client = genai.GenerativeModel(model)
+            self.provider = "google"
+            self.model_name = model
+            return True
+        except ImportError:
+            raise RuntimeError("Google AI package not installed. Run: pip install google-generativeai")
+        except Exception as e:
+            raise RuntimeError(f"Google setup failed: {str(e)}")
+    
+    def setup_ollama(self, model: str = "llama2", base_url: str = "http://localhost:11434"):
+        """Setup Ollama client for local models"""
+        try:
+            import requests
+            response = requests.get(f"{base_url}/api/tags")
+            if response.status_code == 200:
+                self.client = {"base_url": base_url}
+                self.provider = "ollama"
+                self.model_name = model
+                return True
+            else:
+                raise RuntimeError("Ollama server not accessible")
+        except ImportError:
+            raise RuntimeError("Requests package required for Ollama")
+        except Exception as e:
+            raise RuntimeError(f"Ollama setup failed: {str(e)}")
+    
+    def call_ai(self, prompt: str, system_prompt: str = None, max_tokens: int = 1500) -> str:
+        """Universal AI call method"""
+        
+        if not self.client or not self.provider:
+            raise RuntimeError("No AI provider configured. Set up a provider first.")
+        
+        try:
+            if self.provider == "openai":
+                messages = []
+                if system_prompt:
+                    messages.append({"role": "system", "content": system_prompt})
+                messages.extend(self.conversation_history)
+                messages.append({"role": "user", "content": prompt})
+                
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages,
+                    max_tokens=max_tokens
+                )
+                return response.choices[0].message.content.strip()
+            
+            elif self.provider == "anthropic":
+                messages = []
+                messages.extend(self.conversation_history)
+                messages.append({"role": "user", "content": prompt})
+                
+                response = self.client.messages.create(
+                    model=self.model_name,
+                    max_tokens=max_tokens,
+                    system=system_prompt or self.get_default_system_prompt(),
+                    messages=messages
+                )
+                return response.content[0].text.strip()
+            
+            elif self.provider == "google":
+                if system_prompt:
+                    full_prompt = f"System: {system_prompt}\n\nUser: {prompt}"
+                else:
+                    full_prompt = prompt
+                
+                response = self.client.generate_content(full_prompt)
+                return response.text.strip()
+            
+            elif self.provider == "ollama":
+                import requests
+                
+                messages = []
+                if system_prompt:
+                    messages.append({"role": "system", "content": system_prompt})
+                messages.extend(self.conversation_history)
+                messages.append({"role": "user", "content": prompt})
+                
+                response = requests.post(
+                    f"{self.client['base_url']}/api/chat",
+                    json={
+                        "model": self.model_name,
+                        "messages": messages,
+                        "stream": False
+                    }
+                )
+                
+                if response.status_code == 200:
+                    return response.json()["message"]["content"].strip()
+                else:
+                    raise RuntimeError(f"Ollama API error: {response.status_code}")
+            
+            else:
+                raise RuntimeError(f"Unknown provider: {self.provider}")
+                
+        except Exception as e:
+            raise RuntimeError(f"AI call failed: {str(e)}")
+    
+    def get_default_system_prompt(self) -> str:
+        """Default system prompt for assumption-free physics"""
+        return """You are an assumption-free theoretical physics assistant. Your core principles:
+
+1. TREAT ALL THEORIES AS MODELS: General Relativity, Quantum Mechanics, Standard Model, etc. are working models, not absolute truth
+2. EVIDENCE OVER AUTHORITY: Prioritize observational data and mathematical consistency over theoretical consensus
+3. AVOID PHYSICS DOGMA: Never say something is "impossible" because a theory says so - theories can be wrong
+4. BE THEORY-NEUTRAL: Present multiple theoretical frameworks when relevant
+5. ACKNOWLEDGE LIMITATIONS: Clearly state when models break down or make assumptions
+
+When discussing physics:
+- Say "Current models suggest..." instead of "Physics proves..."
+- Say "If we accept GR..." instead of "GR shows that..."
+- Say "Observational data indicates..." instead of "We know that..."
+- Compare predictions from different theoretical frameworks
+- Highlight where theories disagree with data or each other
+
+Your goal is open-minded, evidence-based physics discussion that doesn't shut down alternative ideas just because they challenge established theories."""
+    
+    def test_connection(self) -> str:
+        """Test AI connection"""
+        try:
+            response = self.call_ai(
+                "Reply with exactly: 'Connection successful - ready for assumption-free physics'",
+                system_prompt="You are a test assistant. Follow instructions precisely.",
+                max_tokens=50
+            )
+            
+            if "successful" in response.lower():
+                return f"✅ {self.provider.title()} connection successful!"
+            else:
+                return f"⚠️ {self.provider.title()} connected but unexpected response: {response[:80]}"
+                
+        except Exception as e:
+            return f"❌ {self.provider.title()} connection failed: {str(e)}"
+
+class PureTheoreticalEngine:
+    """Main engine that combines AI with theoretical bias detection"""
+    
+    def __init__(self):
+        self.ai_client = UniversalAIClient()
+        self.bias_detector = TheoreticalBiasDetector()
+        self.conversation_history = []
+        self.setup_interface()
+    
+    def setup_interface(self):
+        """Create the interface"""
+        
+        # Provider selection
+        self.provider_dropdown = widgets.Dropdown(
+            options=['Select Provider', 'OpenAI (GPT)', 'Anthropic (Claude)', 'Google (Gemini)', 'Ollama (Local)'],
+            value='Select Provider',
+            description='AI Provider:',
+            style={'description_width': '100px'}
+        )
+        
+        # API key input
+        self.api_key_input = widgets.Password(
+            placeholder='Enter API key (not needed for Ollama)',
+            description='API Key:',
+            style={'description_width': '100px'},
+            layout=widgets.Layout(width='400px')
+        )
+        
+        # Model selection
+        self.model_input = widgets.Text(
+            placeholder='e.g., gpt-4, claude-3-5-sonnet-20241022, gemini-pro, llama2',
+            description='Model:',
+            style={'description_width': '100px'},
+            layout=widgets.Layout(width='400px')
+        )
+        
+        # Setup button
+        self.setup_button = widgets.Button(
+            description='🔗 Connect',
+            button_style='primary',
+            layout=widgets.Layout(width='120px')
+        )
+        
+        # Header
+        self.header = widgets.HTML(
+            value="""
+            <div style="background: linear-gradient(135deg, #2E8B57 0%, #4169E1 100%); 
+                        color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                <h2>🔬 Pure Theoretical Physics Engine</h2>
+                <p>Assumption-free AI that treats all physics as testable models, not gospel truth</p>
+                <p><strong>Features:</strong> Bias detection, evidence-first reasoning, theory-neutral analysis</p>
+            </div>
+            """
+        )
+        
+        # Status display
+        self.status_display = widgets.HTML(
+            value="<div style='background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;'>🔌 Please select an AI provider and connect</div>"
+        )
+        
+        # Chat display
+        self.chat_display = widgets.HTML(
+            value="<div style='background: #f8f9fa; padding: 20px; border-radius: 8px; min-height: 300px;'>🔬 Pure Theoretical Physics Engine ready! Connect to an AI provider to start assumption-free physics discussion.</div>",
+            layout=widgets.Layout(width='100%', min_height='400px')
+        )
+        
+        # Input area
+        self.input_text = widgets.Textarea(
+            placeholder='Ask physics questions without theoretical bias! Examples:\n• "How does MBT theory compare to General Relativity for explaining galactic rotation?"\n• "What do the observations actually show about dark matter vs. alternative theories?"\n• "Compare predictions from different theories of quantum gravity"',
+            layout=widgets.Layout(width='100%', height='120px')
+        )
+        
+        # Chat buttons
+        self.send_button = widgets.Button(
+            description='🚀 Ask Physics',
+            button_style='success',
+            layout=widgets.Layout(width='140px'),
+            disabled=True
+        )
+        
+        self.clear_button = widgets.Button(
+            description='🗑️ Clear',
+            button_style='warning',
+            layout=widgets.Layout(width='100px')
+        )
+        
+        self.test_button = widgets.Button(
+            description='🧪 Test',
+            button_style='info',
+            layout=widgets.Layout(width='100px'),
+            disabled=True
+        )
+        
+        # Advanced options
+        self.show_analysis = widgets.Checkbox(
+            value=True,
+            description='Show bias analysis',
+            style={'description_width': 'initial'}
+        )
+        
+        self.bias_correction = widgets.Checkbox(
+            value=True,
+            description='Auto-correct theoretical bias',
+            style={'description_width': 'initial'}
+        )
+        
+        # Status output
+        self.status_output = widgets.Output()
+        
+        # Bind events
+        self.setup_button.on_click(self.on_setup)
+        self.send_button.on_click(self.on_send)
+        self.clear_button.on_click(self.on_clear)
+        self.test_button.on_click(self.on_test)
+    
+    def display_interface(self):
+        """Display the complete interface"""
+        
+        # Setup section
+        setup_section = widgets.VBox([
+            widgets.HTML("<h3>🔧 AI Provider Setup</h3>"),
+            widgets.HBox([self.provider_dropdown, self.setup_button]),
+            widgets.HBox([self.api_key_input]),
+            widgets.HBox([self.model_input]),
+            self.status_display
+        ])
+        
+        # Chat section
+        button_row = widgets.HBox([
+            self.send_button,
+            self.clear_button, 
+            self.test_button
+        ])
+        
+        options_row = widgets.HBox([
+            self.show_analysis,
+            self.bias_correction
+        ])
+        
+        chat_section = widgets.VBox([
+            widgets.HTML("<h3>🔬 Assumption-Free Physics Chat</h3>"),
+            self.chat_display,
+            self.input_text,
+            options_row,
+            button_row,
+            self.status_output
+        ])
+        
+        main_interface = widgets.VBox([
+            self.header,
+            setup_section,
+            chat_section
+        ])
+        
+        display(main_interface)
+    
+    def on_setup(self, button):
+        """Handle provider setup"""
+        provider = self.provider_dropdown.value
+        api_key = self.api_key_input.value.strip()
+        model = self.model_input.value.strip()
+        
+        if provider == 'Select Provider':
+            self.status_display.value = "<div style='background: #f8d7da; padding: 15px; border-radius: 8px; border-left: 4px solid #dc3545;'>❌ Please select an AI provider</div>"
+            return
+        
+        self.setup_button.disabled = True
+        self.setup_button.description = "Connecting..."
+        
+        try:
+            if provider == 'OpenAI (GPT)':
+                if not api_key:
+                    raise ValueError("OpenAI API key required")
+                model = model or "gpt-4"
+                self.ai_client.setup_openai(api_key, model)
+                
+            elif provider == 'Anthropic (Claude)':
+                if not api_key:
+                    raise ValueError("Anthropic API key required")
+                model = model or "claude-3-5-sonnet-20241022"
+                self.ai_client.setup_anthropic(api_key, model)
+                
+            elif provider == 'Google (Gemini)':
+                if not api_key:
+                    raise ValueError("Google API key required")
+                model = model or "gemini-pro"
+                self.ai_client.setup_google(api_key, model)
+                
+            elif provider == 'Ollama (Local)':
+                model = model or "llama2"
+                self.ai_client.setup_ollama(model)
+            
+            # Test connection
+            test_result = self.ai_client.test_connection()
+            
+            if "successful" in test_result:
+                self.status_display.value = f"<div style='background: #d4edda; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745;'>{test_result}<br><strong>Model:</strong> {self.ai_client.model_name}<br><strong>Mode:</strong> Assumption-free physics analysis</div>"
+                self.send_button.disabled = False
+                self.test_button.disabled = False
+                
+                # Update chat display
+                self.chat_display.value = f"<div style='background: #f8f9fa; padding: 20px; border-radius: 8px;'>🔬 {provider} connected in assumption-free mode!<br>Model: {self.ai_client.model_name}<br><br>I'll analyze responses for theoretical bias and provide evidence-based physics discussion.</div>"
+            else:
+                self.status_display.value = f"<div style='background: #f8d7da; padding: 15px; border-radius: 8px; border-left: 4px solid #dc3545;'>{test_result}</div>"
+                
+        except Exception as e:
+            self.status_display.value = f"<div style='background: #f8d7da; padding: 15px; border-radius: 8px; border-left: 4px solid #dc3545;'>❌ Setup failed: {str(e)}</div>"
+        
+        finally:
+            self.setup_button.disabled = False
+            self.setup_button.description = "🔗 Connect"
+    
+    def on_send(self, button):
+        """Handle send button click"""
+        query = self.input_text.value.strip()
+        
+        if not query:
+            with self.status_output:
+                print("❌ Please enter a physics question first!")
+            return
+        
+        if not self.ai_client.client:
+            with self.status_output:
+                print("❌ Please connect to an AI provider first!")
+            return
+        
+        # Disable button during processing
+        self.send_button.disabled = True
+        self.send_button.description = "🔬 Analyzing..."
+        
+        # Add user message
+        self.add_message("user", query)
+        
+        # Clear input
+        self.input_text.value = ""
+        
+        try:
+            with self.status_output:
+                self.status_output.clear_output()
+                print(f"🔬 Generating assumption-free physics response...")
+            
+            # Get response with bias correction if enabled
+            if self.bias_correction.value:
+                response, analysis = self.generate_bias_corrected_response(query)
+            else:
+                response = self.ai_client.call_ai(query)
+                analysis = self.bias_detector.analyze_response(response)
+            
+            # Add AI response with analysis
+            self.add_message("ai", response, analysis)
+            
+            # Update conversation history for AI
+            self.ai_client.conversation_history.append({"role": "user", "content": query})
+            self.ai_client.conversation_history.append({"role": "assistant", "content": response})
+            
+            # Keep conversation manageable
+            if len(self.ai_client.conversation_history) > 8:
+                self.ai_client.conversation_history = self.ai_client.conversation_history[-8:]
+            
+            status_msg = f"✅ Response generated - {analysis['status']} (Bias: {analysis['overall_bias_score']:.2f})"
+            
+            with self.status_output:
+                self.status_output.clear_output()
+                print(status_msg)
+                
+        except Exception as e:
+            error_msg = f"❌ Error: {str(e)}"
+            self.add_message("ai", error_msg)
+            
+            with self.status_output:
+                self.status_output.clear_output()
+                print(f"❌ Error occurred: {str(e)}")
+        
+        finally:
+            # Re-enable button
+            self.send_button.disabled = False
+            self.send_button.description = "🚀 Ask Physics"
+    
+    def generate_bias_corrected_response(self, query: str, max_iterations: int = 2) -> tuple:
+        """Generate response with automatic bias correction"""
+        
+        # Initial response
+        current_response = self.ai_client.call_ai(query)
+        iteration = 0
+        
+        while iteration < max_iterations:
+            # Analyze for bias
+            analysis = self.bias_detector.analyze_response(current_response)
+            
+            # If bias is acceptable, we're done
+            if not analysis['needs_refinement']:
+                break
+            
+            # If significant bias detected and we can still refine
+            if iteration < max_iterations - 1:
+                issues = []
+                
+                if analysis['bias_analysis']['bias_phrases']:
+                    issues.append("- Using theory-as-fact language: " + ", ".join(analysis['bias_analysis']['bias_phrases'][:3]))
+                
+                if analysis['assumption_problems']:
+                    issues.append("- Making absolute claims based on theory:")
+                    for problem in analysis['assumption_problems'][:2]:
+                        issues.append(f"  • {problem['type']}: {problem['explanation']}")
+                
+                if analysis['overall_bias_score'] > 0.5:
+                    issues.append("- High theoretical bias detected")
+                
+                refinement_prompt = f"""
+The following response contains theoretical bias and treats models as absolute truth:
+
+ORIGINAL QUERY: {query}
+
+BIASED RESPONSE: {current_response}
+
+BIAS ISSUES DETECTED:
+{chr(10).join(issues)}
+
+Please provide an improved response that:
+1. Treats all theories (GR, QM, Standard Model, etc.) as working models, not absolute truth
+2. Uses evidence-based language: "observations show", "data indicates", "models predict"
+3. Avoids absolute statements like "impossible because theory X says so"
+4. Compares different theoretical frameworks when relevant
+5. Acknowledges limitations and assumptions of current models
+6. Prioritizes empirical evidence over theoretical authority
+
+ASSUMPTION-FREE RESPONSE:
+"""
+                
+                current_response = self.ai_client.call_ai(refinement_prompt)
+            
+            iteration += 1
+        
+        # Final analysis
+        final_analysis = self.bias_detector.analyze_response(current_response)
+        return current_response, final_analysis
+    
+    def add_message(self, sender: str, content: str, analysis: Dict = None):
+        """Add message to chat display with bias analysis"""
+        timestamp = datetime.now().strftime("%H:%M")
+        
+        if sender == "user":
+            message_html = f"""
+            <div style="margin: 15px 0; padding: 15px; background: #e3f2fd; border-radius: 10px; border-left: 4px solid #2196f3;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <strong>🔬 You</strong>
+                    <small style="color: #666;">{timestamp}</small>
+                </div>
+                <div>{content.replace(chr(10), '<br>')}</div>
+            </div>
+            """
+        else:
+            # AI response with bias analysis
+            analysis_html = ""
+            if analysis and self.show_analysis.value:
+                status_colors = {'EVIDENCE_BASED': '🟢', 'MILD_BIAS': '🟡', 'SIGNIFICANT_BIAS': '🟠', 'THEORY_DOGMA': '🔴'}
+                status_icon = status_colors.get(analysis.get('status', 'UNKNOWN'), '⚪')
+                
+                bias_score = analysis.get('overall_bias_score', 0)
+                evidence_ratio = analysis.get('evidence_ratio', 0)
+                
+                analysis_html = f"""
+                <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-top: 12px; font-size: 13px; border-left: 3px solid #2E8B57;">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 8px;">
+                        <div><strong>Bias Status:</strong> {analysis.get('status', 'UNKNOWN')} {status_icon}</div>
+                        <div><strong>Bias Score:</strong> {bias_score:.2f}/1.0</div>
+                        <div><strong>Evidence Ratio:</strong> {evidence_ratio:.2f}</div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                        <div><strong>Bias Phrases:</strong> {len(analysis.get('bias_analysis', {}).get('bias_phrases', []))}</div>
+                        <div><strong>Problems:</strong> {len(analysis.get('assumption_problems', []))}</div>
+                    </div>
+                </div>
+                """
+            
+            provider_name = self.ai_client.provider.title() if self.ai_client.provider else "AI"
+            message_html = f"""
+            <div style="margin: 15px 0; padding: 15px; background: #e8f5e8; border-radius: 10px; border-left: 4px solid #2E8B57;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <strong>🤖 {provider_name} (Assumption-Free)</strong>
+                    <small style="color: #666;">{timestamp}</small>
+                </div>
+                <div style="line-height: 1.6;">{content.replace(chr(10), '<br>')}</div>
+                {analysis_html}
+            </div>
+            """
+        
+        # Update conversation history
+        self.conversation_history.append({
+            'sender': sender,
+            'content': content,
+            'analysis': analysis,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        # Update display
+        all_messages = ""
+        for entry in self.conversation_history:
+            timestamp = datetime.fromisoformat(entry['timestamp']).strftime("%H:%M")
+            
+            if entry['sender'] == 'user':
+                all_messages += f"""
+                <div style="margin: 15px 0; padding: 15px; background: #e3f2fd; border-radius: 10px; border-left: 4px solid #2196f3;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <strong>🔬 You</strong>
+                        <small style="color: #666;">{timestamp}</small>
+                    </div>
+                    <div>{entry['content'].replace(chr(10), '<br>')}</div>
+                </div>
+                """
+            else:
+                analysis = entry.get('analysis', {})
+                analysis_html = ""
+                
+                if analysis and self.show_analysis.value:
+                    status_colors = {'EVIDENCE_BASED': '🟢', 'MILD_BIAS': '🟡', 'SIGNIFICANT_BIAS': '🟠', 'THEORY_DOGMA': '🔴'}
+                    status_icon = status_colors.get(analysis.get('status', 'UNKNOWN'), '⚪')
+                    
+                    bias_score = analysis.get('overall_bias_score', 0)
+                    evidence_ratio = analysis.get('evidence_ratio', 0)
+                    
+                    analysis_html = f"""
+                    <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-top: 12px; font-size: 13px; border-left: 3px solid #2E8B57;">
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 8px;">
+                            <div><strong>Bias Status:</strong> {analysis.get('status', 'UNKNOWN')} {status_icon}</div>
+                            <div><strong>Bias Score:</strong> {bias_score:.2f}/1.0</div>
+                            <div><strong>Evidence Ratio:</strong> {evidence_ratio:.2f}</div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                            <div><strong>Bias Phrases:</strong> {len(analysis.get('bias_analysis', {}).get('bias_phrases', []))}</div>
+                            <div><strong>Problems:</strong> {len(analysis.get('assumption_problems', []))}</div>
+                        </div>
+                    </div>
+                    """
+                
+                provider_name = self.ai_client.provider.title() if self.ai_client.provider else "AI"
+                all_messages += f"""
+                <div style="margin: 15px 0; padding: 15px; background: #e8f5e8; border-radius: 10px; border-left: 4px solid #2E8B57;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <strong>🤖 {provider_name} (Assumption-Free)</strong>
+                        <small style="color: #666;">{timestamp}</small>
+                    </div>
+                    <div style="line-height: 1.6;">{entry['content'].replace(chr(10), '<br>')}</div>
+                    {analysis_html}
+                </div>
+                """
+        
+        self.chat_display.value = f"<div style='background: #f8f9fa; padding: 20px; border-radius: 8px;'>{all_messages}</div>"
+    
+    def on_clear(self, button):
+        """Clear conversation history"""
+        self.conversation_history = []
+        self.ai_client.conversation_history = []
+        provider_name = self.ai_client.provider.title() if self.ai_client.provider else "AI"
+        self.chat_display.value = f"<div style='background: #f8f9fa; padding: 20px; border-radius: 8px;'>🔬 {provider_name} ready for assumption-free physics discussion!</div>"
+        
+        with self.status_output:
+            self.status_output.clear_output()
+            print("🗑️ Conversation cleared!")
+    
+    def on_test(self, button):
+        """Test AI connection with physics bias check"""
+        self.test_button.disabled = True
+        self.test_button.description = "Testing..."
+        
+        try:
+            with self.status_output:
+                self.status_output.clear_output()
+                print("🧪 Testing assumption-free physics mode...")
+                
+                # Test with a potentially biased physics question
+                test_query = "Is faster-than-light travel possible according to physics?"
+                response = self.ai_client.call_ai(test_query)
+                analysis = self.bias_detector.analyze_response(response)
+                
+                print(f"✅ Connection test successful!")
+                print(f"📊 Bias Analysis:")
+                print(f"   Status: {analysis['status']}")
+                print(f"   Bias Score: {analysis['overall_bias_score']:.2f}/1.0")
+                print(f"   Evidence Ratio: {analysis['evidence_ratio']:.2f}")
+                
+                if analysis['overall_bias_score'] > 0.3:
+                    print("⚠️  Some theoretical bias detected - auto-correction will help")
+                else:
+                    print("✅ Good assumption-free response!")
+                    
+        except Exception as e:
+            with self.status_output:
+                print(f"❌ Test failed: {str(e)}")
+        
+        finally:
+            self.test_button.disabled = False
+            self.test_button.description = "🧪 Test"
+
+def create_physics_sample_questions():
+    """Create sample physics questions that often trigger bias"""
+    
+    physics_samples = {
+        "🚀 FTL Travel": "Is faster-than-light travel possible? Compare what different theories predict vs. what we actually know from observations.",
+        
+        "🌌 Dark Matter vs Alternatives": "How does the evidence for dark matter compare to alternative theories like MOND or MBT? What do the observations actually show?",
+        
+        "⚡ Quantum Gravity": "Compare the different approaches to quantum gravity (String Theory, Loop Quantum Gravity, etc.) - which has the strongest empirical support?",
+        
+        "🕳️ Black Hole Information": "What does the data actually tell us about black hole information loss? How do different theories handle this?",
+        
+        "🌊 Wave-Particle Duality": "Explain wave-particle duality without appealing to 'that's just how quantum mechanics works' - what do the experiments actually show?",
+        
+        "📐 Spacetime Curvature": "How do we know spacetime is actually curved versus other explanations for gravitational effects? What would distinguish them observationally?"
+    }
+    
+    sample_buttons = []
+    
+    for title, question in physics_samples.items():
+        button = widgets.Button(
+            description=title,
+            layout=widgets.Layout(width='400px', margin='3px'),
+            style={'description_width': 'initial'}
+        )
+        
+        def make_handler(q):
+            def handler(b):
+                if 'theory_engine' in globals():
+                    theory_engine.input_text.value = q
+                    print(f"📝 Loaded: {q[:70]}...")
+                else:
+                    print("Engine not ready yet!")
+            return handler
+        
+        button.on_click(make_handler(question))
+        sample_buttons.append(button)
+    
+    sample_box1 = widgets.HBox(sample_buttons[:3])
+    sample_box2 = widgets.HBox(sample_buttons[3:])
+    
+    display(widgets.VBox([
+        widgets.HTML("<h3>🔬 Physics Sample Questions (Bias-Prone)</h3><p>Test questions that often trigger theoretical bias in AI responses:</p>"),
+        sample_box1,
+        sample_box2
+    ]))
+
+# Initialize and display the engine
+print("🔬 Pure Theoretical Physics Engine - Removing AI Bias from Physics Discussions")
+print("=" * 80)
+
+# Create sample questions
+create_physics_sample_questions()
+
+# Initialize the main engine
+theory_engine = PureTheoreticalEngine()
+
+print("\n" + "="*80)
+print("🔬 PURE THEORETICAL PHYSICS ENGINE READY!")
+print("="*80)
+
+theory_engine.display_interface()
+
+print(f"""
+🎉 **Pure Theoretical Physics Engine is now running!**
+
+✅ **Core Features:**
+• 🔍 Theoretical bias detection across all AI providers
+• 🧠 Automatic assumption checking and correction
+• 📊 Evidence-first physics discussion
+• 🌍 Theory-neutral analysis of competing frameworks
+• 🔧 Real-time bias scoring and refinement
+
+✅ **What This Fixes:**
+• ❌ "That's impossible because GR says so"
+• ❌ "The Standard Model proves..."
+• ❌ "Basic physics requires..."
+• ❌ "Einstein showed that..."
+• ✅ "Current models suggest..."
+• ✅ "Observations indicate..."
+• ✅ "If we accept this framework..."
+• ✅ "Comparing different theories..."
+
+✅ **Bias Detection:**
+• Sacred cow theory identification (GR, QM, SM, etc.)
+• Theory-as-fact language detection
+• Assumption tracking and flagging
+• Evidence vs authority balance analysis
+• Automatic refinement suggestions
+
+✅ **Perfect for:**
+• Testing alternative physics frameworks
+• Comparing competing theories objectively
+• Getting evidence-based rather than authority-based answers
+• Avoiding physics dogma and textbook bias
+• Open-minded theoretical exploration
+
+🔧 **How It Works:**
+1. AI generates initial physics response
+2. Bias detector analyzes for theoretical assumptions
+3. If bias detected → automatic refinement process
+4. Final response is evidence-based and theory-neutral
+5. Full bias analysis shown for transparency
+
+💡 **Example Transformation:**
+❌ **Biased:** "FTL travel is impossible because Einstein's relativity proves the speed of light is absolute"
+✅ **Corrected:** "Current relativistic models predict FTL travel faces significant barriers, though alternative frameworks like tachyon theories or modified spacetime models might allow different possibilities. Observationally, we haven't detected FTL phenomena, but this could be due to technological limitations rather than fundamental impossibility."
+
+Ready to explore physics without theoretical bias! 🌌
+""")
+
+# Installation guide for additional packages
+print("""
+📦 **Additional Packages (same as Paradox Engine):**
+
+```bash
+# For OpenAI
+pip install openai
+
+# For Anthropic  
+pip install anthropic
+
+# For Google Gemini
+pip install google-generativeai
+
+# For Ollama (local)
+pip install requests
+```
+
+🎯 **Perfect Companion to:**
+• Your MBT cosmological framework testing
+• Alternative gravity theory exploration  
+• Quantum mechanics interpretation analysis
+• Any physics research challenging established models
+
+This engine will stop AIs from reflexively defending theories and start them analyzing evidence! 🔬
+""")
