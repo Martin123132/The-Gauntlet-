@@ -1,49 +1,61 @@
-Copyright © Motion-timespace 
+Motion-TimeSpace Non-Commercial License (MTNSL-1.0)
+Copyright (c) 2025 Martin Ollett
 
-1. Non-Commercial Use
+1. Permission and Non-Commercial Use
+------------------------------------
+This software, including all source code, data files, documentation, and
+any associated materials (collectively, the “Software”), is freely available
+for:
 
-This software and all associated code, data, and documentation are free to use, modify, and distribute for non-commercial academic research, personal projects, and educational purposes, provided proper attribution is given.
+    • Non-commercial academic research
+    • Personal, hobby, or educational projects
+    • Open scientific collaboration
 
-Attribution must include:
+Users are permitted to use, copy, modify, and distribute the Software for
+non-commercial purposes, provided proper attribution is included.
 
-“Based on the Motion-TimeSpace Framework and Rat-Trap Compression Engine 
+Required attribution:
+    “Based on the Motion-TimeSpace Framework by Martin Ollett.”
 
+2. Commercial Use Prohibited Without License
+--------------------------------------------
+Commercial use of this Software is strictly prohibited without a signed,
+written commercial license agreement from the copyright holder.
 
-2. Commercial Use
+“Commercial use” includes, but is not limited to:
 
-Commercial use is prohibited without a signed license agreement.
+    • Use in any product or service that generates revenue
+    • Use by companies, startups, or corporate entities
+    • Use in closed-source or proprietary systems intended for profit
+    • Use in consulting, paid research, or internal commercial R&D
 
-“Commercial use” includes but is not limited to:
+To obtain a commercial license, contact the author.
 
-Use in any product or service that generates revenue or forms part of a commercial offering
-Use by companies, corporations, or startups, regardless of whether the software itself is sold
-Integration into closed-source systems offered for profit
+3. Derivative Works
+-------------------
+Modification and derivative works are allowed under the following terms:
 
-Licensing terms will include royalties or other compensation based on deployment scale and economic value.
+    • Any publicly released derivative must remain open-source
+      under this same Motion-TimeSpace Non-Commercial License.
+    • Attribution to the original Software and author must be retained.
+    • Derivatives must not imply endorsement by the original author.
 
-3. Revocation Rights
+Use of the names “Rat-Trap,” “GMW,” or “Motion-TimeSpace” in commercial
+branding, promotion, or paid products is prohibited without written permission.
 
+4. No Warranty
+--------------
+The Software is provided “as is,” without warranty of any kind, express or
+implied. The author is not liable for any damages arising from the use of
+this Software.
 
-The author retains the right to revoke this license — including retroactively — from any entity found to:
+5. Limitation of Liability
+--------------------------
+In no event shall the author be liable for any claim, loss, or damages,
+including incidental or consequential damages, arising from the use of the
+Software, whether in contract, tort, or otherwise.
 
-
-Engage in illegal activities
-Deploy AI systems that provide unqualified medical or psychological advice
-Violate human rights or ethical standards
-Misuse this software in ways harmful to public safety or well-being
-
-Upon revocation, the entity must immediately cease use of the software and remove all derived works from deployment.
-
-4. Derivative Works
-
-Any modification or derivative work must:
-
-Remain open-source under the same license terms if publicly released
-Include clear attribution to the original author and framework
-Not use the names “Rat-Trap,” “GMW,” or “Motion-TimeSpace” in any commercial branding without written permission.
-
-
-5. Disclaimer
-
-
-This software is provided “as is” without warranty of any kind. The author is not liable for any damages arising from its use.
+6. Governing Law
+----------------
+This license shall be governed by the laws of the United Kingdom unless
+otherwise agreed in writing.
