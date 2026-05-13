@@ -1,4 +1,4 @@
-"""
+﻿"""
 improved_paradox_engine.py
 ===========================
 
