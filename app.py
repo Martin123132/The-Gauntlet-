@@ -11,6 +11,20 @@ from gauntlet_core.sample_text import SAMPLE_PAPER
 
 st.set_page_config(page_title="The Gauntlet", page_icon="G", layout="wide")
 
+VALID_PAGES = ("summary", "breakdown", "claims", "contradictions", "evidence")
+PAGE_LABELS = {
+    "summary": "Summary",
+    "breakdown": "Breakdown",
+    "claims": "Claims",
+    "contradictions": "Contradictions",
+    "evidence": "Evidence",
+}
+
+
+@st.cache_resource
+def report_store() -> dict:
+    return {}
+
 
 CSS = """
 <style>
@@ -105,6 +119,12 @@ h1, h2, h3, p {
   color: #252d38;
   font-weight: 680;
   font-size: .93rem;
+  text-decoration: none;
+  border-bottom: 3px solid transparent;
+}
+.nav-tab:hover {
+  color: var(--gauntlet-teal);
+  text-decoration: none;
 }
 .nav-tab.active {
   color: var(--gauntlet-teal);
@@ -302,6 +322,82 @@ div[data-baseweb="tab-highlight"] {
   padding: .9rem 1rem;
   margin-bottom: .9rem;
 }
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .8rem;
+  margin: .9rem 0;
+}
+.detail-card,
+.wide-detail-card,
+.claim-card {
+  border: 1px solid var(--gauntlet-border);
+  border-radius: 8px;
+  background: white;
+  box-shadow: var(--gauntlet-shadow);
+}
+.detail-card {
+  padding: 1rem;
+}
+.wide-detail-card {
+  padding: 1rem;
+  margin-bottom: .9rem;
+}
+.detail-title {
+  color: var(--gauntlet-ink);
+  font-weight: 820;
+  font-size: 1.25rem;
+  margin-bottom: .25rem;
+}
+.detail-subtitle {
+  color: var(--gauntlet-muted);
+  font-size: .92rem;
+  margin-bottom: .9rem;
+}
+.claim-card {
+  padding: .95rem 1rem;
+  margin-bottom: .7rem;
+}
+.claim-head {
+  display: flex;
+  justify-content: space-between;
+  gap: .8rem;
+  align-items: center;
+  margin-bottom: .45rem;
+}
+.claim-status {
+  border-radius: 6px;
+  padding: .18rem .52rem;
+  background: #e6f6f3;
+  color: var(--gauntlet-teal);
+  font-size: .76rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+.claim-status.partial {
+  background: var(--gauntlet-amber-bg);
+  color: var(--gauntlet-amber);
+}
+.claim-status.failed {
+  background: var(--gauntlet-red-bg);
+  color: var(--gauntlet-red);
+}
+.claim-text {
+  color: #24303c;
+  line-height: 1.48;
+}
+.claim-meta {
+  color: var(--gauntlet-muted);
+  font-size: .84rem;
+  margin-top: .45rem;
+}
+.empty-detail {
+  border: 1px dashed #b8c5cf;
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 1.25rem;
+  color: var(--gauntlet-muted);
+}
 .bar-row {
   display: grid;
   grid-template-columns: 96px 1fr 42px;
@@ -470,6 +566,7 @@ div[data-baseweb="tab-highlight"] {
   }
   .verdict-hero,
   .breakdown-grid,
+  .detail-grid,
   .stat-strip,
   .footer-status {
     grid-template-columns: 1fr;
@@ -485,47 +582,76 @@ div[data-baseweb="tab-highlight"] {
 
 def main() -> None:
     st.markdown(CSS, unsafe_allow_html=True)
-    render_topbar()
-    left, middle, right = st.columns([0.23, 0.43, 0.34], gap="medium")
+    page = current_page()
+    report = active_report()
+    render_topbar(page)
 
-    with left:
-        render_upload_panel()
+    if page == "summary":
+        render_summary_page(report)
+    else:
+        left, detail = st.columns([0.23, 0.77], gap="medium")
+        with left:
+            render_upload_panel()
+        with detail:
+            render_detail_page(page, report)
 
-    with middle:
-        report = st.session_state.get("report")
-        if report:
-            render_report_center(report)
-        else:
-            render_empty_state()
-
-    with right:
-        render_flagged_panel(st.session_state.get("report"))
-
-    render_footer(st.session_state.get("report"))
+    render_footer(report)
 
 
-def render_topbar() -> None:
+def current_page() -> str:
+    page = st.query_params.get("page", "summary")
+    if isinstance(page, list):
+        page = page[0] if page else "summary"
+    return page if page in VALID_PAGES else "summary"
+
+
+def active_report():
+    if "report" in st.session_state:
+        return st.session_state["report"]
+    return report_store().get("report")
+
+
+def save_report(report) -> None:
+    st.session_state["report"] = report
+    report_store()["report"] = report
+
+
+def render_topbar(active_page: str) -> None:
+    nav = "\n".join(
+        f'<a class="nav-tab {"active" if page == active_page else ""}" href="?page={page}" target="_self">{label}</a>'
+        for page, label in PAGE_LABELS.items()
+    )
     st.markdown(
-        """
+        f"""
         <div class="gauntlet-topbar">
           <div class="brand-lockup">
             <div class="brand-mark">G</div>
             <h1>The Gauntlet</h1>
           </div>
           <div class="nav-tabs">
-            <div class="nav-tab active">Summary</div>
-            <div class="nav-tab">Claims</div>
-            <div class="nav-tab">Contradictions</div>
-            <div class="nav-tab">Evidence</div>
+            {nav}
           </div>
           <div class="top-actions">
-            <div class="export-chip">Export Report</div>
+            <a class="export-chip" href="?page=breakdown" target="_self">Export Report</a>
             <div style="font-size: 1.35rem; line-height: 1;">=</div>
           </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+
+def render_summary_page(report) -> None:
+    left, middle, right = st.columns([0.23, 0.43, 0.34], gap="medium")
+    with left:
+        render_upload_panel()
+    with middle:
+        if report:
+            render_report_center(report)
+        else:
+            render_empty_state()
+    with right:
+        render_flagged_panel(report)
 
 
 def render_upload_panel() -> None:
@@ -563,7 +689,7 @@ def render_upload_panel() -> None:
             except Exception as exc:  # Streamlit should show clean user-facing errors.
                 st.error(str(exc))
                 return
-            st.session_state["report"] = report
+            save_report(report)
             st.rerun()
 
         st.markdown(
@@ -631,38 +757,146 @@ def render_report_center(report) -> None:
     )
 
     render_stat_strip(report)
-
-    summary_tab, claims_tab, contradictions_tab, evidence_tab = st.tabs(
-        ["Summary", "Claims", "Contradictions", "Evidence"]
+    render_breakdowns(report)
+    st.markdown(
+        '<a class="export-chip" href="?page=breakdown" target="_self">Open full breakdown</a>',
+        unsafe_allow_html=True,
     )
 
-    with summary_tab:
-        render_breakdowns(report)
-        render_exports(report)
 
-    with claims_tab:
-        if not report.claims:
-            st.warning("No explicit resolution claims were detected.")
-        for claim in report.claims:
-            st.markdown(f"**{claim.status.title()}** - quality `{claim.quality:.2f}`")
-            st.write(claim.claim)
-            st.caption(f"Mechanism: {claim.mechanism} | Gaps: {', '.join(claim.gaps) if claim.gaps else 'none'}")
-            st.divider()
+def render_detail_page(page: str, report) -> None:
+    if not report:
+        render_missing_report(page)
+        return
 
-    with contradictions_tab:
-        if not report.findings:
-            st.success("No internal contradictions were detected by the v1 rules.")
-        for finding in report.findings:
-            render_finding(finding)
+    if page == "breakdown":
+        render_breakdown_page(report)
+    elif page == "claims":
+        render_claims_page(report)
+    elif page == "contradictions":
+        render_contradictions_page(report)
+    elif page == "evidence":
+        render_evidence_page(report)
+    else:
+        render_breakdown_page(report)
 
-    with evidence_tab:
-        st.progress(min(report.evidence.score, 1.0), text=f"Evidence quality {report.evidence.score:.2f}/1.00")
-        evidence_cols = st.columns(5)
-        evidence_cols[0].metric("Quantitative", report.evidence.quantitative_evidence)
-        evidence_cols[1].metric("Math", report.evidence.mathematical_content)
-        evidence_cols[2].metric("Citations", report.evidence.citations)
-        evidence_cols[3].metric("Methodology", report.evidence.methodology_terms)
-        evidence_cols[4].metric("Evidence terms", report.evidence.evidence_terms)
+
+def render_missing_report(page: str) -> None:
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="detail-title">{html.escape(PAGE_LABELS.get(page, "Breakdown"))}</div>
+          <div class="detail-subtitle">Run an analysis first, then this page will show the detailed breakdown.</div>
+          <div class="empty-detail">Use the upload rail on the left or turn on the built-in sample paper, then press Analyze Paper.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_breakdown_page(report) -> None:
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="detail-title">Actual Breakdown</div>
+          <div class="detail-subtitle">Source: {html.escape(report.source_name)}. This page expands the front-page verdict into the claim audit, contradiction ledger, and evidence profile.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    render_stat_strip(report)
+    render_breakdowns(report)
+    render_claims_page(report, compact=True)
+    render_contradictions_page(report, compact=True)
+    render_evidence_page(report, compact=True)
+    render_exports(report)
+
+
+def render_claims_page(report, compact: bool = False) -> None:
+    title = "Claim-by-Claim Audit" if compact else "Claims"
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="detail-title">{title}</div>
+          <div class="detail-subtitle">Each claim is scored for mechanism, evidence strength, and gaps the paper should repair.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if not report.claims:
+        st.markdown('<div class="empty-detail">No explicit resolution claims were detected.</div>', unsafe_allow_html=True)
+        return
+    for index, claim in enumerate(report.claims, start=1):
+        render_claim_card(index, claim)
+
+
+def render_claim_card(index: int, claim) -> None:
+    gaps = ", ".join(claim.gaps) if claim.gaps else "none"
+    status_class = html.escape(claim.status)
+    st.markdown(
+        f"""
+        <div class="claim-card">
+          <div class="claim-head">
+            <strong>Claim {index}</strong>
+            <span class="claim-status {status_class}">{html.escape(claim.status)}</span>
+          </div>
+          <div class="claim-text">{html.escape(claim.claim)}</div>
+          <div class="claim-meta">Quality: {claim.quality:.2f} | Evidence: {claim.evidence_strength:.2f} | Mechanism: {html.escape(claim.mechanism)} | Gaps: {html.escape(gaps)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_contradictions_page(report, compact: bool = False) -> None:
+    title = "Contradiction Ledger" if compact else "Contradictions"
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="detail-title">{title}</div>
+          <div class="detail-subtitle">Internal contradictions and logical repair suggestions found by the deterministic rule set.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if not report.findings:
+        st.markdown(
+            '<div class="finding-card low"><div class="finding-title">No internal contradictions <span class="severity-pill low">Low</span></div><div class="finding-body">The v1 rule set did not find direct internal conflicts in this paper.</div></div>',
+            unsafe_allow_html=True,
+        )
+        return
+    for finding in report.findings:
+        render_finding(finding)
+
+
+def render_evidence_page(report, compact: bool = False) -> None:
+    title = "Evidence Profile" if compact else "Evidence"
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="detail-title">{title}</div>
+          <div class="detail-subtitle">Evidence quality is based on local markers: quantities, citations, math, method terms, and evidence language.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.progress(min(report.evidence.score, 1.0), text=f"Evidence quality {report.evidence.score:.2f}/1.00")
+    st.markdown(
+        f"""
+        <div class="detail-grid">
+          <div class="detail-card"><div class="stat-title">Quantitative Evidence</div><div class="stat-number">{report.evidence.quantitative_evidence}</div></div>
+          <div class="detail-card"><div class="stat-title">Mathematical Content</div><div class="stat-number">{report.evidence.mathematical_content}</div></div>
+          <div class="detail-card"><div class="stat-title">Citations</div><div class="stat-number">{report.evidence.citations}</div></div>
+        </div>
+        <div class="wide-detail-card">
+          <div class="bar-row"><span>Data</span><div class="bar-track"><div class="bar-fill" style="width:{min(100, report.evidence.evidence_terms * 10)}%"></div></div><strong>{report.evidence.evidence_terms}</strong></div>
+          <div class="bar-row"><span>Math</span><div class="bar-track"><div class="bar-fill amber" style="width:{min(100, report.evidence.mathematical_content * 14)}%"></div></div><strong>{report.evidence.mathematical_content}</strong></div>
+          <div class="bar-row"><span>Citations</span><div class="bar-track"><div class="bar-fill" style="width:{min(100, report.evidence.citations * 18)}%"></div></div><strong>{report.evidence.citations}</strong></div>
+          <div class="bar-row"><span>Methods</span><div class="bar-track"><div class="bar-fill red" style="width:{min(100, report.evidence.methodology_terms * 12)}%"></div></div><strong>{report.evidence.methodology_terms}</strong></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_stat_strip(report) -> None:
