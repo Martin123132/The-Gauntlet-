@@ -58,6 +58,29 @@ The verdict is a review aid, not a replacement for expert peer review.
   evidence gaps, scope conflicts, circular support, and theory-as-fact wording
 - exportable JSON and Markdown reports
 
+## Benchmark Demo Gallery
+
+The `Benchmarks` page contains synthetic mini papers with known expected
+outcomes. These samples are not real papers and are not claims about any real
+author. They are calibration cases that show what the deterministic rules are
+supposed to catch.
+
+Current benchmark cases cover:
+
+- strong mechanism and evidence
+- weak evidence
+- no clear resolution claims
+- unsupported resolution claims
+- internal contradiction
+- scope conflict
+- circular support
+- theory-as-fact language
+
+Each benchmark shows the expected verdict, actual verdict, matched findings,
+missed findings, extra findings, matched claim gaps, and export buttons. The
+same benchmark corpus is used by the test suite so future rule changes cannot
+quietly break known behavior.
+
 ## Optional Refinement Chamber
 
 The `Refinement` page is optional. It lets a user paste session-only OpenAI and
@@ -101,10 +124,13 @@ print(report.verdict)
 print(report.to_json())
 ```
 
-Optional refinement can be imported separately:
+Benchmark samples and optional refinement can be imported separately:
 
 ```python
-from gauntlet_core import analyze_paper_text, run_refinement
+from gauntlet_core import analyze_paper_text, list_benchmark_samples, run_benchmark_sample, run_refinement
+
+for sample in list_benchmark_samples():
+    print(sample.id, run_benchmark_sample(sample.id).passed)
 
 report = analyze_paper_text(paper_text, source_name="paper.txt")
 refinement = run_refinement(report, paper_text, openai_api_key="...", anthropic_api_key="...")

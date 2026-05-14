@@ -5,6 +5,7 @@ import html
 import streamlit as st
 
 from gauntlet_core import analyze_paper_text
+from gauntlet_core.benchmarks import list_benchmark_samples, run_benchmark_sample
 from gauntlet_core.document_loader import SUPPORTED_EXTENSIONS, extract_text_from_bytes
 from gauntlet_core.refinement import (
     DEFAULT_ANTHROPIC_MODEL,
@@ -17,10 +18,11 @@ from gauntlet_core.sample_text import SAMPLE_PAPER
 
 st.set_page_config(page_title="The Gauntlet", page_icon="G", layout="wide")
 
-VALID_PAGES = ("summary", "breakdown", "claims", "contradictions", "evidence", "refinement")
+VALID_PAGES = ("summary", "breakdown", "benchmarks", "claims", "contradictions", "evidence", "refinement")
 PAGE_LABELS = {
     "summary": "Summary",
     "breakdown": "Breakdown",
+    "benchmarks": "Benchmarks",
     "claims": "Claims",
     "contradictions": "Contradictions",
     "evidence": "Evidence",
@@ -602,6 +604,47 @@ div[data-baseweb="tab-highlight"] {
   max-height: 420px;
   overflow: auto;
 }
+.benchmark-hero {
+  border: 1px solid var(--gauntlet-border);
+  border-radius: 8px;
+  background: white;
+  box-shadow: var(--gauntlet-shadow);
+  padding: 1rem;
+  margin-bottom: .9rem;
+}
+.benchmark-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .85rem;
+  margin-bottom: .9rem;
+}
+.benchmark-card {
+  border: 1px solid var(--gauntlet-border);
+  border-radius: 8px;
+  background: white;
+  padding: 1rem;
+  min-height: 150px;
+}
+.match-pill {
+  display: inline-block;
+  border-radius: 6px;
+  padding: .22rem .55rem;
+  font-size: .76rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  background: #e6f6f3;
+  color: var(--gauntlet-teal);
+}
+.match-pill.review {
+  background: var(--gauntlet-amber-bg);
+  color: var(--gauntlet-amber);
+}
+.comparison-list {
+  margin: .65rem 0 0;
+  padding-left: 1.05rem;
+  color: #273340;
+  font-size: .86rem;
+}
 .footer-status {
   display: grid;
   grid-template-columns: 300px 1fr 250px;
@@ -630,6 +673,7 @@ div[data-baseweb="tab-highlight"] {
   .verdict-hero,
   .breakdown-grid,
   .audit-grid,
+  .benchmark-grid,
   .detail-grid,
   .stat-strip,
   .footer-status {
@@ -652,6 +696,8 @@ def main() -> None:
 
     if page == "summary":
         render_summary_page(report)
+    elif page == "benchmarks":
+        render_benchmarks_page()
     else:
         left, detail = st.columns([0.23, 0.77], gap="medium")
         with left:
@@ -687,6 +733,12 @@ def active_refinement():
     return report_store().get("refinement_report")
 
 
+def active_benchmark_result():
+    if "benchmark_result" in st.session_state:
+        return st.session_state["benchmark_result"]
+    return report_store().get("benchmark_result")
+
+
 def save_report(report, paper_text: str) -> None:
     st.session_state["report"] = report
     st.session_state["paper_text"] = paper_text
@@ -699,6 +751,11 @@ def save_report(report, paper_text: str) -> None:
 def save_refinement(refinement_report) -> None:
     st.session_state["refinement_report"] = refinement_report
     report_store()["refinement_report"] = refinement_report
+
+
+def save_benchmark_result(benchmark_result) -> None:
+    st.session_state["benchmark_result"] = benchmark_result
+    report_store()["benchmark_result"] = benchmark_result
 
 
 def render_topbar(active_page: str) -> None:
@@ -851,6 +908,10 @@ def render_report_center(report) -> None:
 
 
 def render_detail_page(page: str, report) -> None:
+    if page == "benchmarks":
+        render_benchmarks_page()
+        return
+
     if not report:
         render_missing_report(page)
         return
@@ -1169,6 +1230,143 @@ def render_exports(report) -> None:
     )
 
 
+def render_benchmarks_page() -> None:
+    samples = list_benchmark_samples()
+    sample_by_title = {sample.title: sample for sample in samples}
+    st.markdown(
+        """
+        <div class="benchmark-hero">
+          <div class="detail-title">Benchmark Demo Gallery</div>
+          <div class="detail-subtitle">Synthetic papers with known expected outcomes. Run one to see whether the current deterministic rules catch the intended problem.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    left, right = st.columns([0.42, 0.58], gap="medium")
+    with left:
+        selected_title = st.selectbox("Benchmark sample", list(sample_by_title.keys()))
+        sample = sample_by_title[selected_title]
+        st.markdown(
+            f"""
+            <div class="benchmark-card">
+              <div class="small-label">{html.escape(sample.category)}</div>
+              <div class="panel-title">{html.escape(sample.title)}</div>
+              <div class="muted-note">{html.escape(sample.why_it_matters)}</div>
+              <div class="verdict-meta">
+                <div>Expected:<span>{html.escape(sample.expected_verdict)}</span></div>
+                <div>Findings:<span>{len(sample.expected_findings)}</span></div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        with st.expander("Synthetic sample text"):
+            st.code(sample.paper_text.strip(), language="markdown")
+        if st.button("Run Benchmark Sample", type="primary", use_container_width=True):
+            comparison = run_benchmark_sample(sample.id)
+            save_benchmark_result(comparison)
+            save_report(comparison.report, sample.paper_text)
+            st.rerun()
+
+    with right:
+        benchmark_result = active_benchmark_result()
+        if benchmark_result and benchmark_result.sample.id == sample.id:
+            render_benchmark_result(benchmark_result)
+        else:
+            st.markdown(
+                """
+                <div class="empty-detail">Choose a synthetic case and run the benchmark to compare expected vs actual verdicts, findings, and claim gaps.</div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+def render_benchmark_result(result) -> None:
+    expected = result.sample
+    status_class = "" if result.passed else "review"
+    actual_findings = sorted({finding.type for finding in result.report.findings})
+    actual_gaps = sorted({gap for claim in result.report.claims for gap in claim.gaps})
+    st.markdown(
+        f"""
+        <div class="benchmark-grid">
+          <div class="benchmark-card">
+            <div class="small-label">Expected Verdict</div>
+            <div class="verdict-stamp {html.escape(expected.expected_verdict.lower())}">{html.escape(expected.expected_verdict)}</div>
+            <ul class="comparison-list">
+              {''.join(f'<li>{html.escape(item)}</li>' for item in expected.expected_findings) or '<li>No findings expected</li>'}
+            </ul>
+          </div>
+          <div class="benchmark-card">
+            <div class="small-label">Actual Verdict</div>
+            <div class="verdict-stamp {html.escape(result.report.verdict.lower())}">{html.escape(result.report.verdict)}</div>
+            <div style="margin-top:.75rem;"><span class="match-pill {status_class}">{'Pass' if result.passed else 'Review'}</span> <span class="muted-note">Score {result.score:.0%}</span></div>
+          </div>
+        </div>
+        <div class="wide-detail-card">
+          <div class="detail-title">Expected vs Actual</div>
+          <div class="detail-subtitle">The benchmark passes when the expected verdict and required findings/gaps are present. Extra findings are shown so tuning remains transparent.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    comparison_cards = [
+        ("Matched Findings", result.matched_findings),
+        ("Missed Findings", result.missed_findings),
+        ("Extra Findings", result.extra_findings),
+        ("Matched Claim Gaps", result.matched_claim_gaps),
+        ("Missed Claim Gaps", result.missed_claim_gaps),
+        ("Extra Claim Gaps", result.extra_claim_gaps),
+    ]
+    for first, second in zip(comparison_cards[::2], comparison_cards[1::2]):
+        left, right = st.columns(2)
+        with left:
+            render_benchmark_comparison_card(first[0], first[1])
+        with right:
+            render_benchmark_comparison_card(second[0], second[1])
+    st.markdown(
+        f"""
+        <div class="benchmark-grid">
+          <div class="benchmark-card">
+            <div class="panel-title">Actual Finding Types</div>
+            <ul class="comparison-list">{''.join(f'<li>{html.escape(item)}</li>' for item in actual_findings) or '<li>none</li>'}</ul>
+          </div>
+          <div class="benchmark-card">
+            <div class="panel-title">Actual Claim Gaps</div>
+            <ul class="comparison-list">{''.join(f'<li>{html.escape(item)}</li>' for item in actual_gaps) or '<li>none</li>'}</ul>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    json_col, markdown_col = st.columns(2)
+    json_col.download_button(
+        "Export Benchmark JSON",
+        data=result.to_json(),
+        file_name=f"{safe_stem(result.sample.id)}-benchmark.json",
+        mime="application/json",
+        use_container_width=True,
+    )
+    markdown_col.download_button(
+        "Export Benchmark Markdown",
+        data=result.to_markdown(),
+        file_name=f"{safe_stem(result.sample.id)}-benchmark.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
+
+
+def render_benchmark_comparison_card(title: str, items) -> None:
+    st.markdown(
+        f"""
+        <div class="audit-card">
+          <strong>{html.escape(title)}</strong>
+          <ul class="comparison-list">{''.join(f'<li>{html.escape(item)}</li>' for item in items) or '<li>none</li>'}</ul>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_refinement_page(report) -> None:
     st.markdown(
         f"""
@@ -1407,7 +1605,7 @@ def render_footer(report) -> None:
         f"""
         <div class="footer-status">
           <div>{html.escape(status)}</div>
-          <div>Rules Engine: v2.0.0&nbsp;&nbsp;&nbsp; Rule Set: Theory/Paradox&nbsp;&nbsp;&nbsp; Optional AI: Session Keys Only</div>
+          <div>Rules Engine: v3.0.0&nbsp;&nbsp;&nbsp; Rule Set: Theory/Paradox&nbsp;&nbsp;&nbsp; Benchmarks: Synthetic Demo Corpus</div>
           <div>{html.escape(source)}</div>
         </div>
         """,
