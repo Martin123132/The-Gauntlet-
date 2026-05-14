@@ -2,5 +2,6 @@
 
 from .analysis import analyze_paper_text
 from .models import AnalysisReport
+from .refinement import RefinementReport, run_refinement
 
-__all__ = ["AnalysisReport", "analyze_paper_text"]
+__all__ = ["AnalysisReport", "RefinementReport", "analyze_paper_text", "run_refinement"]

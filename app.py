@@ -6,18 +6,25 @@ import streamlit as st
 
 from gauntlet_core import analyze_paper_text
 from gauntlet_core.document_loader import SUPPORTED_EXTENSIONS, extract_text_from_bytes
+from gauntlet_core.refinement import (
+    DEFAULT_ANTHROPIC_MODEL,
+    DEFAULT_OPENAI_MODEL,
+    RefinementError,
+    run_refinement,
+)
 from gauntlet_core.sample_text import SAMPLE_PAPER
 
 
 st.set_page_config(page_title="The Gauntlet", page_icon="G", layout="wide")
 
-VALID_PAGES = ("summary", "breakdown", "claims", "contradictions", "evidence")
+VALID_PAGES = ("summary", "breakdown", "claims", "contradictions", "evidence", "refinement")
 PAGE_LABELS = {
     "summary": "Summary",
     "breakdown": "Breakdown",
     "claims": "Claims",
     "contradictions": "Contradictions",
     "evidence": "Evidence",
+    "refinement": "Refinement",
 }
 
 
@@ -539,6 +546,62 @@ div[data-baseweb="tab-highlight"] {
   color: var(--gauntlet-muted);
   font-size: .92rem;
 }
+.audit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+  margin-bottom: .9rem;
+}
+.audit-card,
+.evidence-link-card,
+.turn-card {
+  border: 1px solid var(--gauntlet-border);
+  border-radius: 8px;
+  background: white;
+  padding: .85rem .95rem;
+  box-shadow: 0 10px 24px rgba(22, 34, 44, .05);
+}
+.audit-card strong,
+.evidence-link-card strong,
+.turn-card strong {
+  color: var(--gauntlet-ink);
+}
+.audit-card span {
+  color: var(--gauntlet-teal);
+  font-weight: 820;
+}
+.rubric-row {
+  display: grid;
+  grid-template-columns: 150px 1fr 58px;
+  gap: .65rem;
+  align-items: center;
+  margin: .62rem 0;
+  color: #273340;
+  font-size: .84rem;
+}
+.mini-list {
+  margin: .5rem 0 0 0;
+  padding-left: 1rem;
+  color: var(--gauntlet-muted);
+  font-size: .84rem;
+}
+.refinement-lock {
+  border: 1px solid var(--gauntlet-border);
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ffffff, #f4f8fa);
+  padding: 1rem;
+  margin-bottom: .9rem;
+}
+.transcript-box {
+  border: 1px solid var(--gauntlet-border);
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: .9rem;
+  color: #26313d;
+  white-space: pre-wrap;
+  max-height: 420px;
+  overflow: auto;
+}
 .footer-status {
   display: grid;
   grid-template-columns: 300px 1fr 250px;
@@ -566,6 +629,7 @@ div[data-baseweb="tab-highlight"] {
   }
   .verdict-hero,
   .breakdown-grid,
+  .audit-grid,
   .detail-grid,
   .stat-strip,
   .footer-status {
@@ -611,9 +675,30 @@ def active_report():
     return report_store().get("report")
 
 
-def save_report(report) -> None:
+def active_source_text() -> str:
+    if "paper_text" in st.session_state:
+        return st.session_state["paper_text"]
+    return report_store().get("paper_text", "")
+
+
+def active_refinement():
+    if "refinement_report" in st.session_state:
+        return st.session_state["refinement_report"]
+    return report_store().get("refinement_report")
+
+
+def save_report(report, paper_text: str) -> None:
     st.session_state["report"] = report
+    st.session_state["paper_text"] = paper_text
+    st.session_state.pop("refinement_report", None)
     report_store()["report"] = report
+    report_store()["paper_text"] = paper_text
+    report_store().pop("refinement_report", None)
+
+
+def save_refinement(refinement_report) -> None:
+    st.session_state["refinement_report"] = refinement_report
+    report_store()["refinement_report"] = refinement_report
 
 
 def render_topbar(active_page: str) -> None:
@@ -676,20 +761,21 @@ def render_upload_panel() -> None:
         if analyze_clicked:
             try:
                 if use_sample:
-                    report = analyze_paper_text(SAMPLE_PAPER, source_name="sample-paper.txt")
+                    paper_text = SAMPLE_PAPER
+                    report = analyze_paper_text(paper_text, source_name="sample-paper.txt")
                 elif upload is not None:
-                    text = extract_text_from_bytes(upload.name, upload.getvalue())
-                    if not text.strip():
+                    paper_text = extract_text_from_bytes(upload.name, upload.getvalue())
+                    if not paper_text.strip():
                         st.error("No readable text was found in that file.")
                         return
-                    report = analyze_paper_text(text, source_name=upload.name)
+                    report = analyze_paper_text(paper_text, source_name=upload.name)
                 else:
                     st.error("Upload a paper or turn on the sample paper first.")
                     return
             except Exception as exc:  # Streamlit should show clean user-facing errors.
                 st.error(str(exc))
                 return
-            save_report(report)
+            save_report(report, paper_text)
             st.rerun()
 
         st.markdown(
@@ -777,6 +863,8 @@ def render_detail_page(page: str, report) -> None:
         render_contradictions_page(report)
     elif page == "evidence":
         render_evidence_page(report)
+    elif page == "refinement":
+        render_refinement_page(report)
     else:
         render_breakdown_page(report)
 
@@ -806,10 +894,82 @@ def render_breakdown_page(report) -> None:
     )
     render_stat_strip(report)
     render_breakdowns(report)
+    render_curtain_up(report)
     render_claims_page(report, compact=True)
     render_contradictions_page(report, compact=True)
     render_evidence_page(report, compact=True)
     render_exports(report)
+
+
+def render_curtain_up(report) -> None:
+    st.markdown(
+        """
+        <div class="wide-detail-card">
+          <div class="detail-title">Curtain-Up Audit</div>
+          <div class="detail-subtitle">The visible rule trail behind the verdict: rubric weights, parsing events, and linked evidence snippets.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    rubric_rows = []
+    for item in report.verdict_rubric:
+        pct = int(min(100, max(0, item.score * 100)))
+        rubric_rows.append(
+            f"""
+            <div class="rubric-row">
+              <span>{html.escape(item.name)}</span>
+              <div class="bar-track"><div class="bar-fill" style="width:{pct}%"></div></div>
+              <strong>{item.score:.2f}</strong>
+            </div>
+            <div class="muted-note">{html.escape(item.reason)} | Weight {item.weight:.2f}</div>
+            """
+        )
+    event_cards = []
+    for event in report.audit_events:
+        score = "" if event.score is None else f" <span>{event.score:.2f}</span>"
+        event_cards.append(
+            f"""
+            <div class="audit-card">
+              <strong>{html.escape(event.step.title())}</strong>{score}
+              <div class="muted-note">{html.escape(event.status)} - {html.escape(event.detail)}</div>
+            </div>
+            """
+        )
+    evidence_cards = []
+    for link in report.evidence.evidence_links[:6]:
+        evidence_cards.append(
+            f"""
+            <div class="evidence-link-card">
+              <strong>{html.escape(link.id)} - {html.escape(link.type.title())}</strong>
+              <div class="muted-note">{html.escape(link.section)} | Sentence {link.sentence_index} | Confidence {link.confidence:.0%}</div>
+              <div class="claim-text">{html.escape(link.snippet)}</div>
+            </div>
+            """
+        )
+    st.markdown(
+        f"""
+        <div class="breakdown-grid">
+          <div class="breakdown-card">
+            <div class="panel-title">Verdict Rubric</div>
+            {''.join(rubric_rows) or '<div class="muted-note">No rubric details recorded.</div>'}
+          </div>
+          <div class="breakdown-card">
+            <div class="panel-title">Evidence Index</div>
+            <div class="muted-note">{report.evidence.linked_evidence} evidence snippets were indexed across {len(report.evidence.section_counts)} sections.</div>
+            <ul class="mini-list">
+              {''.join(f'<li>{html.escape(section)}: {count}</li>' for section, count in report.evidence.section_counts.items()) or '<li>No evidence snippets indexed.</li>'}
+            </ul>
+          </div>
+        </div>
+        <div class="audit-grid">
+          {''.join(event_cards)}
+        </div>
+        <div class="audit-grid">
+          {''.join(evidence_cards) or '<div class="empty-detail">No evidence snippets were indexed.</div>'}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_claims_page(report, compact: bool = False) -> None:
@@ -833,15 +993,27 @@ def render_claims_page(report, compact: bool = False) -> None:
 def render_claim_card(index: int, claim) -> None:
     gaps = ", ".join(claim.gaps) if claim.gaps else "none"
     status_class = html.escape(claim.status)
+    evidence_links = ", ".join(link.id for link in claim.evidence_links) if claim.evidence_links else "none"
+    rubric = "".join(
+        f'<li>{html.escape(score.name)}: {score.score:.2f} - {html.escape(score.reason)}</li>'
+        for score in claim.rubric_scores
+    )
+    audit = "".join(
+        f'<li>{html.escape(event.step)}: {html.escape(event.status)} - {html.escape(event.detail)}</li>'
+        for event in claim.audit_events
+    )
     st.markdown(
         f"""
         <div class="claim-card">
           <div class="claim-head">
-            <strong>Claim {index}</strong>
+            <strong>{html.escape(claim.id or f"Claim {index}")} | {html.escape(claim.section)}</strong>
             <span class="claim-status {status_class}">{html.escape(claim.status)}</span>
           </div>
           <div class="claim-text">{html.escape(claim.claim)}</div>
-          <div class="claim-meta">Quality: {claim.quality:.2f} | Evidence: {claim.evidence_strength:.2f} | Mechanism: {html.escape(claim.mechanism)} | Gaps: {html.escape(gaps)}</div>
+          <div class="claim-meta">Quality: {claim.quality:.2f} | Evidence: {claim.evidence_strength:.2f} | Mechanism: {html.escape(claim.mechanism)} | Gaps: {html.escape(gaps)} | Links: {html.escape(evidence_links)}</div>
+          <div class="claim-meta"><strong>Repair:</strong> {html.escape(claim.repair_suggestion)}</div>
+          <ul class="mini-list">{rubric}</ul>
+          <ul class="mini-list">{audit}</ul>
         </div>
         """,
         unsafe_allow_html=True,
@@ -861,7 +1033,7 @@ def render_contradictions_page(report, compact: bool = False) -> None:
     )
     if not report.findings:
         st.markdown(
-            '<div class="finding-card low"><div class="finding-title">No internal contradictions <span class="severity-pill low">Low</span></div><div class="finding-body">The v1 rule set did not find direct internal conflicts in this paper.</div></div>',
+            '<div class="finding-card low"><div class="finding-title">No internal contradictions <span class="severity-pill low">Low</span></div><div class="finding-body">The v2 rule set did not find direct internal conflicts in this paper.</div></div>',
             unsafe_allow_html=True,
         )
         return
@@ -897,6 +1069,19 @@ def render_evidence_page(report, compact: bool = False) -> None:
         """,
         unsafe_allow_html=True,
     )
+    if report.evidence.evidence_links:
+        cards = []
+        for link in report.evidence.evidence_links:
+            cards.append(
+                f"""
+                <div class="evidence-link-card">
+                  <strong>{html.escape(link.id)} - {html.escape(link.type.title())}</strong>
+                  <div class="muted-note">{html.escape(link.section)} | Sentence {link.sentence_index} | Confidence {link.confidence:.0%}</div>
+                  <div class="claim-text">{html.escape(link.snippet)}</div>
+                </div>
+                """
+            )
+        st.markdown(f'<div class="audit-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
 
 
 def render_stat_strip(report) -> None:
@@ -984,6 +1169,153 @@ def render_exports(report) -> None:
     )
 
 
+def render_refinement_page(report) -> None:
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="detail-title">Optional Refinement Chamber</div>
+          <div class="detail-subtitle">Source: {html.escape(report.source_name)}. The non-AI report stays first; this page only runs if you provide session keys.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        """
+        <div class="refinement-lock">
+          <div class="panel-title">Session Keys</div>
+          <div class="muted-note">Keys are used for this Streamlit session and are not written to project files by The Gauntlet.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    key_col, model_col = st.columns([0.45, 0.55], gap="medium")
+    with key_col:
+        openai_key = st.text_input("OpenAI API key", type="password", placeholder="Paste OpenAI key for this session")
+        anthropic_key = st.text_input(
+            "Anthropic API key", type="password", placeholder="Paste Anthropic key for this session"
+        )
+    with model_col:
+        openai_model = st.text_input("OpenAI model", value=DEFAULT_OPENAI_MODEL)
+        anthropic_model = st.text_input("Anthropic model", value=DEFAULT_ANTHROPIC_MODEL)
+        st.markdown(
+            '<div class="muted-note">Output is critique plus repair plan. The paper is not rewritten by default.</div>',
+            unsafe_allow_html=True,
+        )
+
+    run_clicked = st.button("Run Curtain-Up Refinement", type="primary", use_container_width=True)
+    if run_clicked:
+        if not openai_key.strip() or not anthropic_key.strip():
+            st.error("Paste both API keys to run optional refinement.")
+        elif not active_source_text().strip():
+            st.error("Run a fresh paper analysis first so the refinement chamber has the source text.")
+        else:
+            try:
+                with st.spinner("Running two-model critique and deterministic re-check..."):
+                    refinement_report = run_refinement(
+                        report,
+                        active_source_text(),
+                        openai_api_key=openai_key,
+                        anthropic_api_key=anthropic_key,
+                        openai_model=openai_model.strip() or DEFAULT_OPENAI_MODEL,
+                        anthropic_model=anthropic_model.strip() or DEFAULT_ANTHROPIC_MODEL,
+                    )
+                save_refinement(refinement_report)
+                st.rerun()
+            except RefinementError as exc:
+                st.error(str(exc))
+            except Exception as exc:
+                st.error(f"Refinement failed: {exc}")
+
+    refinement_report = active_refinement()
+    if refinement_report:
+        render_refinement_report(refinement_report)
+    else:
+        st.markdown(
+            """
+            <div class="empty-detail">Run refinement to see the visible prompts, model critiques, disagreements, repair plan, and deterministic re-check.</div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+def render_refinement_report(refinement_report) -> None:
+    st.markdown(
+        f"""
+        <div class="verdict-panel">
+          <div class="verdict-label">Refinement Re-Check</div>
+          <div class="verdict-hero">
+            <div class="verdict-stamp {html.escape(refinement_report.recheck_report.verdict.lower())}">{html.escape(refinement_report.recheck_report.verdict)}</div>
+            <div>
+              <div class="verdict-copy">{html.escape(refinement_report.recheck_report.summary)}</div>
+              <div class="verdict-meta">
+                <div>Original:<span>{html.escape(refinement_report.deterministic_verdict)}</span></div>
+                <div>Disagreements:<span>{len(refinement_report.disagreements)}</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    events = []
+    for event in refinement_report.audit_events:
+        events.append(
+            f"""
+            <div class="audit-card">
+              <strong>{html.escape(event.step.title())}</strong>
+              <div class="muted-note">{html.escape(event.status)} - {html.escape(event.detail)}</div>
+            </div>
+            """
+        )
+    st.markdown(f'<div class="audit-grid">{"".join(events)}</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="wide-detail-card"><div class="detail-title">Visible Model Transcript</div><div class="detail-subtitle">Prompts and returned messages only. Hidden model reasoning is not requested or displayed.</div></div>', unsafe_allow_html=True)
+    for turn in [refinement_report.openai_turn, refinement_report.anthropic_turn]:
+        st.markdown(
+            f"""
+            <div class="turn-card">
+              <strong>{html.escape(turn.provider)} | {html.escape(turn.model)}</strong>
+              <div class="muted-note">Status: {html.escape(turn.status)}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        with st.expander(f"{turn.provider} prompt"):
+            st.code(turn.prompt, language="markdown")
+        with st.expander(f"{turn.provider} response", expanded=True):
+            st.markdown(f'<div class="transcript-box">{html.escape(turn.response)}</div>', unsafe_allow_html=True)
+
+    disagreements = "".join(f"<li>{html.escape(item)}</li>" for item in refinement_report.disagreements)
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="detail-title">Disagreements And Remaining Tension</div>
+          <ul class="mini-list">{disagreements or '<li>No explicit disagreements were extracted.</li>'}</ul>
+        </div>
+        <div class="wide-detail-card">
+          <div class="detail-title">Repair Plan</div>
+          <div class="transcript-box">{html.escape(refinement_report.repair_plan)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    json_col, markdown_col = st.columns(2)
+    json_col.download_button(
+        "Export Refinement JSON",
+        data=refinement_report.to_json(),
+        file_name=f"{safe_stem(refinement_report.source_name)}-gauntlet-refinement.json",
+        mime="application/json",
+        use_container_width=True,
+    )
+    markdown_col.download_button(
+        "Export Refinement Markdown",
+        data=refinement_report.to_markdown(),
+        file_name=f"{safe_stem(refinement_report.source_name)}-gauntlet-refinement.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
+
+
 def render_flagged_panel(report) -> None:
     findings = report.findings if report else []
     high = sum(1 for finding in findings if finding.severity == "high")
@@ -1020,7 +1352,7 @@ def render_flagged_panel(report) -> None:
                 """
                 <div class="finding-card low">
                   <div class="finding-title">No internal contradictions <span class="severity-pill low">Low</span></div>
-                  <div class="finding-body">The v1 rule set did not find direct internal conflicts in this paper.</div>
+                  <div class="finding-body">The v2 rule set did not find direct internal conflicts in this paper.</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -1032,11 +1364,13 @@ def render_finding(finding) -> None:
     related = ""
     if finding.related_sentence:
         related = f"<p><strong>Related:</strong> {html.escape(finding.related_sentence)}</p>"
+    claim_link = f" | Claim: {html.escape(finding.claim_id)}" if finding.claim_id else ""
+    trigger = f" | Trigger: {html.escape(finding.trigger)}" if finding.trigger else ""
     st.markdown(
         f"""
         <div class="finding-card {severity}">
-          <div class="finding-title">{html.escape(finding.type)} <span class="severity-pill {severity}">{severity.title()}</span></div>
-          <div class="finding-meta">Severity: {severity} | Confidence: {finding.confidence:.0%}</div>
+          <div class="finding-title">{html.escape(finding.id or finding.type)} - {html.escape(finding.type)} <span class="severity-pill {severity}">{severity.title()}</span></div>
+          <div class="finding-meta">Section: {html.escape(finding.section)} | Severity: {severity} | Confidence: {finding.confidence:.0%}{claim_link}{trigger}</div>
           <div class="finding-body">
             <p>{html.escape(finding.sentence)}</p>
             {related}
@@ -1073,7 +1407,7 @@ def render_footer(report) -> None:
         f"""
         <div class="footer-status">
           <div>{html.escape(status)}</div>
-          <div>Rules Engine: v1.0.0&nbsp;&nbsp;&nbsp; Rule Set: Standard (Default)&nbsp;&nbsp;&nbsp; Strictness: Normal</div>
+          <div>Rules Engine: v2.0.0&nbsp;&nbsp;&nbsp; Rule Set: Theory/Paradox&nbsp;&nbsp;&nbsp; Optional AI: Session Keys Only</div>
           <div>{html.escape(source)}</div>
         </div>
         """,
