@@ -49,3 +49,12 @@ def test_clean_benchmark_case_fails_when_extra_findings_appear():
 
     assert comparison.extra_findings
     assert not comparison.passed
+
+
+def test_benchmark_export_distinguishes_match_from_paper_pass():
+    comparison = run_benchmark_sample("weak-evidence")
+    markdown = comparison.to_markdown()
+
+    assert comparison.report.verdict == "PARTIAL"
+    assert "Benchmark result: **EXPECTED MATCH**" in markdown
+    assert "Result: **PASS**" not in markdown

@@ -1299,12 +1299,12 @@ def render_benchmark_result(result) -> None:
           <div class="benchmark-card">
             <div class="small-label">Actual Verdict</div>
             <div class="verdict-stamp {html.escape(result.report.verdict.lower())}">{html.escape(result.report.verdict)}</div>
-            <div style="margin-top:.75rem;"><span class="match-pill {status_class}">{'Pass' if result.passed else 'Review'}</span> <span class="muted-note">Score {result.score:.0%}</span></div>
+            <div style="margin-top:.75rem;"><span class="match-pill {status_class}">{'Expected Match' if result.passed else 'Needs Review'}</span> <span class="muted-note">Benchmark match {result.score:.0%}</span></div>
           </div>
         </div>
         <div class="wide-detail-card">
           <div class="detail-title">Expected vs Actual</div>
-          <div class="detail-subtitle">The benchmark passes when the expected verdict and required findings/gaps are present. Extra findings are shown so tuning remains transparent.</div>
+          <div class="detail-subtitle">Benchmark match means the checker produced the expected result for this synthetic case. It does not mean the paper verdict is a pass.</div>
         </div>
         """,
         unsafe_allow_html=True,

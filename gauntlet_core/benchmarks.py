@@ -48,8 +48,8 @@ class BenchmarkComparison:
                 f"- Category: {self.sample.category}",
                 f"- Expected verdict: **{self.sample.expected_verdict}**",
                 f"- Actual verdict: **{self.report.verdict}**",
-                f"- Result: **{'PASS' if self.passed else 'REVIEW'}**",
-                f"- Match score: **{self.score:.0%}**",
+                f"- Benchmark result: **{'EXPECTED MATCH' if self.passed else 'NEEDS REVIEW'}**",
+                f"- Benchmark match: **{self.score:.0%}**",
                 "",
                 "## Why This Matters",
                 "",
@@ -83,7 +83,7 @@ BENCHMARK_SAMPLES: tuple[BenchmarkSample, ...] = (
         expected_verdict="RESOLVES",
         expected_findings=(),
         expected_claim_gaps=(),
-        why_it_matters="Shows what a clean pass looks like when claims include a mechanism, numbers, citations, and an evidence trail.",
+        why_it_matters="Shows what a clean expected match looks like when claims include a mechanism, numbers, citations, and an evidence trail.",
         paper_text="""
         Abstract
         The framework resolves the anomaly through a geometric mechanism that specifically predicts the measured curve by 14.2 percent.
