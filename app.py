@@ -8,10 +8,13 @@ from gauntlet_core import analyze_paper_text
 from gauntlet_core.benchmarks import list_benchmark_samples, run_benchmark_sample
 from gauntlet_core.document_loader import SUPPORTED_EXTENSIONS, extract_text_from_bytes
 from gauntlet_core.refinement import (
-    DEFAULT_ANTHROPIC_MODEL,
-    DEFAULT_OPENAI_MODEL,
+    DEFAULT_CHALLENGER_PROVIDER,
+    DEFAULT_CRITIC_PROVIDER,
+    DEFAULT_PROVIDER_MODELS,
+    PROVIDER_ORDER,
+    ProviderSelection,
     RefinementError,
-    run_refinement,
+    run_provider_refinement,
 )
 from gauntlet_core.sample_text import SAMPLE_PAPER
 
@@ -1387,35 +1390,76 @@ def render_refinement_page(report) -> None:
         unsafe_allow_html=True,
     )
     key_col, model_col = st.columns([0.45, 0.55], gap="medium")
-    with key_col:
-        openai_key = st.text_input("OpenAI API key", type="password", placeholder="Paste OpenAI key for this session")
-        anthropic_key = st.text_input(
-            "Anthropic API key", type="password", placeholder="Paste Anthropic key for this session"
-        )
     with model_col:
-        openai_model = st.text_input("OpenAI model", value=DEFAULT_OPENAI_MODEL)
-        anthropic_model = st.text_input("Anthropic model", value=DEFAULT_ANTHROPIC_MODEL)
+        st.markdown('<div class="panel-title">Model Roles</div>', unsafe_allow_html=True)
+        critic_provider = st.selectbox(
+            "Critic provider",
+            list(PROVIDER_ORDER),
+            index=provider_index(DEFAULT_CRITIC_PROVIDER),
+            help="First model: reads the deterministic issue brief and proposes a repair plan.",
+        )
+        critic_model = st.text_input(
+            "Critic model",
+            value=DEFAULT_PROVIDER_MODELS[critic_provider],
+            key=f"critic-model-{critic_provider}",
+        )
+        challenger_provider = st.selectbox(
+            "Challenger provider",
+            list(PROVIDER_ORDER),
+            index=provider_index(DEFAULT_CHALLENGER_PROVIDER),
+            help="Second model: challenges the first critique and searches for remaining weak points.",
+        )
+        challenger_model = st.text_input(
+            "Challenger model",
+            value=DEFAULT_PROVIDER_MODELS[challenger_provider],
+            key=f"challenger-model-{challenger_provider}",
+        )
         st.markdown(
             '<div class="muted-note">Output is critique plus repair plan. The paper is not rewritten by default.</div>',
+            unsafe_allow_html=True,
+        )
+    with key_col:
+        st.markdown('<div class="panel-title">Provider Keys</div>', unsafe_allow_html=True)
+        selected_providers = ordered_unique([critic_provider, challenger_provider])
+        provider_keys = {}
+        for provider in selected_providers:
+            provider_keys[provider] = st.text_input(
+                f"{provider} API key",
+                type="password",
+                placeholder=f"Paste {provider} key for this session",
+            )
+        st.markdown(
+            '<div class="muted-note">Gemini, OpenAI, and Anthropic keys are read only from this page and are never exported in reports.</div>',
             unsafe_allow_html=True,
         )
 
     run_clicked = st.button("Run Curtain-Up Refinement", type="primary", use_container_width=True)
     if run_clicked:
-        if not openai_key.strip() or not anthropic_key.strip():
-            st.error("Paste both API keys to run optional refinement.")
+        missing_keys = [provider for provider in selected_providers if not provider_keys[provider].strip()]
+        if missing_keys:
+            st.error(f"Paste session key(s) for: {', '.join(missing_keys)}.")
         elif not active_source_text().strip():
             st.error("Run a fresh paper analysis first so the refinement chamber has the source text.")
         else:
             try:
-                with st.spinner("Running two-model critique and deterministic re-check..."):
-                    refinement_report = run_refinement(
+                with st.spinner(
+                    f"Running {critic_provider} critique, {challenger_provider} challenge, and deterministic re-check..."
+                ):
+                    refinement_report = run_provider_refinement(
                         report,
                         active_source_text(),
-                        openai_api_key=openai_key,
-                        anthropic_api_key=anthropic_key,
-                        openai_model=openai_model.strip() or DEFAULT_OPENAI_MODEL,
-                        anthropic_model=anthropic_model.strip() or DEFAULT_ANTHROPIC_MODEL,
+                        critic=ProviderSelection(
+                            role="critic",
+                            provider=critic_provider,
+                            model=critic_model,
+                            api_key=provider_keys[critic_provider],
+                        ),
+                        challenger=ProviderSelection(
+                            role="challenger",
+                            provider=challenger_provider,
+                            model=challenger_model,
+                            api_key=provider_keys[challenger_provider],
+                        ),
                     )
                 save_refinement(refinement_report)
                 st.rerun()
@@ -1468,19 +1512,20 @@ def render_refinement_report(refinement_report) -> None:
     st.markdown(f'<div class="audit-grid">{"".join(events)}</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="wide-detail-card"><div class="detail-title">Visible Model Transcript</div><div class="detail-subtitle">Prompts and returned messages only. Hidden model reasoning is not requested or displayed.</div></div>', unsafe_allow_html=True)
-    for turn in [refinement_report.openai_turn, refinement_report.anthropic_turn]:
+    for turn in refinement_report.turns:
+        role = turn.role.title()
         st.markdown(
             f"""
             <div class="turn-card">
-              <strong>{html.escape(turn.provider)} | {html.escape(turn.model)}</strong>
+              <strong>{html.escape(role)}: {html.escape(turn.provider)} | {html.escape(turn.model)}</strong>
               <div class="muted-note">Status: {html.escape(turn.status)}</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        with st.expander(f"{turn.provider} prompt"):
+        with st.expander(f"{role} {turn.provider} prompt"):
             st.code(turn.prompt, language="markdown")
-        with st.expander(f"{turn.provider} response", expanded=True):
+        with st.expander(f"{role} {turn.provider} response", expanded=True):
             st.markdown(f'<div class="transcript-box">{html.escape(turn.response)}</div>', unsafe_allow_html=True)
 
     disagreements = "".join(f"<li>{html.escape(item)}</li>" for item in refinement_report.disagreements)
@@ -1586,6 +1631,23 @@ def safe_stem(filename: str) -> str:
     stem = filename.rsplit(".", 1)[0]
     cleaned = "".join(character if character.isalnum() or character in "-_" else "-" for character in stem)
     return cleaned.strip("-") or "paper"
+
+
+def provider_index(provider: str) -> int:
+    try:
+        return list(PROVIDER_ORDER).index(provider)
+    except ValueError:
+        return 0
+
+
+def ordered_unique(items: list[str]) -> list[str]:
+    seen = set()
+    unique = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            unique.append(item)
+    return unique
 
 
 def evidence_label(score: float) -> str:

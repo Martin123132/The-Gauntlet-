@@ -11,6 +11,15 @@ from .models import AnalysisReport, AuditEvent, utc_now_iso
 
 DEFAULT_OPENAI_MODEL = "gpt-4.1"
 DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5"
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+PROVIDER_ORDER = ("Gemini", "OpenAI", "Anthropic")
+DEFAULT_PROVIDER_MODELS = {
+    "Gemini": DEFAULT_GEMINI_MODEL,
+    "OpenAI": DEFAULT_OPENAI_MODEL,
+    "Anthropic": DEFAULT_ANTHROPIC_MODEL,
+}
+DEFAULT_CRITIC_PROVIDER = "Gemini"
+DEFAULT_CHALLENGER_PROVIDER = "Anthropic"
 
 SYSTEM_PROMPT = """You are working inside The Gauntlet's optional refinement chamber.
 Do not rewrite the paper. Produce visible critique and repair planning only.
@@ -30,12 +39,21 @@ class RefinementClient(Protocol):
 
 
 @dataclass(frozen=True)
+class ProviderSelection:
+    role: str
+    provider: str
+    model: str
+    api_key: str = ""
+
+
+@dataclass(frozen=True)
 class ModelTurn:
     provider: str
     model: str
     prompt: str
     response: str
     status: str
+    role: str = "model"
 
 
 @dataclass(frozen=True)
@@ -44,12 +62,24 @@ class RefinementReport:
     created_at: str
     deterministic_verdict: str
     issue_brief: str
-    openai_turn: ModelTurn
-    anthropic_turn: ModelTurn
+    critic_turn: ModelTurn
+    challenger_turn: ModelTurn
     disagreements: list[str]
     repair_plan: str
     recheck_report: AnalysisReport
     audit_events: list[AuditEvent]
+
+    @property
+    def turns(self) -> list[ModelTurn]:
+        return [self.critic_turn, self.challenger_turn]
+
+    @property
+    def openai_turn(self) -> ModelTurn:
+        return self.critic_turn
+
+    @property
+    def anthropic_turn(self) -> ModelTurn:
+        return self.challenger_turn
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -71,13 +101,13 @@ class RefinementReport:
                 "",
                 self.issue_brief,
                 "",
-                "## OpenAI Critique",
+                f"## {self.critic_turn.provider} Critique",
                 "",
-                self.openai_turn.response,
+                self.critic_turn.response,
                 "",
-                "## Anthropic Challenge",
+                f"## {self.challenger_turn.provider} Challenge",
                 "",
-                self.anthropic_turn.response,
+                self.challenger_turn.response,
                 "",
                 "## Disagreements And Remaining Tension",
                 "",
@@ -137,6 +167,31 @@ class AnthropicRefinementClient:
         return extract_anthropic_text(message)
 
 
+class GeminiRefinementClient:
+    provider = "Gemini"
+
+    def __init__(self, api_key: str) -> None:
+        try:
+            from google import genai
+            from google.genai import types
+        except ImportError as exc:
+            raise RefinementError("Install optional AI dependencies with: pip install -r requirements-ai.txt") from exc
+        self._client = genai.Client(api_key=api_key)
+        self._types = types
+
+    def complete(self, prompt: str, model: str) -> str:
+        response = self._client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=self._types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                max_output_tokens=1800,
+                temperature=0.2,
+            ),
+        )
+        return extract_gemini_text(response)
+
+
 def run_refinement(
     report: AnalysisReport,
     paper_text: str,
@@ -147,31 +202,60 @@ def run_refinement(
     openai_client: RefinementClient | None = None,
     anthropic_client: RefinementClient | None = None,
 ) -> RefinementReport:
-    if not openai_client and not openai_api_key.strip():
-        raise RefinementError("OpenAI API key is required for the optional refinement chamber.")
-    if not anthropic_client and not anthropic_api_key.strip():
-        raise RefinementError("Anthropic API key is required for the optional refinement chamber.")
+    return run_provider_refinement(
+        report,
+        paper_text,
+        critic=ProviderSelection("critic", "OpenAI", openai_model, openai_api_key),
+        challenger=ProviderSelection("challenger", "Anthropic", anthropic_model, anthropic_api_key),
+        clients={"critic": openai_client, "challenger": anthropic_client},
+    )
 
-    openai_client = openai_client or OpenAIRefinementClient(openai_api_key)
-    anthropic_client = anthropic_client or AnthropicRefinementClient(anthropic_api_key)
+
+def run_provider_refinement(
+    report: AnalysisReport,
+    paper_text: str,
+    critic: ProviderSelection,
+    challenger: ProviderSelection,
+    clients: dict[str, RefinementClient | None] | None = None,
+) -> RefinementReport:
+    critic = normalize_selection(critic, "critic")
+    challenger = normalize_selection(challenger, "challenger")
+    clients = clients or {}
+    critic_client = resolve_client(critic, clients.get("critic") or clients.get(critic.provider))
+    challenger_client = resolve_client(challenger, clients.get("challenger") or clients.get(challenger.provider))
     issue_brief = report.issue_brief or build_issue_brief_from_report(report)
     paper_excerpt = trim_for_prompt(paper_text)
 
-    openai_prompt = build_openai_prompt(report, issue_brief, paper_excerpt)
-    openai_response = openai_client.complete(openai_prompt, openai_model)
-    openai_turn = ModelTurn(openai_client.provider, openai_model, openai_prompt, openai_response, "complete")
+    critic_prompt = build_critic_prompt(report, issue_brief, paper_excerpt)
+    critic_response = critic_client.complete(critic_prompt, critic.model)
+    critic_turn = ModelTurn(critic_client.provider, critic.model, critic_prompt, critic_response, "complete", "critic")
 
-    anthropic_prompt = build_anthropic_prompt(report, issue_brief, paper_excerpt, openai_response)
-    anthropic_response = anthropic_client.complete(anthropic_prompt, anthropic_model)
-    anthropic_turn = ModelTurn(anthropic_client.provider, anthropic_model, anthropic_prompt, anthropic_response, "complete")
+    challenger_prompt = build_challenger_prompt(report, issue_brief, paper_excerpt, critic_response)
+    challenger_response = challenger_client.complete(challenger_prompt, challenger.model)
+    challenger_turn = ModelTurn(
+        challenger_client.provider,
+        challenger.model,
+        challenger_prompt,
+        challenger_response,
+        "complete",
+        "challenger",
+    )
 
-    disagreements = extract_disagreements(openai_response, anthropic_response)
-    repair_plan = build_repair_plan(report, openai_response, anthropic_response, disagreements)
+    disagreements = extract_disagreements(critic_response, challenger_response)
+    repair_plan = build_repair_plan(report, critic_turn, challenger_turn, disagreements)
     recheck_report = analyze_paper_text(repair_plan, source_name=f"{report.source_name} repair-plan")
     audit_events = [
         AuditEvent("deterministic brief", "complete", "Issue brief generated from the non-AI report."),
-        AuditEvent("openai critique", "complete", f"{openai_model} returned a critique and repair plan."),
-        AuditEvent("anthropic challenge", "complete", f"{anthropic_model} challenged the critique and weak points."),
+        AuditEvent(
+            "critic critique",
+            "complete",
+            f"{critic.provider} {critic.model} returned a critique and repair plan.",
+        ),
+        AuditEvent(
+            "challenger challenge",
+            "complete",
+            f"{challenger.provider} {challenger.model} challenged the critique and weak points.",
+        ),
         AuditEvent("disagreement extraction", "complete", f"{len(disagreements)} disagreement or tension lines detected."),
         AuditEvent("gauntlet re-check", recheck_report.verdict, "The combined repair plan was sent back through the deterministic rules."),
     ]
@@ -180,8 +264,8 @@ def run_refinement(
         created_at=utc_now_iso(),
         deterministic_verdict=report.verdict,
         issue_brief=issue_brief,
-        openai_turn=openai_turn,
-        anthropic_turn=anthropic_turn,
+        critic_turn=critic_turn,
+        challenger_turn=challenger_turn,
         disagreements=disagreements,
         repair_plan=repair_plan,
         recheck_report=recheck_report,
@@ -189,7 +273,36 @@ def run_refinement(
     )
 
 
-def build_openai_prompt(report: AnalysisReport, issue_brief: str, paper_excerpt: str) -> str:
+def normalize_selection(selection: ProviderSelection, default_role: str) -> ProviderSelection:
+    provider = normalize_provider(selection.provider)
+    model = selection.model.strip() or DEFAULT_PROVIDER_MODELS[provider]
+    role = selection.role.strip().lower() or default_role
+    return ProviderSelection(role=role, provider=provider, model=model, api_key=selection.api_key)
+
+
+def normalize_provider(provider: str) -> str:
+    cleaned = provider.strip().lower()
+    for known_provider in PROVIDER_ORDER:
+        if cleaned == known_provider.lower():
+            return known_provider
+    raise RefinementError(f"Unknown refinement provider: {provider}. Choose Gemini, OpenAI, or Anthropic.")
+
+
+def resolve_client(selection: ProviderSelection, injected_client: RefinementClient | None = None) -> RefinementClient:
+    if injected_client:
+        return injected_client
+    if not selection.api_key.strip():
+        raise RefinementError(f"{selection.provider} API key is required for the {selection.role} slot.")
+    if selection.provider == "OpenAI":
+        return OpenAIRefinementClient(selection.api_key)
+    if selection.provider == "Anthropic":
+        return AnthropicRefinementClient(selection.api_key)
+    if selection.provider == "Gemini":
+        return GeminiRefinementClient(selection.api_key)
+    raise RefinementError(f"Unknown refinement provider: {selection.provider}.")
+
+
+def build_critic_prompt(report: AnalysisReport, issue_brief: str, paper_excerpt: str) -> str:
     return f"""The Gauntlet deterministic report found the following issues.
 
 SOURCE: {report.source_name}
@@ -209,7 +322,7 @@ Produce a visible critique and repair plan. Use exactly these sections:
 Do not rewrite the paper. Do not invent citations. Do not expose hidden reasoning."""
 
 
-def build_anthropic_prompt(report: AnalysisReport, issue_brief: str, paper_excerpt: str, openai_response: str) -> str:
+def build_challenger_prompt(report: AnalysisReport, issue_brief: str, paper_excerpt: str, critic_response: str) -> str:
     return f"""A first model proposed this critique and repair plan for a paper.
 
 SOURCE: {report.source_name}
@@ -220,10 +333,18 @@ PAPER EXCERPT:
 {paper_excerpt}
 
 FIRST MODEL OUTPUT:
-{openai_response}
+{critic_response}
 
 Challenge the first model. Identify weak repairs, missed contradictions, unsupported assumptions, and anything that still fails The Gauntlet rubric. Then give a corrected repair plan.
 Do not rewrite the paper. Do not invent citations. Do not expose hidden reasoning."""
+
+
+def build_openai_prompt(report: AnalysisReport, issue_brief: str, paper_excerpt: str) -> str:
+    return build_critic_prompt(report, issue_brief, paper_excerpt)
+
+
+def build_anthropic_prompt(report: AnalysisReport, issue_brief: str, paper_excerpt: str, openai_response: str) -> str:
+    return build_challenger_prompt(report, issue_brief, paper_excerpt, openai_response)
 
 
 def build_issue_brief_from_report(report: AnalysisReport) -> str:
@@ -236,9 +357,7 @@ def build_issue_brief_from_report(report: AnalysisReport) -> str:
     return "\n".join(lines)
 
 
-def build_repair_plan(
-    report: AnalysisReport, openai_response: str, anthropic_response: str, disagreements: list[str]
-) -> str:
+def build_repair_plan(report: AnalysisReport, critic_turn: ModelTurn, challenger_turn: ModelTurn, disagreements: list[str]) -> str:
     unresolved = "\n".join(f"- {item}" for item in disagreements) if disagreements else "- No explicit model disagreement was extracted."
     weak_claims = "\n".join(
         f"- {claim.id}: {claim.repair_suggestion}" for claim in report.claims if claim.status != "resolved"
@@ -249,8 +368,8 @@ Claim-level repairs:
 {weak_claims}
 
 Model critique synthesis:
-- OpenAI critique summary: {summarize_text(openai_response)}
-- Anthropic challenge summary: {summarize_text(anthropic_response)}
+- {critic_turn.provider} critique summary: {summarize_text(critic_turn.response)}
+- {challenger_turn.provider} challenge summary: {summarize_text(challenger_turn.response)}
 
 Remaining disagreements or unresolved tension:
 {unresolved}
@@ -297,6 +416,21 @@ def extract_anthropic_text(message) -> str:
             chunks.append(str(text))
     text = "\n".join(chunks).strip()
     return text or str(message)
+
+
+def extract_gemini_text(response) -> str:
+    direct_text = getattr(response, "text", None)
+    if direct_text:
+        return str(direct_text).strip()
+    chunks: list[str] = []
+    for candidate in getattr(response, "candidates", []) or []:
+        content = getattr(candidate, "content", None)
+        for part in getattr(content, "parts", []) or []:
+            text = getattr(part, "text", None)
+            if text:
+                chunks.append(str(text))
+    text = "\n".join(chunks).strip()
+    return text or str(response)
 
 
 def trim_for_prompt(text: str, limit: int = 12000) -> str:

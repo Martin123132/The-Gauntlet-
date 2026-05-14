@@ -83,17 +83,22 @@ quietly break known behavior.
 
 ## Optional Refinement Chamber
 
-The `Refinement` page is optional. It lets a user paste session-only OpenAI and
-Anthropic API keys, then runs a visible two-model critique:
+The `Refinement` page is optional. It lets a user paste session-only Gemini,
+OpenAI, or Anthropic API keys, then runs a visible two-model critique:
 
 1. The deterministic Gauntlet report creates an issue brief.
-2. OpenAI proposes a critique and repair plan.
-3. Anthropic challenges weak repairs, assumptions, and unresolved issues.
+2. The selected critic provider proposes a critique and repair plan.
+3. The selected challenger provider challenges weak repairs, assumptions, and unresolved issues.
 4. The combined repair plan is re-checked by the deterministic Gauntlet rules.
 
 The app shows the prompts, returned model messages, disagreements, repair plan,
 and re-check result. It does not ask for hidden model reasoning and it does not
 save API keys to project files.
+
+Gemini is available as a first-class option for people who want a
+free-tier-friendly provider. Current Gemini pricing, rate limits, and available
+models can change, so check the official Google AI Studio/Gemini API pages
+before relying on a specific quota.
 
 Install optional AI dependencies only if you want this page to run live:
 
@@ -128,6 +133,7 @@ Benchmark samples and optional refinement can be imported separately:
 
 ```python
 from gauntlet_core import analyze_paper_text, list_benchmark_samples, run_benchmark_sample, run_refinement
+from gauntlet_core.refinement import ProviderSelection, run_provider_refinement
 
 for sample in list_benchmark_samples():
     print(sample.id, run_benchmark_sample(sample.id).passed)
@@ -135,6 +141,14 @@ for sample in list_benchmark_samples():
 report = analyze_paper_text(paper_text, source_name="paper.txt")
 refinement = run_refinement(report, paper_text, openai_api_key="...", anthropic_api_key="...")
 print(refinement.repair_plan)
+
+gemini_refinement = run_provider_refinement(
+    report,
+    paper_text,
+    critic=ProviderSelection("critic", "Gemini", "gemini-2.5-flash", "..."),
+    challenger=ProviderSelection("challenger", "Gemini", "gemini-2.5-flash", "..."),
+)
+print(gemini_refinement.repair_plan)
 ```
 
 ## License
