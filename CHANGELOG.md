@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Added source-map traceability for claims, findings, contradictions, and
+  evidence snippets.
+- Added structured document loading with best-effort PDF page numbers and
+  source anchors in JSON/Markdown exports.
+
 ## v0.1.0 - Local Paper Checker
 
 The first public app release of The Gauntlet turns the original Colab and

@@ -1,4 +1,6 @@
-from gauntlet_core import analyze_paper_text
+import json
+
+from gauntlet_core import SourceSpan, analyze_paper_text
 from gauntlet_core.analysis import parse_document_sections
 
 
@@ -77,6 +79,9 @@ def test_section_parsing_and_evidence_links_are_visible():
     assert any(claim.evidence_links for claim in report.claims)
     assert report.verdict_rubric
     assert report.audit_events
+    assert report.source_spans
+    assert all(claim.source_span for claim in report.claims)
+    assert all(link.source_span for link in report.evidence.evidence_links)
 
 
 def test_scope_conflict_and_theory_as_fact_are_flagged():
@@ -100,3 +105,34 @@ def test_unsupported_resolution_claim_emits_barrier_findings():
     assert "Missing Mechanism Barrier" in finding_types
     assert "Evidence Gap" in finding_types
     assert "Unsupported Resolution Claim" in finding_types
+
+
+def test_source_spans_attach_to_claims_findings_and_exports():
+    text = (
+        "The paper resolves the paradox because the mechanism is measured by 12 tests. "
+        "The model says every signal is always conserved. However, under boundary cases the signal can change."
+    )
+    source_spans = [
+        SourceSpan("S1", "Document", 1, 3, 0, 72, "The paper resolves the paradox because the mechanism is measured by 12 tests."),
+        SourceSpan("S2", "Document", 2, 3, 73, 123, "The model says every signal is always conserved."),
+        SourceSpan("S3", "Document", 3, 3, 124, 181, "However, under boundary cases the signal can change."),
+    ]
+
+    report = analyze_paper_text(text, source_name="paper.pdf", source_spans=source_spans)
+    data = json.loads(report.to_json())
+    markdown = report.to_markdown()
+
+    assert report.source_spans[0].page_number == 3
+    assert report.claims[0].source_span is not None
+    assert all(finding.source_span for finding in report.findings)
+    assert data["claims"][0]["source_span"]["page_number"] == 3
+    assert "Page 3" in markdown
+    assert "Source Trace" in markdown
+
+
+def test_source_spans_degrade_without_page_numbers():
+    report = analyze_paper_text("The paper resolves the paradox because the mechanism is measured by 12 tests.")
+
+    assert report.source_spans
+    assert report.source_spans[0].page_number is None
+    assert "Document, sentence 1" in report.to_markdown()

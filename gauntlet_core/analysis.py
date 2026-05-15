@@ -13,6 +13,7 @@ from .models import (
     EvidenceProfile,
     Finding,
     RubricScore,
+    SourceSpan,
     Verdict,
     utc_now_iso,
 )
@@ -29,6 +30,7 @@ class DocumentSentence:
     text: str
     section: str
     index: int
+    source_span: SourceSpan | None = None
 
 
 @dataclass(frozen=True)
@@ -201,10 +203,16 @@ THEORY_AS_FACT_PATTERNS = (
 )
 
 
-def analyze_paper_text(text: str, source_name: str = "uploaded document") -> AnalysisReport:
+def analyze_paper_text(
+    text: str,
+    source_name: str = "uploaded document",
+    source_spans: list[SourceSpan] | None = None,
+) -> AnalysisReport:
     sections = parse_document_sections(text)
     sentences = split_section_sentences(sections)
     cleaned_text = normalize_document_text(" ".join(section.text for section in sections))
+    aligned_spans = align_source_spans(sentences, source_spans, cleaned_text)
+    sentences = attach_source_spans(sentences, aligned_spans)
     evidence_links = extract_evidence_links(sentences)
     evidence = assess_evidence(cleaned_text, evidence_links)
     claim_candidates = extract_claim_candidates(sentences)
@@ -233,6 +241,15 @@ def analyze_paper_text(text: str, source_name: str = "uploaded document") -> Ana
         audit_events=audit_events,
         verdict_rubric=verdict_rubric,
         issue_brief=issue_brief,
+        source_spans=aligned_spans,
+    )
+
+
+def analyze_loaded_document(document) -> AnalysisReport:
+    return analyze_paper_text(
+        document.text,
+        source_name=getattr(document, "filename", "uploaded document"),
+        source_spans=getattr(document, "source_spans", None),
     )
 
 
@@ -295,6 +312,84 @@ def split_section_sentences(sections: list[DocumentSection]) -> list[DocumentSen
 
 def split_sentences(text: str) -> list[str]:
     return [sentence.text for sentence in split_section_sentences([DocumentSection("Document", normalize_document_text(text))])]
+
+
+def align_source_spans(
+    sentences: list[DocumentSentence],
+    provided_spans: list[SourceSpan] | None,
+    cleaned_text: str,
+) -> list[SourceSpan]:
+    provided_spans = provided_spans or []
+    used_span_ids: set[str] = set()
+    aligned: list[SourceSpan] = []
+    search_from = 0
+    for sentence in sentences:
+        matched = find_matching_source_span(sentence.text, provided_spans, used_span_ids)
+        if matched:
+            used_span_ids.add(matched.anchor_id)
+            char_start = matched.char_start
+            char_end = matched.char_end
+            page_number = matched.page_number
+        else:
+            char_start = cleaned_text.find(sentence.text, search_from)
+            if char_start < 0:
+                char_start = cleaned_text.find(sentence.text)
+            if char_start < 0:
+                char_start = -1
+                char_end = -1
+            else:
+                char_end = char_start + len(sentence.text)
+                search_from = char_end
+            page_number = None
+        aligned.append(
+            SourceSpan(
+                anchor_id=f"S{sentence.index}",
+                section=sentence.section,
+                sentence_index=sentence.index,
+                page_number=page_number,
+                char_start=char_start,
+                char_end=char_end,
+                text=sentence.text,
+            )
+        )
+    return aligned
+
+
+def find_matching_source_span(
+    sentence_text: str,
+    source_spans: list[SourceSpan],
+    used_span_ids: set[str],
+) -> SourceSpan | None:
+    target = source_key(sentence_text)
+    if not target:
+        return None
+    best: tuple[float, SourceSpan] | None = None
+    for span in source_spans:
+        if span.anchor_id in used_span_ids:
+            continue
+        candidate = source_key(span.text)
+        if not candidate:
+            continue
+        if candidate == target:
+            return span
+        overlap = jaccard(set(target.split()), set(candidate.split()))
+        contains_bonus = 0.15 if target in candidate or candidate in target else 0.0
+        score = overlap + contains_bonus
+        if score >= 0.72 and (best is None or score > best[0]):
+            best = (score, span)
+    return best[1] if best else None
+
+
+def attach_source_spans(sentences: list[DocumentSentence], source_spans: list[SourceSpan]) -> list[DocumentSentence]:
+    spans_by_index = {span.sentence_index: span for span in source_spans}
+    return [
+        DocumentSentence(sentence.text, sentence.section, sentence.index, spans_by_index.get(sentence.index))
+        for sentence in sentences
+    ]
+
+
+def source_key(text: str) -> str:
+    return re.sub(r"\W+", " ", text.lower()).strip()
 
 
 def extract_claim_candidates(sentences: list[DocumentSentence], limit: int = 28) -> list[ClaimCandidate]:
@@ -387,6 +482,7 @@ def analyze_claims(candidates: list[ClaimCandidate], evidence_links: list[Eviden
                 audit_events=audit_events,
                 repair_suggestion=repair_suggestion_for_gaps(gaps),
                 trigger_terms=candidate.trigger_terms,
+                source_span=candidate.sentence.source_span,
             )
         )
     return results
@@ -421,6 +517,7 @@ def extract_evidence_links(sentences: list[DocumentSentence]) -> list[EvidenceLi
                 section=sentence.section,
                 sentence_index=sentence.index,
                 confidence=round(confidence, 3),
+                source_span=sentence.source_span,
             )
         )
     return links
@@ -504,6 +601,8 @@ def find_internal_contradictions(sentences: list[DocumentSentence] | list[str]) 
                         confidence=round(contradiction.score, 2),
                         section=second.section,
                         trigger=f"overlap {overlap:.2f}",
+                        source_span=second.source_span,
+                        related_source_span=first.source_span,
                     )
                 )
             elif has_negation(first.text) != has_negation(second.text) and overlap >= 0.42:
@@ -518,6 +617,8 @@ def find_internal_contradictions(sentences: list[DocumentSentence] | list[str]) 
                         confidence=round(overlap, 2),
                         section=second.section,
                         trigger=f"negation polarity with overlap {overlap:.2f}",
+                        source_span=second.source_span,
+                        related_source_span=first.source_span,
                     )
                 )
         if checked >= max_pairs:
@@ -558,6 +659,8 @@ def find_circular_reasoning(sentences: list[DocumentSentence]) -> list[Finding]:
                         confidence=round(max(0.45, overlap), 2),
                         section=first.section,
                         trigger="because/therefore support loop",
+                        source_span=first.source_span,
+                        related_source_span=second.source_span,
                     )
                 ]
     return []
@@ -584,6 +687,8 @@ def find_scope_conflicts(sentences: list[DocumentSentence]) -> list[Finding]:
                     confidence=0.68,
                     section=sentence.section,
                     trigger="absolute quantifier near caveat",
+                    source_span=sentence.source_span,
+                    related_source_span=caveats[0].source_span,
                 )
             )
     return findings[:4]
@@ -604,6 +709,7 @@ def find_theory_as_fact_language(sentences: list[DocumentSentence]) -> list[Find
                     confidence=0.62,
                     section=sentence.section,
                     trigger="model authority phrasing",
+                    source_span=sentence.source_span,
                 )
             )
     return findings[:4]
@@ -628,6 +734,7 @@ def find_barrier_findings(claims: list[ClaimResult], sentences: list[DocumentSen
                     section=section,
                     trigger="claim rubric gap",
                     claim_id=claim.id,
+                    source_span=claim.source_span,
                 )
             )
         if "evidence not linked" in claim.gaps:
@@ -642,6 +749,7 @@ def find_barrier_findings(claims: list[ClaimResult], sentences: list[DocumentSen
                     section=section,
                     trigger="claim rubric gap",
                     claim_id=claim.id,
+                    source_span=claim.source_span,
                 )
             )
         if claim.status == "failed" and any(indicator in claim.claim.lower() for indicator in RESOLUTION_INDICATORS):
@@ -656,6 +764,7 @@ def find_barrier_findings(claims: list[ClaimResult], sentences: list[DocumentSen
                     section=section,
                     trigger="failed resolution claim",
                     claim_id=claim.id,
+                    source_span=claim.source_span,
                 )
             )
     return findings[:10]
@@ -680,6 +789,8 @@ def assign_finding_ids(findings: list[Finding]) -> list[Finding]:
                 section=finding.section,
                 trigger=finding.trigger,
                 claim_id=finding.claim_id,
+                source_span=finding.source_span,
+                related_source_span=finding.related_source_span,
             )
         )
     return assigned
