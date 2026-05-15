@@ -1,0 +1,4 @@
+-r requirements.txt
+openai>=1.99
+anthropic>=0.70
+google-genai>=1.0

@@ -1,4 +1,5 @@
 from gauntlet_core import analyze_paper_text
+from gauntlet_core.analysis import parse_document_sections
 
 
 def test_no_clear_claims_fails():
@@ -55,3 +56,47 @@ def test_resolution_claim_without_mechanism_has_gap():
 
     assert report.claims
     assert "mechanism missing" in report.claims[0].gaps
+
+
+def test_section_parsing_and_evidence_links_are_visible():
+    text = """
+    Abstract
+    The framework resolves the paradox because its mechanism separates local and global cases.
+    Evidence
+    Smith et al. (2024) reports 12 measurements and equation x = 2 supporting the prediction.
+    Conclusion
+    Therefore the paper explains the anomaly through a bounded process.
+    """
+
+    sections = parse_document_sections(text)
+    report = analyze_paper_text(text)
+
+    assert [section.title for section in sections] == ["Abstract", "Evidence", "Conclusion"]
+    assert report.sections == ["Abstract", "Evidence", "Conclusion"]
+    assert report.evidence.evidence_links
+    assert any(claim.evidence_links for claim in report.claims)
+    assert report.verdict_rubric
+    assert report.audit_events
+
+
+def test_scope_conflict_and_theory_as_fact_are_flagged():
+    text = """
+    The theory proves that the paradox is impossible because the model says that every signal is always conserved.
+    However, under boundary cases the signal can change when the sampling frame changes.
+    """
+
+    report = analyze_paper_text(text)
+    finding_types = {finding.type for finding in report.findings}
+
+    assert "Scope Conflict" in finding_types
+    assert "Theory-As-Fact Language" in finding_types
+
+
+def test_unsupported_resolution_claim_emits_barrier_findings():
+    report = analyze_paper_text("The paper resolves the paradox and eliminates the contradiction.")
+
+    finding_types = {finding.type for finding in report.findings}
+
+    assert "Missing Mechanism Barrier" in finding_types
+    assert "Evidence Gap" in finding_types
+    assert "Unsupported Resolution Claim" in finding_types

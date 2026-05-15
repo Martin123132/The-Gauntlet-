@@ -1,0 +1,48 @@
+name: Benchmark idea
+description: Suggest a synthetic case The Gauntlet should learn to catch.
+title: "[Benchmark]: "
+labels: ["benchmark"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Benchmark samples should be synthetic. Please avoid submitting real unpublished paper text.
+  - type: input
+    id: case_name
+    attributes:
+      label: Synthetic case name
+      placeholder: Unsupported resolution claim with no mechanism
+    validations:
+      required: true
+  - type: dropdown
+    id: expected_verdict
+    attributes:
+      label: Expected verdict
+      options:
+        - RESOLVES
+        - PARTIAL
+        - FAILS
+        - CREATES_NEW_PARADOXES
+    validations:
+      required: true
+  - type: textarea
+    id: sample_text
+    attributes:
+      label: Synthetic mini paper text
+      description: Keep it short and artificial.
+    validations:
+      required: true
+  - type: textarea
+    id: expected_findings
+    attributes:
+      label: Expected finding types or claim gaps
+      placeholder: Evidence Gap, Missing Mechanism, Scope Conflict
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why this matters
+      description: Explain what rule behavior this sample should protect.
+    validations:
+      required: true

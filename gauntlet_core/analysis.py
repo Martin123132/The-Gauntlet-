@@ -1,14 +1,45 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import math
 import re
 
 from .contradiction import ClaimPair, ContradictionEngine, content_words, has_negation
-from .models import AnalysisReport, ClaimResult, EvidenceProfile, Finding, Verdict, utc_now_iso
+from .models import (
+    AnalysisReport,
+    AuditEvent,
+    ClaimResult,
+    EvidenceLink,
+    EvidenceProfile,
+    Finding,
+    RubricScore,
+    Verdict,
+    utc_now_iso,
+)
+
+
+@dataclass(frozen=True)
+class DocumentSection:
+    title: str
+    text: str
+
+
+@dataclass(frozen=True)
+class DocumentSentence:
+    text: str
+    section: str
+    index: int
+
+
+@dataclass(frozen=True)
+class ClaimCandidate:
+    sentence: DocumentSentence
+    trigger_terms: list[str]
 
 
 CLAIM_INDICATORS = {
     "resolves",
+    "solve",
     "solves",
     "explains",
     "accounts for",
@@ -25,11 +56,27 @@ CLAIM_INDICATORS = {
     "addresses",
     "eliminates",
     "reconciles",
+    "unifies",
     "therefore",
     "thus",
     "consequently",
     "because",
     "due to",
+    "predicts",
+}
+
+RESOLUTION_INDICATORS = {
+    "resolves",
+    "solve",
+    "solves",
+    "eliminates",
+    "reconciles",
+    "unifies",
+    "addresses",
+    "accounts for",
+    "explains",
+    "fixes",
+    "removes",
 }
 
 PROBLEM_INDICATORS = {
@@ -46,6 +93,7 @@ PROBLEM_INDICATORS = {
     "breakdown",
     "crisis",
     "tension",
+    "puzzle",
 }
 
 MECHANISM_INDICATORS = {
@@ -65,6 +113,7 @@ MECHANISM_INDICATORS = {
     "calculation",
     "proof",
     "derivation",
+    "causal",
 }
 
 DETAIL_INDICATORS = {
@@ -75,6 +124,7 @@ DETAIL_INDICATORS = {
     "including",
     "namely",
     "i.e.",
+    "for instance",
 }
 
 EVIDENCE_TERMS = {
@@ -93,6 +143,7 @@ EVIDENCE_TERMS = {
     "accuracy",
     "precision",
     "dataset",
+    "sample",
 }
 
 METHODOLOGY_TERMS = {
@@ -124,16 +175,49 @@ COMPARISON_MARKERS = {
     "rather than",
 }
 
+SECTION_HEADINGS = {
+    "abstract",
+    "summary",
+    "introduction",
+    "background",
+    "theory",
+    "framework",
+    "method",
+    "methods",
+    "methodology",
+    "evidence",
+    "results",
+    "analysis",
+    "discussion",
+    "limitations",
+    "conclusion",
+    "references",
+}
+
+THEORY_AS_FACT_PATTERNS = (
+    r"\b(theory|model|framework)\s+(proves|shows|says|dictates)\s+that\b",
+    r"\b(impossible|certain|absolute|undeniable)\s+because\s+(theory|model|framework)\b",
+    r"\b(current|standard)\s+(theory|model)\s+(therefore\s+)?(proves|forbids|requires)\b",
+)
+
 
 def analyze_paper_text(text: str, source_name: str = "uploaded document") -> AnalysisReport:
-    cleaned_text = normalize_document_text(text)
-    sentences = split_sentences(cleaned_text)
-    evidence = assess_evidence(cleaned_text)
-    claims = analyze_claims(extract_claims(sentences))
+    sections = parse_document_sections(text)
+    sentences = split_section_sentences(sections)
+    cleaned_text = normalize_document_text(" ".join(section.text for section in sections))
+    evidence_links = extract_evidence_links(sentences)
+    evidence = assess_evidence(cleaned_text, evidence_links)
+    claim_candidates = extract_claim_candidates(sentences)
+    claims = analyze_claims(claim_candidates, evidence_links)
     findings = find_internal_contradictions(sentences)
+    findings.extend(find_barrier_findings(claims, sentences))
+    findings = assign_finding_ids(dedupe_findings(findings)[:18])
+    verdict_rubric = build_verdict_rubric(claims, findings, evidence)
     verdict = determine_verdict(claims, findings, evidence)
     confidence = calculate_confidence(claims, findings, evidence, verdict)
     summary = build_summary(verdict, claims, findings, evidence)
+    audit_events = build_report_audit_events(sections, sentences, claims, findings, evidence, verdict)
+    issue_brief = build_issue_brief(claims, findings, evidence, verdict)
     return AnalysisReport(
         source_name=source_name,
         verdict=verdict,
@@ -145,7 +229,50 @@ def analyze_paper_text(text: str, source_name: str = "uploaded document") -> Ana
         findings=findings,
         evidence=evidence,
         summary=summary,
+        sections=[section.title for section in sections],
+        audit_events=audit_events,
+        verdict_rubric=verdict_rubric,
+        issue_brief=issue_brief,
     )
+
+
+def parse_document_sections(text: str) -> list[DocumentSection]:
+    text = text.replace("\x00", " ")
+    text = re.sub(r"-\s*\n\s*", "", text)
+    lines = [line.strip() for line in text.splitlines()]
+    sections: list[DocumentSection] = []
+    current_title = "Document"
+    current_lines: list[str] = []
+
+    for line in lines:
+        if not line:
+            continue
+        heading = detect_heading(line)
+        if heading:
+            if current_lines:
+                sections.append(DocumentSection(current_title, normalize_document_text(" ".join(current_lines))))
+                current_lines = []
+            current_title = heading
+            continue
+        current_lines.append(line)
+
+    if current_lines:
+        sections.append(DocumentSection(current_title, normalize_document_text(" ".join(current_lines))))
+
+    return [section for section in sections if section.text] or [DocumentSection("Document", normalize_document_text(text))]
+
+
+def detect_heading(line: str) -> str | None:
+    stripped = re.sub(r"^#+\s*", "", line).strip().strip(":")
+    lowered = stripped.lower()
+    if lowered in SECTION_HEADINGS:
+        return stripped.title()
+    numbered = re.sub(r"^\d+(?:\.\d+)*\s+", "", lowered).strip()
+    if numbered in SECTION_HEADINGS:
+        return numbered.title()
+    if len(stripped.split()) <= 4 and not re.search(r"[.!?]$", stripped) and numbered in SECTION_HEADINGS:
+        return stripped.title()
+    return None
 
 
 def normalize_document_text(text: str) -> str:
@@ -155,29 +282,46 @@ def normalize_document_text(text: str) -> str:
     return text.strip()
 
 
+def split_section_sentences(sections: list[DocumentSection]) -> list[DocumentSentence]:
+    sentences: list[DocumentSentence] = []
+    for section in sections:
+        parts = re.split(r"(?<=[.!?])\s+", section.text)
+        for part in parts:
+            cleaned = part.strip()
+            if len(cleaned) >= 20:
+                sentences.append(DocumentSentence(cleaned, section.title, len(sentences) + 1))
+    return sentences
+
+
 def split_sentences(text: str) -> list[str]:
-    parts = re.split(r"(?<=[.!?])\s+", text)
-    return [part.strip() for part in parts if len(part.strip()) >= 20]
+    return [sentence.text for sentence in split_section_sentences([DocumentSection("Document", normalize_document_text(text))])]
+
+
+def extract_claim_candidates(sentences: list[DocumentSentence], limit: int = 28) -> list[ClaimCandidate]:
+    candidates: list[ClaimCandidate] = []
+    for sentence in sentences:
+        lower = sentence.text.lower()
+        triggers = sorted(indicator for indicator in CLAIM_INDICATORS if indicator in lower)
+        problem_reference = any(problem in lower for problem in PROBLEM_INDICATORS)
+        theory_reference = any(word in lower for word in ["model", "framework", "theory", "paper", "approach", "method"])
+        modal_resolution = bool(re.search(r"\b(can|will|must|should|would)\b.*\b(resolve|solve|explain|reconcile|predict)\b", lower))
+        if triggers or (problem_reference and theory_reference) or modal_resolution:
+            candidates.append(ClaimCandidate(sentence, triggers or ["problem reference"]))
+    return dedupe_claim_candidates(candidates)[:limit]
 
 
 def extract_claims(sentences: list[str], limit: int = 24) -> list[str]:
-    claims: list[str] = []
-    for sentence in sentences:
-        lower = sentence.lower()
-        if any(indicator in lower for indicator in CLAIM_INDICATORS):
-            claims.append(sentence)
-            continue
-        if any(problem in lower for problem in PROBLEM_INDICATORS) and any(
-            word in lower for word in ["model", "framework", "theory", "paper", "approach"]
-        ):
-            claims.append(sentence)
-    return dedupe_preserve_order(claims)[:limit]
+    wrapped = [DocumentSentence(sentence, "Document", index + 1) for index, sentence in enumerate(sentences)]
+    return [candidate.sentence.text for candidate in extract_claim_candidates(wrapped, limit)]
 
 
-def analyze_claims(claims: list[str]) -> list[ClaimResult]:
+def analyze_claims(candidates: list[ClaimCandidate], evidence_links: list[EvidenceLink] | None = None) -> list[ClaimResult]:
+    evidence_links = evidence_links or []
     results: list[ClaimResult] = []
-    for claim in claims:
+    for index, candidate in enumerate(candidates, start=1):
+        claim = candidate.sentence.text
         lower = claim.lower()
+        linked_evidence = link_evidence_to_claim(candidate.sentence, evidence_links)
         has_mechanism = any(indicator in lower for indicator in MECHANISM_INDICATORS)
         has_detail = any(indicator in lower for indicator in DETAIL_INDICATORS)
         evidence_hits = count_terms(lower, EVIDENCE_TERMS)
@@ -185,55 +329,136 @@ def analyze_claims(claims: list[str]) -> list[ClaimResult]:
         number_hits = len(re.findall(r"\d+(?:\.\d+)?%?", claim))
         citation_hits = count_citations(claim)
         equation_hits = count_math_content(claim)
+        linked_strength = sum(link.confidence for link in linked_evidence[:4]) / max(1, min(4, len(linked_evidence)))
 
-        mechanism_score = 0.32 if has_mechanism else 0.0
+        mechanism_score = 0.28 if has_mechanism else 0.0
         detail_score = 0.12 if has_detail else 0.0
-        evidence_score = min(0.36, (evidence_hits + methodology_hits) * 0.06 + number_hits * 0.05 + citation_hits * 0.08)
-        math_score = min(0.2, equation_hits * 0.08)
-        quality = clamp(0.12 + mechanism_score + detail_score + evidence_score + math_score, 0.05, 0.98)
+        local_evidence_score = min(
+            0.26,
+            (evidence_hits + methodology_hits) * 0.045 + number_hits * 0.04 + citation_hits * 0.07,
+        )
+        linked_evidence_score = min(0.22, linked_strength * 0.26)
+        math_score = min(0.12, equation_hits * 0.055)
+        quality = clamp(0.10 + mechanism_score + detail_score + local_evidence_score + linked_evidence_score + math_score, 0.05, 0.98)
 
         gaps: list[str] = []
         if not has_mechanism:
             gaps.append("mechanism missing")
-        if evidence_hits + methodology_hits + number_hits + citation_hits == 0:
-            gaps.append("evidence thin")
+        if not linked_evidence and evidence_hits + methodology_hits + number_hits + citation_hits == 0:
+            gaps.append("evidence not linked")
         if not has_detail:
             gaps.append("details not specific")
+        if any(indicator in lower for indicator in RESOLUTION_INDICATORS) and not any(problem in lower for problem in PROBLEM_INDICATORS):
+            gaps.append("problem scope unclear")
 
-        if quality >= 0.72 and has_mechanism and "evidence thin" not in gaps:
+        if quality >= 0.70 and has_mechanism and "evidence not linked" not in gaps:
             status = "resolved"
-        elif quality >= 0.38 or has_mechanism:
+        elif quality >= 0.40 or has_mechanism or linked_evidence:
             status = "partial"
         else:
             status = "failed"
 
+        rubric_scores = [
+            RubricScore("Mechanism", round(mechanism_score / 0.28 if mechanism_score else 0.0, 3), 0.28, "Mechanism language found" if has_mechanism else "No explicit mechanism language"),
+            RubricScore("Specificity", 1.0 if has_detail else 0.0, 0.12, "Specific detail marker found" if has_detail else "No concrete detail marker"),
+            RubricScore("Local evidence", round(min(1.0, local_evidence_score / 0.26), 3), 0.26, "Evidence markers in the claim sentence"),
+            RubricScore("Linked evidence", round(min(1.0, linked_evidence_score / 0.22), 3), 0.22, "Nearby or overlapping evidence snippets"),
+            RubricScore("Math/proof", round(min(1.0, math_score / 0.12), 3), 0.12, "Math or proof markers"),
+        ]
+        audit_events = [
+            AuditEvent("claim extraction", "matched", f"Triggered by: {', '.join(candidate.trigger_terms)}"),
+            AuditEvent("mechanism check", "pass" if has_mechanism else "fail", "Mechanism language present" if has_mechanism else "Needs a named process, equation, proof, or causal bridge", mechanism_score),
+            AuditEvent("evidence link", "pass" if linked_evidence else "warn", f"{len(linked_evidence)} evidence snippets linked", linked_evidence_score),
+            AuditEvent("claim verdict", status, f"Quality score {quality:.2f}", quality),
+        ]
         results.append(
             ClaimResult(
                 claim=claim,
                 status=status,
                 quality=round(quality, 3),
                 mechanism="provided" if has_mechanism else "missing",
-                evidence_strength=round(clamp(evidence_score + math_score + citation_hits * 0.05, 0.0, 0.95), 3),
+                evidence_strength=round(clamp(local_evidence_score + linked_evidence_score + math_score + citation_hits * 0.04, 0.0, 0.95), 3),
                 gaps=gaps,
+                id=f"C{index}",
+                section=candidate.sentence.section,
+                sentence_index=candidate.sentence.index,
+                evidence_links=linked_evidence,
+                rubric_scores=rubric_scores,
+                audit_events=audit_events,
+                repair_suggestion=repair_suggestion_for_gaps(gaps),
+                trigger_terms=candidate.trigger_terms,
             )
         )
     return results
 
 
-def assess_evidence(text: str) -> EvidenceProfile:
+def extract_evidence_links(sentences: list[DocumentSentence]) -> list[EvidenceLink]:
+    links: list[EvidenceLink] = []
+    for sentence in sentences:
+        lower = sentence.text.lower()
+        evidence_count = count_terms(lower, EVIDENCE_TERMS)
+        methodology_count = count_terms(lower, METHODOLOGY_TERMS)
+        numbers = len(re.findall(r"\b\d+(?:\.\d+)?%?\b|r\^?2\s*=|rmse\s*=|p\s*[<=>]", lower))
+        citations = count_citations(sentence.text)
+        math_content = count_math_content(sentence.text)
+        if evidence_count + methodology_count + numbers + citations + math_content == 0:
+            continue
+        evidence_type = "mixed"
+        if citations:
+            evidence_type = "citation"
+        elif numbers:
+            evidence_type = "quantitative"
+        elif math_content:
+            evidence_type = "math"
+        elif methodology_count:
+            evidence_type = "method"
+        confidence = clamp(0.24 + citations * 0.16 + numbers * 0.07 + math_content * 0.07 + evidence_count * 0.04 + methodology_count * 0.04, 0.2, 0.95)
+        links.append(
+            EvidenceLink(
+                id=f"E{len(links) + 1}",
+                type=evidence_type,
+                snippet=trim_sentence(sentence.text, 220),
+                section=sentence.section,
+                sentence_index=sentence.index,
+                confidence=round(confidence, 3),
+            )
+        )
+    return links
+
+
+def link_evidence_to_claim(claim: DocumentSentence, evidence_links: list[EvidenceLink]) -> list[EvidenceLink]:
+    claim_words = content_words(claim.text)
+    scored: list[tuple[float, EvidenceLink]] = []
+    for link in evidence_links:
+        evidence_words = content_words(link.snippet)
+        overlap = jaccard(claim_words, evidence_words)
+        proximity = max(0.0, 1.0 - abs(claim.index - link.sentence_index) / 8)
+        same_section = 0.22 if claim.section == link.section else 0.0
+        score = overlap * 0.55 + proximity * 0.30 + same_section
+        if score >= 0.20:
+            scored.append((score, link))
+    return [link for _, link in sorted(scored, key=lambda item: item[0], reverse=True)[:4]]
+
+
+def assess_evidence(text: str, evidence_links: list[EvidenceLink] | None = None) -> EvidenceProfile:
+    evidence_links = evidence_links or []
     lower = text.lower()
     quantitative = len(re.findall(r"\b\d+(?:\.\d+)?%?\b|r\^?2\s*=|rmse\s*=|p\s*[<=>]", lower))
     math_content = count_math_content(text)
     citations = count_citations(text)
     methodology = count_terms(lower, METHODOLOGY_TERMS)
     evidence_terms = count_terms(lower, EVIDENCE_TERMS)
+    section_counts: dict[str, int] = {}
+    for link in evidence_links:
+        section_counts[link.section] = section_counts.get(link.section, 0) + 1
     score = (
-        0.16
-        + 0.28 * min(1.0, quantitative / 8)
-        + 0.24 * min(1.0, math_content / 6)
-        + 0.22 * min(1.0, citations / 6)
-        + 0.16 * min(1.0, methodology / 8)
+        0.14
+        + 0.24 * min(1.0, quantitative / 8)
+        + 0.20 * min(1.0, math_content / 6)
+        + 0.20 * min(1.0, citations / 6)
+        + 0.14 * min(1.0, methodology / 8)
         + 0.10 * min(1.0, evidence_terms / 10)
+        + 0.12 * min(1.0, len(evidence_links) / 8)
     )
     return EvidenceProfile(
         score=round(clamp(score, 0.0, 0.98), 3),
@@ -242,74 +467,222 @@ def assess_evidence(text: str) -> EvidenceProfile:
         citations=citations,
         methodology_terms=methodology,
         evidence_terms=evidence_terms,
+        linked_evidence=len(evidence_links),
+        section_counts=section_counts,
+        evidence_links=evidence_links[:18],
     )
 
 
-def find_internal_contradictions(sentences: list[str]) -> list[Finding]:
+def find_internal_contradictions(sentences: list[DocumentSentence] | list[str]) -> list[Finding]:
+    normalized_sentences = normalize_sentence_inputs(sentences)
     engine = ContradictionEngine()
     findings: list[Finding] = []
-    max_pairs = 360
+    max_pairs = 520
     checked = 0
-    for i, first in enumerate(sentences):
-        for j, second in enumerate(sentences[i + 1 :], i + 1):
+    for i, first in enumerate(normalized_sentences):
+        for j, second in enumerate(normalized_sentences[i + 1 :], i + 1):
             if checked >= max_pairs:
                 break
             checked += 1
-            if is_comparison_context(first, second):
+            if is_comparison_context(first.text, second.text):
                 continue
-            first_words = content_words(first)
-            second_words = content_words(second)
+            first_words = content_words(first.text)
+            second_words = content_words(second.text)
             overlap = jaccard(first_words, second_words)
-            if overlap < 0.22:
+            if overlap < 0.20:
                 continue
-            contradiction = engine.detect(ClaimPair(f"s{i + 1}-s{j + 1}", first, second))
+            contradiction = engine.detect(ClaimPair(f"s{first.index}-s{second.index}", first.text, second.text))
             if contradiction:
                 findings.append(
                     Finding(
                         type=contradiction.type.value.replace("_", " ").title(),
                         severity=severity_for_score(contradiction.score),
-                        sentence=trim_sentence(second),
-                        related_sentence=trim_sentence(first),
+                        sentence=trim_sentence(second.text),
+                        related_sentence=trim_sentence(first.text),
                         explanation=contradiction.note,
                         repair_suggestion=contradiction.repair_suggestion,
                         confidence=round(contradiction.score, 2),
+                        section=second.section,
+                        trigger=f"overlap {overlap:.2f}",
                     )
                 )
-            elif has_negation(first) != has_negation(second) and overlap >= 0.42:
+            elif has_negation(first.text) != has_negation(second.text) and overlap >= 0.42:
                 findings.append(
                     Finding(
                         type="Potential Direct Negation",
                         severity="medium",
-                        sentence=trim_sentence(second),
-                        related_sentence=trim_sentence(first),
+                        sentence=trim_sentence(second.text),
+                        related_sentence=trim_sentence(first.text),
                         explanation="Two similar sentences appear to differ mainly by negation.",
                         repair_suggestion="Clarify whether these sentences refer to different scopes, dates, or assumptions.",
                         confidence=round(overlap, 2),
+                        section=second.section,
+                        trigger=f"negation polarity with overlap {overlap:.2f}",
                     )
                 )
         if checked >= max_pairs:
             break
 
-    findings.extend(find_circular_reasoning(sentences))
-    return dedupe_findings(findings)[:12]
+    findings.extend(find_circular_reasoning(normalized_sentences))
+    findings.extend(find_scope_conflicts(normalized_sentences))
+    findings.extend(find_theory_as_fact_language(normalized_sentences))
+    return findings
 
 
-def find_circular_reasoning(sentences: list[str]) -> list[Finding]:
-    because_sentences = [sentence for sentence in sentences if "because" in sentence.lower()]
-    therefore_sentences = [sentence for sentence in sentences if "therefore" in sentence.lower()]
-    if len(because_sentences) >= 2 and len(therefore_sentences) >= 2:
-        return [
-            Finding(
-                type="Potential Circular Reasoning",
-                severity="low",
-                sentence=trim_sentence(because_sentences[0]),
-                related_sentence=trim_sentence(therefore_sentences[0]),
-                explanation="The paper contains repeated because/therefore reasoning that should be checked for circular support.",
-                repair_suggestion="Make premises, evidence, and conclusions explicit so the conclusion is not used as its own support.",
-                confidence=0.45,
-            )
-        ]
+def normalize_sentence_inputs(sentences: list[DocumentSentence] | list[str]) -> list[DocumentSentence]:
+    if not sentences:
+        return []
+    if isinstance(sentences[0], DocumentSentence):
+        return sentences  # type: ignore[return-value]
+    return [DocumentSentence(str(sentence), "Document", index + 1) for index, sentence in enumerate(sentences)]
+
+
+def find_circular_reasoning(sentences: list[DocumentSentence]) -> list[Finding]:
+    because_sentences = [sentence for sentence in sentences if "because" in sentence.text.lower()]
+    therefore_sentences = [sentence for sentence in sentences if "therefore" in sentence.text.lower()]
+    for first in because_sentences:
+        first_words = content_words(first.text)
+        for second in therefore_sentences:
+            if first.index == second.index:
+                continue
+            overlap = jaccard(first_words, content_words(second.text))
+            if overlap >= 0.30 or (len(because_sentences) >= 2 and len(therefore_sentences) >= 2):
+                return [
+                    Finding(
+                        type="Potential Circular Reasoning",
+                        severity="low",
+                        sentence=trim_sentence(first.text),
+                        related_sentence=trim_sentence(second.text),
+                        explanation="Repeated because/therefore reasoning with overlapping terms may be using the conclusion as support.",
+                        repair_suggestion="Make premises, evidence, and conclusions explicit so the conclusion is not used as its own support.",
+                        confidence=round(max(0.45, overlap), 2),
+                        section=first.section,
+                        trigger="because/therefore support loop",
+                    )
+                ]
     return []
+
+
+def find_scope_conflicts(sentences: list[DocumentSentence]) -> list[Finding]:
+    findings: list[Finding] = []
+    absolute = re.compile(r"\b(all|always|every|never|none|universal|in every case|without exception)\b", re.I)
+    caveat = re.compile(r"\b(except|unless|only when|under|in some cases|limited to|scope|boundary|however)\b", re.I)
+    for index, sentence in enumerate(sentences):
+        if not absolute.search(sentence.text):
+            continue
+        window = sentences[max(0, index - 2) : min(len(sentences), index + 3)]
+        caveats = [candidate for candidate in window if candidate.index != sentence.index and caveat.search(candidate.text)]
+        if caveats:
+            findings.append(
+                Finding(
+                    type="Scope Conflict",
+                    severity="medium",
+                    sentence=trim_sentence(sentence.text),
+                    related_sentence=trim_sentence(caveats[0].text),
+                    explanation="A broad universal claim appears near caveat language that narrows the scope.",
+                    repair_suggestion="Replace absolute wording with the exact domain, boundary condition, or exception class.",
+                    confidence=0.68,
+                    section=sentence.section,
+                    trigger="absolute quantifier near caveat",
+                )
+            )
+    return findings[:4]
+
+
+def find_theory_as_fact_language(sentences: list[DocumentSentence]) -> list[Finding]:
+    findings: list[Finding] = []
+    for sentence in sentences:
+        lower = sentence.text.lower()
+        if any(re.search(pattern, lower) for pattern in THEORY_AS_FACT_PATTERNS):
+            findings.append(
+                Finding(
+                    type="Theory-As-Fact Language",
+                    severity="low",
+                    sentence=trim_sentence(sentence.text),
+                    explanation="The wording treats a model or theory as final authority rather than an evidenced framework.",
+                    repair_suggestion="Use evidence-based phrasing and name which observations, assumptions, or tests support the statement.",
+                    confidence=0.62,
+                    section=sentence.section,
+                    trigger="model authority phrasing",
+                )
+            )
+    return findings[:4]
+
+
+def find_barrier_findings(claims: list[ClaimResult], sentences: list[DocumentSentence]) -> list[Finding]:
+    findings: list[Finding] = []
+    by_index = {sentence.index: sentence for sentence in sentences}
+    for claim in claims:
+        sentence = by_index.get(claim.sentence_index)
+        section = sentence.section if sentence else claim.section
+        severity = "medium" if claim.status == "failed" else "low"
+        if "mechanism missing" in claim.gaps:
+            findings.append(
+                Finding(
+                    type="Missing Mechanism Barrier",
+                    severity=severity,
+                    sentence=trim_sentence(claim.claim),
+                    explanation="The claim names a resolution but does not explain the process that performs the resolution.",
+                    repair_suggestion="Add a named mechanism, equation, causal pathway, proof step, or operational process.",
+                    confidence=0.74 if severity == "medium" else 0.58,
+                    section=section,
+                    trigger="claim rubric gap",
+                    claim_id=claim.id,
+                )
+            )
+        if "evidence not linked" in claim.gaps:
+            findings.append(
+                Finding(
+                    type="Evidence Gap",
+                    severity=severity,
+                    sentence=trim_sentence(claim.claim),
+                    explanation="The claim does not link to nearby quantitative, citation, method, or proof evidence.",
+                    repair_suggestion="Attach the claim to a citation, measurement, derivation, test, or falsifiable prediction.",
+                    confidence=0.70 if severity == "medium" else 0.55,
+                    section=section,
+                    trigger="claim rubric gap",
+                    claim_id=claim.id,
+                )
+            )
+        if claim.status == "failed" and any(indicator in claim.claim.lower() for indicator in RESOLUTION_INDICATORS):
+            findings.append(
+                Finding(
+                    type="Unsupported Resolution Claim",
+                    severity="medium",
+                    sentence=trim_sentence(claim.claim),
+                    explanation="The paper appears to claim a resolution, but the rule audit did not find enough mechanism or evidence support.",
+                    repair_suggestion="Restate the exact problem, then show the resolving mechanism and the evidence that would fail if the claim were wrong.",
+                    confidence=0.76,
+                    section=section,
+                    trigger="failed resolution claim",
+                    claim_id=claim.id,
+                )
+            )
+    return findings[:10]
+
+
+def assign_finding_ids(findings: list[Finding]) -> list[Finding]:
+    assigned: list[Finding] = []
+    for index, finding in enumerate(findings, start=1):
+        if finding.id:
+            assigned.append(finding)
+            continue
+        assigned.append(
+            Finding(
+                type=finding.type,
+                severity=finding.severity,
+                sentence=finding.sentence,
+                explanation=finding.explanation,
+                repair_suggestion=finding.repair_suggestion,
+                confidence=finding.confidence,
+                related_sentence=finding.related_sentence,
+                id=f"F{index}",
+                section=finding.section,
+                trigger=finding.trigger,
+                claim_id=finding.claim_id,
+            )
+        )
+    return assigned
 
 
 def determine_verdict(claims: list[ClaimResult], findings: list[Finding], evidence: EvidenceProfile) -> Verdict:
@@ -318,15 +691,40 @@ def determine_verdict(claims: list[ClaimResult], findings: list[Finding], eviden
     high_findings = sum(1 for finding in findings if finding.severity == "high")
     if high_findings > 0:
         return "CREATES_NEW_PARADOXES"
-    resolution_ratio = (
-        sum(1 for claim in claims if claim.status == "resolved")
-        + 0.5 * sum(1 for claim in claims if claim.status == "partial")
-    ) / max(1, len(claims))
-    if resolution_ratio >= 0.72 and evidence.score >= 0.58:
+    resolution_ratio = resolution_ratio_for_claims(claims)
+    medium_penalty = min(0.18, sum(1 for finding in findings if finding.severity == "medium") * 0.045)
+    adjusted_evidence = max(0.0, evidence.score - medium_penalty)
+    if resolution_ratio >= 0.72 and adjusted_evidence >= 0.58:
         return "RESOLVES"
-    if resolution_ratio >= 0.42 or evidence.score >= 0.42:
+    if resolution_ratio >= 0.42 or adjusted_evidence >= 0.42:
         return "PARTIAL"
     return "FAILS"
+
+
+def build_verdict_rubric(claims: list[ClaimResult], findings: list[Finding], evidence: EvidenceProfile) -> list[RubricScore]:
+    claim_ratio = resolution_ratio_for_claims(claims)
+    contradiction_score = clamp(1.0 - sum(0.28 if finding.severity == "high" else 0.12 if finding.severity == "medium" else 0.05 for finding in findings), 0.0, 1.0)
+    evidence_score = evidence.score
+    mechanism_score = (
+        sum(1 for claim in claims if claim.mechanism == "provided") / len(claims)
+        if claims
+        else 0.0
+    )
+    return [
+        RubricScore("Claim resolution", round(claim_ratio, 3), 0.36, "Resolved claims count fully; partial claims count halfway"),
+        RubricScore("Evidence strength", round(evidence_score, 3), 0.28, "Document-level evidence markers plus linked evidence snippets"),
+        RubricScore("Internal consistency", round(contradiction_score, 3), 0.24, "Penalizes high and medium contradiction/risk findings"),
+        RubricScore("Mechanism coverage", round(mechanism_score, 3), 0.12, "Share of claims with explicit mechanism language"),
+    ]
+
+
+def resolution_ratio_for_claims(claims: list[ClaimResult]) -> float:
+    if not claims:
+        return 0.0
+    return (
+        sum(1 for claim in claims if claim.status == "resolved")
+        + 0.5 * sum(1 for claim in claims if claim.status == "partial")
+    ) / len(claims)
 
 
 def calculate_confidence(
@@ -335,9 +733,10 @@ def calculate_confidence(
     if not claims:
         return 0.56
     average_claim_quality = sum(claim.quality for claim in claims) / len(claims)
-    finding_penalty = min(0.22, len(findings) * 0.025 + sum(0.05 for finding in findings if finding.severity == "high"))
-    verdict_bonus = 0.06 if verdict in {"RESOLVES", "CREATES_NEW_PARADOXES"} else 0.0
-    confidence = 0.48 + average_claim_quality * 0.26 + evidence.score * 0.22 + verdict_bonus - finding_penalty
+    linked_ratio = sum(1 for claim in claims if claim.evidence_links) / len(claims)
+    finding_penalty = min(0.24, len(findings) * 0.018 + sum(0.06 for finding in findings if finding.severity == "high"))
+    verdict_bonus = 0.05 if verdict in {"RESOLVES", "CREATES_NEW_PARADOXES"} else 0.0
+    confidence = 0.46 + average_claim_quality * 0.25 + evidence.score * 0.20 + linked_ratio * 0.08 + verdict_bonus - finding_penalty
     return round(clamp(confidence, 0.1, 0.95), 3)
 
 
@@ -351,23 +750,61 @@ def build_summary(
         )
     if verdict == "CREATES_NEW_PARADOXES":
         return (
-            "The paper makes analyzable claims, but the rule set found a high-severity internal contradiction. "
+            "The paper makes analyzable claims, but the rule set found a high-severity contradiction or barrier. "
             "Resolve that conflict before treating the verdict as supportive."
         )
     if verdict == "RESOLVES":
         return (
-            "The paper's main claims include mechanisms and enough evidence markers to pass the v1 rule checks. "
-            "Review the claim list and evidence profile before using this as a final review."
+            "The paper's main claims include mechanisms, linked evidence, and enough consistency to pass the v2 rule checks. "
+            "Review the curtain-up audit before using this as a final review."
         )
     if verdict == "PARTIAL":
         return (
-            "The paper has some usable claim structure, but at least part of the mechanism or evidence trail is thin. "
+            "The paper has useful claim structure, but some mechanisms, evidence links, or scope boundaries remain thin. "
             "Strengthen the flagged claims before relying on the result."
         )
     return (
         "The paper makes claims, but the rules did not find enough mechanism and evidence support. "
         "The fastest improvement is to connect each claim to a concrete process, citation, calculation, or test."
     )
+
+
+def build_report_audit_events(
+    sections: list[DocumentSection],
+    sentences: list[DocumentSentence],
+    claims: list[ClaimResult],
+    findings: list[Finding],
+    evidence: EvidenceProfile,
+    verdict: Verdict,
+) -> list[AuditEvent]:
+    return [
+        AuditEvent("section parse", "complete", f"{len(sections)} sections detected"),
+        AuditEvent("sentence parse", "complete", f"{len(sentences)} analyzable sentences detected"),
+        AuditEvent("claim extraction", "complete", f"{len(claims)} resolution or theory claims detected"),
+        AuditEvent("evidence linking", "complete", f"{evidence.linked_evidence} evidence snippets indexed", evidence.score),
+        AuditEvent("barrier scan", "complete", f"{len(findings)} contradiction or repair findings emitted"),
+        AuditEvent("verdict", verdict, "Deterministic verdict selected from claim, evidence, and finding scores"),
+    ]
+
+
+def build_issue_brief(claims: list[ClaimResult], findings: list[Finding], evidence: EvidenceProfile, verdict: Verdict) -> str:
+    lines = [
+        f"Verdict: {verdict}",
+        f"Evidence score: {evidence.score:.2f}",
+        f"Claims: {len(claims)} total, {sum(1 for claim in claims if claim.status == 'resolved')} resolved, {sum(1 for claim in claims if claim.status == 'partial')} partial, {sum(1 for claim in claims if claim.status == 'failed')} failed.",
+    ]
+    if findings:
+        lines.append("Top findings:")
+        for finding in findings[:6]:
+            target = f" linked to {finding.claim_id}" if finding.claim_id else ""
+            lines.append(f"- {finding.id}: {finding.type} ({finding.severity}){target}: {finding.explanation}")
+    weak_claims = [claim for claim in claims if claim.status != "resolved"]
+    if weak_claims:
+        lines.append("Claims needing repair:")
+        for claim in weak_claims[:6]:
+            gaps = ", ".join(claim.gaps) if claim.gaps else "general support gap"
+            lines.append(f"- {claim.id}: {gaps}. {claim.repair_suggestion}")
+    return "\n".join(lines)
 
 
 def count_terms(text: str, terms: set[str]) -> int:
@@ -386,8 +823,8 @@ def count_citations(text: str) -> int:
 
 
 def count_math_content(text: str) -> int:
-    math_symbols = len(re.findall(r"[=<>∫∂∇Σ∝≈≠≤≥±]", text))
-    equation_words = len(re.findall(r"\b(equation|formula|derivation|proof|theorem|model)\b", text.lower()))
+    math_symbols = len(re.findall(r"(?:[A-Za-z]\s*=\s*[-+*/^A-Za-z0-9(). ]+)|[=<>+\-*/^~]", text))
+    equation_words = len(re.findall(r"\b(equation|formula|derivation|proof|theorem|lemma|model)\b", text.lower()))
     return math_symbols + equation_words
 
 
@@ -417,14 +854,29 @@ def trim_sentence(sentence: str, limit: int = 260) -> str:
     return sentence[: limit - 3].rstrip() + "..."
 
 
-def dedupe_preserve_order(items: list[str]) -> list[str]:
+def repair_suggestion_for_gaps(gaps: list[str]) -> str:
+    if not gaps:
+        return "Keep the claim tied to its mechanism and evidence when revising."
+    repairs = []
+    if "mechanism missing" in gaps:
+        repairs.append("name the mechanism that performs the resolution")
+    if "evidence not linked" in gaps:
+        repairs.append("attach a citation, measurement, derivation, or falsifiable test")
+    if "details not specific" in gaps:
+        repairs.append("add concrete conditions, examples, or boundary cases")
+    if "problem scope unclear" in gaps:
+        repairs.append("state the exact paradox or contradiction being resolved")
+    return "To repair this claim, " + "; ".join(repairs) + "."
+
+
+def dedupe_claim_candidates(candidates: list[ClaimCandidate]) -> list[ClaimCandidate]:
     seen: set[str] = set()
-    deduped: list[str] = []
-    for item in items:
-        key = re.sub(r"\W+", " ", item.lower()).strip()
+    deduped: list[ClaimCandidate] = []
+    for candidate in candidates:
+        key = re.sub(r"\W+", " ", candidate.sentence.text.lower()).strip()
         if key not in seen:
             seen.add(key)
-            deduped.append(item)
+            deduped.append(candidate)
     return deduped
 
 
@@ -436,6 +888,17 @@ def dedupe_findings(findings: list[Finding]) -> list[Finding]:
         if key not in seen:
             seen.add(key)
             deduped.append(finding)
+    return deduped
+
+
+def dedupe_preserve_order(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for item in items:
+        key = re.sub(r"\W+", " ", item.lower()).strip()
+        if key not in seen:
+            seen.add(key)
+            deduped.append(item)
     return deduped
 
 

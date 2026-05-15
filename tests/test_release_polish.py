@@ -1,0 +1,65 @@
+import re
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_public_release_files_exist():
+    required_paths = [
+        "README.md",
+        "LICENSE",
+        "Start-Gauntlet.bat",
+        "requirements.txt",
+        "requirements-ai.txt",
+        "docs/RELEASE_CHECKLIST.md",
+        "docs/images/gauntlet-summary.png",
+        "docs/images/gauntlet-breakdown.png",
+        "docs/images/gauntlet-benchmarks.png",
+        "docs/images/gauntlet-refinement.png",
+        ".github/workflows/tests.yml",
+        ".github/ISSUE_TEMPLATE/bug_report.yml",
+        ".github/ISSUE_TEMPLATE/benchmark_idea.yml",
+        ".github/ISSUE_TEMPLATE/false_positive.yml",
+    ]
+
+    missing = [path for path in required_paths if not (ROOT / path).exists()]
+
+    assert not missing
+
+
+def test_windows_launcher_keeps_default_install_non_ai():
+    launcher = (ROOT / "Start-Gauntlet.bat").read_text(encoding="utf-8")
+    command_lines = [
+        line.strip().lower()
+        for line in launcher.splitlines()
+        if line.strip() and not line.strip().lower().startswith("echo")
+    ]
+
+    assert any("python 3.10" in line.lower() for line in launcher.splitlines())
+    assert any("pip install -r requirements.txt" in line for line in command_lines)
+    assert not any("pip install -r requirements-ai.txt" in line for line in command_lines)
+    assert "requirements-ai.txt" in launcher
+    assert "http://localhost:8501" in launcher
+
+
+def test_readme_image_links_point_to_existing_files():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    image_paths = re.findall(r"!\[[^\]]*\]\((docs/images/[^)]+)\)", readme)
+
+    assert image_paths
+    assert {Path(path).name for path in image_paths} == {
+        "gauntlet-summary.png",
+        "gauntlet-breakdown.png",
+        "gauntlet-benchmarks.png",
+        "gauntlet-refinement.png",
+    }
+    assert all((ROOT / path).exists() for path in image_paths)
+
+
+def test_github_actions_runs_non_ai_test_suite():
+    workflow = (ROOT / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
+
+    assert "requirements-dev.txt" in workflow
+    assert "python -m pytest" in workflow
+    assert "requirements-ai.txt" not in workflow
