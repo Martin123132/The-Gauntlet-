@@ -5,10 +5,32 @@ papers, and arguments. Upload a document and it produces a transparent
 rule-based verdict: `RESOLVES`, `PARTIAL`, `FAILS`, or
 `CREATES_NEW_PARADOXES`.
 
+## Download ZIP -> Double-Click -> Upload Paper
+
+1. Click GitHub's green `Code` button.
+2. Choose `Download ZIP`.
+3. Unzip the folder.
+4. Double-click `Start-Gauntlet.bat`.
+5. Upload a `.pdf`, `.docx`, `.txt`, or `.md` paper and press `Analyze Paper`.
+
 The default flow does not call any AI provider. There is no API key setup for
 the normal checker. The app runs on your machine and uses deterministic rules
 for section parsing, claim extraction, contradiction checks, mechanism checks,
 evidence linking, and verdict scoring.
+
+**Privacy note:** the normal checker runs locally and does not require an API
+key. Optional AI refinement only runs when you paste a session key on the
+`Refinement` page.
+
+## Screenshots
+
+![The Gauntlet summary dashboard](docs/images/gauntlet-summary.png)
+
+![The Gauntlet breakdown page](docs/images/gauntlet-breakdown.png)
+
+![The Gauntlet benchmark gallery](docs/images/gauntlet-benchmarks.png)
+
+![The Gauntlet refinement provider setup](docs/images/gauntlet-refinement.png)
 
 ## Quick Start on Windows
 
@@ -100,11 +122,15 @@ free-tier-friendly provider. Current Gemini pricing, rate limits, and available
 models can change, so check the official Google AI Studio/Gemini API pages
 before relying on a specific quota.
 
-Install optional AI dependencies only if you want this page to run live:
+The Windows launcher does not install AI packages. Install optional AI
+dependencies only if you want this page to run live:
 
 ```bash
 .venv\Scripts\python -m pip install -r requirements-ai.txt
 ```
+
+API keys are session-only. They are not written to project files and are not
+included in JSON or Markdown exports.
 
 ## Legacy Colab Versions
 

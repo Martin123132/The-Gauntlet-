@@ -1,0 +1,46 @@
+name: Paper-checker false positive
+description: Report a rule result that looks too harsh, too loose, or misleading.
+title: "[False positive]: "
+labels: ["checker-calibration"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share the smallest safe excerpt you can. Do not post private or unpublished work unless you are comfortable making it public.
+  - type: dropdown
+    id: verdict
+    attributes:
+      label: Actual Gauntlet verdict
+      options:
+        - RESOLVES
+        - PARTIAL
+        - FAILS
+        - CREATES_NEW_PARADOXES
+    validations:
+      required: true
+  - type: textarea
+    id: finding
+    attributes:
+      label: Finding or claim gap that seems wrong
+      placeholder: Paste the issue type, claim ID, or short report excerpt.
+    validations:
+      required: true
+  - type: textarea
+    id: excerpt
+    attributes:
+      label: Minimal safe text excerpt
+      description: Paste only what is needed to reproduce the scoring issue.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should The Gauntlet have done?
+      placeholder: It should have treated this as evidence-linked because...
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Extra context
+      description: Mention file type, section names, or export details if relevant.

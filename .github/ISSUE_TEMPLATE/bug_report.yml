@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a problem with launching, uploading, analyzing, or exporting.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve The Gauntlet. Please do not paste private papers unless you are comfortable sharing them publicly.
+  - type: input
+    id: version
+    attributes:
+      label: Version or branch
+      description: Paste the branch, commit, or release ZIP name you used.
+      placeholder: non-ai-app-v1, main, or a commit hash
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Windows launcher
+        - Upload or document parsing
+        - Summary or breakdown UI
+        - Benchmarks
+        - Optional refinement
+        - Exports
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Tell us exactly what you clicked or ran.
+      placeholder: "1. Double-clicked Start-Gauntlet.bat\n2. Uploaded a PDF\n3. Pressed Analyze Paper"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Include visible error messages if there were any.
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System
+      placeholder: Windows 11, Python 3.11
