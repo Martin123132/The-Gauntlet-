@@ -78,6 +78,8 @@ The verdict is a review aid, not a replacement for expert peer review.
   counterexamples, and temporal conflicts
 - repair barriers such as unsupported resolution claims, missing mechanisms,
   evidence gaps, scope conflicts, circular support, and theory-as-fact wording
+- source trace anchors for claims, findings, contradictions, and evidence
+  snippets, including PDF page numbers when available
 - exportable JSON and Markdown reports
 
 ## Benchmark Demo Gallery

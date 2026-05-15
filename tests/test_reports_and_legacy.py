@@ -15,8 +15,11 @@ def test_report_exports_include_core_fields():
 
     assert data["source_name"] == "paper.txt"
     assert data["verdict"] in {"RESOLVES", "PARTIAL", "FAILS", "CREATES_NEW_PARADOXES"}
+    assert data["source_spans"]
+    assert data["claims"][0]["source_span"]
     assert "The Gauntlet Report: paper.txt" in markdown
     assert "Evidence Profile" in markdown
+    assert "Source Trace" in markdown
 
 
 def test_legacy_colab_files_are_preserved():

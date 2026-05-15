@@ -4,9 +4,10 @@ import html
 
 import streamlit as st
 
-from gauntlet_core import analyze_paper_text
+from gauntlet_core import analyze_loaded_document, analyze_paper_text
 from gauntlet_core.benchmarks import list_benchmark_samples, run_benchmark_sample
-from gauntlet_core.document_loader import SUPPORTED_EXTENSIONS, extract_text_from_bytes
+from gauntlet_core.document_loader import SUPPORTED_EXTENSIONS, load_document_from_bytes
+from gauntlet_core.models import source_reference
 from gauntlet_core.refinement import (
     DEFAULT_CHALLENGER_PROVIDER,
     DEFAULT_CRITIC_PROVIDER,
@@ -575,6 +576,24 @@ div[data-baseweb="tab-highlight"] {
   color: var(--gauntlet-teal);
   font-weight: 820;
 }
+.source-ref {
+  display: inline-block;
+  border: 1px solid #c7e2df;
+  border-radius: 6px;
+  background: #effaf8;
+  color: var(--gauntlet-teal);
+  font-size: .76rem;
+  font-weight: 800;
+  padding: .2rem .48rem;
+  margin-top: .4rem;
+}
+.source-snippet {
+  border-left: 3px solid var(--gauntlet-teal);
+  background: #fbfcfd;
+  color: #273340;
+  padding: .6rem .75rem;
+  margin: .45rem 0;
+}
 .rubric-row {
   display: grid;
   grid-template-columns: 150px 1fr 58px;
@@ -824,11 +843,12 @@ def render_upload_panel() -> None:
                     paper_text = SAMPLE_PAPER
                     report = analyze_paper_text(paper_text, source_name="sample-paper.txt")
                 elif upload is not None:
-                    paper_text = extract_text_from_bytes(upload.name, upload.getvalue())
+                    loaded_document = load_document_from_bytes(upload.name, upload.getvalue())
+                    paper_text = loaded_document.text
                     if not paper_text.strip():
                         st.error("No readable text was found in that file.")
                         return
-                    report = analyze_paper_text(paper_text, source_name=upload.name)
+                    report = analyze_loaded_document(loaded_document)
                 else:
                     st.error("Upload a paper or turn on the sample paper first.")
                     return
@@ -1006,6 +1026,7 @@ def render_curtain_up(report) -> None:
             <div class="evidence-link-card">
               <strong>{html.escape(link.id)} - {html.escape(link.type.title())}</strong>
               <div class="muted-note">{html.escape(link.section)} | Sentence {link.sentence_index} | Confidence {link.confidence:.0%}</div>
+              <div class="source-ref">{html.escape(source_reference(link.source_span))}</div>
               <div class="claim-text">{html.escape(link.snippet)}</div>
             </div>
             """
@@ -1034,6 +1055,7 @@ def render_curtain_up(report) -> None:
         """,
         unsafe_allow_html=True,
     )
+    render_source_trace(report, limit=10)
 
 
 def render_claims_page(report, compact: bool = False) -> None:
@@ -1074,6 +1096,7 @@ def render_claim_card(index: int, claim) -> None:
             <span class="claim-status {status_class}">{html.escape(claim.status)}</span>
           </div>
           <div class="claim-text">{html.escape(claim.claim)}</div>
+          <div class="source-ref">{html.escape(source_reference(claim.source_span))}</div>
           <div class="claim-meta">Quality: {claim.quality:.2f} | Evidence: {claim.evidence_strength:.2f} | Mechanism: {html.escape(claim.mechanism)} | Gaps: {html.escape(gaps)} | Links: {html.escape(evidence_links)}</div>
           <div class="claim-meta"><strong>Repair:</strong> {html.escape(claim.repair_suggestion)}</div>
           <ul class="mini-list">{rubric}</ul>
@@ -1082,6 +1105,8 @@ def render_claim_card(index: int, claim) -> None:
         """,
         unsafe_allow_html=True,
     )
+    claim_label = claim.id or f"Claim {index}"
+    render_source_expander(f"Source for {claim_label}", claim.source_span, claim.evidence_links)
 
 
 def render_contradictions_page(report, compact: bool = False) -> None:
@@ -1134,18 +1159,21 @@ def render_evidence_page(report, compact: bool = False) -> None:
         unsafe_allow_html=True,
     )
     if report.evidence.evidence_links:
-        cards = []
         for link in report.evidence.evidence_links:
-            cards.append(
+            st.markdown(
                 f"""
                 <div class="evidence-link-card">
                   <strong>{html.escape(link.id)} - {html.escape(link.type.title())}</strong>
                   <div class="muted-note">{html.escape(link.section)} | Sentence {link.sentence_index} | Confidence {link.confidence:.0%}</div>
+                  <div class="source-ref">{html.escape(source_reference(link.source_span))}</div>
                   <div class="claim-text">{html.escape(link.snippet)}</div>
                 </div>
-                """
+                """,
+                unsafe_allow_html=True,
             )
-        st.markdown(f'<div class="audit-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+            render_source_expander(f"Source for {link.id}", link.source_span)
+    if not compact:
+        render_source_trace(report, limit=18)
 
 
 def render_stat_strip(report) -> None:
@@ -1616,6 +1644,7 @@ def render_finding(finding) -> None:
           <div class="finding-meta">Section: {html.escape(finding.section)} | Severity: {severity} | Confidence: {finding.confidence:.0%}{claim_link}{trigger}</div>
           <div class="finding-body">
             <p>{html.escape(finding.sentence)}</p>
+            <div class="source-ref">{html.escape(source_reference(finding.source_span))}</div>
             {related}
             <p><strong>Why it matters:</strong> {html.escape(finding.explanation)}</p>
             <p><strong>Repair:</strong> {html.escape(finding.repair_suggestion)}</p>
@@ -1625,6 +1654,66 @@ def render_finding(finding) -> None:
         """,
         unsafe_allow_html=True,
     )
+    render_source_expander(f"Source for {finding.id or finding.type}", finding.source_span, related_span=finding.related_source_span)
+
+
+def render_source_expander(label: str, source_span, evidence_links=None, related_span=None) -> None:
+    if not source_span and not related_span and not evidence_links:
+        return
+    with st.expander(label):
+        if source_span:
+            render_source_span_block("Primary source", source_span)
+        if related_span:
+            render_source_span_block("Related source", related_span)
+        if evidence_links:
+            st.markdown("**Linked evidence**")
+            for link in evidence_links:
+                render_source_span_block(f"{link.id} - {link.type.title()}", link.source_span)
+
+
+def render_source_span_block(title: str, span) -> None:
+    if not span:
+        st.markdown(f'<div class="muted-note">{html.escape(title)}: source unavailable</div>', unsafe_allow_html=True)
+        return
+    source_html = (
+        '<div class="source-snippet">'
+        f"<strong>{html.escape(title)}</strong>"
+        f'<div class="muted-note">{html.escape(source_reference(span))}</div>'
+        f"<div>{html.escape(span.text)}</div>"
+        "</div>"
+    )
+    st.markdown(source_html, unsafe_allow_html=True)
+
+
+def render_source_trace(report, limit: int = 12) -> None:
+    if not getattr(report, "source_spans", None):
+        return
+    visible_spans = report.source_spans[:limit]
+    cards = []
+    for span in visible_spans:
+        cards.append(
+            '<div class="audit-card">'
+            f"<strong>{html.escape(span.anchor_id)}</strong>"
+            f'<div class="muted-note">{html.escape(source_reference(span))}</div>'
+            f'<div class="claim-text">{html.escape(span.text)}</div>'
+            "</div>"
+        )
+    remaining = len(report.source_spans) - len(visible_spans)
+    remaining_note = (
+        f'<div class="muted-note">{remaining} more source anchors are included in JSON and Markdown exports.</div>'
+        if remaining > 0
+        else ""
+    )
+    trace_html = (
+        '<div class="wide-detail-card">'
+        '<div class="detail-title">Source Trace</div>'
+        '<div class="detail-subtitle">Exact sentence anchors used by the local rule audit. '
+        "Page numbers are shown when the loader can recover them.</div>"
+        "</div>"
+        f'<div class="audit-grid">{"".join(cards)}</div>'
+        f"{remaining_note}"
+    )
+    st.markdown(trace_html, unsafe_allow_html=True)
 
 
 def safe_stem(filename: str) -> str:
