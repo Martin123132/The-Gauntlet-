@@ -18,13 +18,23 @@ from gauntlet_core.refinement import (
     run_provider_refinement,
 )
 from gauntlet_core.sample_text import SAMPLE_PAPER
+from gauntlet_core.workspace import (
+    REVIEW_STATUSES,
+    delete_saved_run,
+    list_saved_runs,
+    load_saved_run,
+    save_analysis_run,
+    update_saved_run_notes,
+    workspace_runs_dir,
+)
 
 
 st.set_page_config(page_title="The Gauntlet", page_icon="G", layout="wide")
 
-VALID_PAGES = ("summary", "breakdown", "benchmarks", "claims", "contradictions", "evidence", "refinement")
+VALID_PAGES = ("summary", "workspace", "breakdown", "benchmarks", "claims", "contradictions", "evidence", "refinement")
 PAGE_LABELS = {
     "summary": "Summary",
+    "workspace": "Workspace",
     "breakdown": "Breakdown",
     "benchmarks": "Benchmarks",
     "claims": "Claims",
@@ -667,6 +677,62 @@ div[data-baseweb="tab-highlight"] {
   color: #273340;
   font-size: .86rem;
 }
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, .36fr) minmax(0, .64fr);
+  gap: .9rem;
+}
+.workspace-card {
+  border: 1px solid var(--gauntlet-border);
+  border-radius: 8px;
+  background: white;
+  padding: .95rem;
+  margin-bottom: .75rem;
+  box-shadow: 0 10px 24px rgba(22, 34, 44, .05);
+}
+.workspace-card.active {
+  border-color: #9fd3cf;
+  background: #fbfffe;
+}
+.workspace-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .5rem;
+  margin-top: .75rem;
+  color: var(--gauntlet-muted);
+  font-size: .84rem;
+}
+.workspace-meta strong {
+  display: block;
+  color: var(--gauntlet-ink);
+  font-size: 1rem;
+}
+.workspace-privacy {
+  border: 1px solid #c7e2df;
+  border-radius: 8px;
+  background: #effaf8;
+  color: #24423f;
+  padding: .85rem .95rem;
+  margin-bottom: .9rem;
+}
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: .8rem 0;
+  color: #273340;
+  font-size: .9rem;
+}
+.compare-table th,
+.compare-table td {
+  border-bottom: 1px solid var(--gauntlet-border);
+  padding: .55rem .4rem;
+  text-align: left;
+}
+.compare-table th {
+  color: var(--gauntlet-muted);
+  font-size: .78rem;
+  text-transform: uppercase;
+}
 .footer-status {
   display: grid;
   grid-template-columns: 300px 1fr 250px;
@@ -696,6 +762,7 @@ div[data-baseweb="tab-highlight"] {
   .breakdown-grid,
   .audit-grid,
   .benchmark-grid,
+  .workspace-grid,
   .detail-grid,
   .stat-strip,
   .footer-status {
@@ -718,6 +785,8 @@ def main() -> None:
 
     if page == "summary":
         render_summary_page(report)
+    elif page == "workspace":
+        render_workspace_page()
     elif page == "benchmarks":
         render_benchmarks_page()
     else:
@@ -761,13 +830,37 @@ def active_benchmark_result():
     return report_store().get("benchmark_result")
 
 
-def save_report(report, paper_text: str) -> None:
+def save_report(report, paper_text: str, run_kind: str = "analysis", benchmark_result=None) -> None:
     st.session_state["report"] = report
     st.session_state["paper_text"] = paper_text
     st.session_state.pop("refinement_report", None)
+    if benchmark_result is None:
+        st.session_state.pop("benchmark_result", None)
     report_store()["report"] = report
     report_store()["paper_text"] = paper_text
     report_store().pop("refinement_report", None)
+    if benchmark_result is None:
+        report_store().pop("benchmark_result", None)
+    try:
+        saved_run = save_analysis_run(report, run_kind=run_kind, benchmark_result=benchmark_result)
+    except OSError as exc:
+        st.warning(f"Analysis finished, but the local workspace could not save this run: {exc}")
+        return
+    st.session_state["workspace_run_id"] = saved_run.run_id
+    report_store()["workspace_run_id"] = saved_run.run_id
+
+
+def open_saved_run(saved_run) -> None:
+    st.session_state["report"] = saved_run.report
+    st.session_state["paper_text"] = ""
+    st.session_state["workspace_run_id"] = saved_run.run_id
+    st.session_state.pop("refinement_report", None)
+    st.session_state.pop("benchmark_result", None)
+    report_store()["report"] = saved_run.report
+    report_store()["paper_text"] = ""
+    report_store()["workspace_run_id"] = saved_run.run_id
+    report_store().pop("refinement_report", None)
+    report_store().pop("benchmark_result", None)
 
 
 def save_refinement(refinement_report) -> None:
@@ -839,9 +932,11 @@ def render_upload_panel() -> None:
         analyze_clicked = st.button("Analyze Paper", type="primary", use_container_width=True)
         if analyze_clicked:
             try:
+                run_kind = "analysis"
                 if use_sample:
                     paper_text = SAMPLE_PAPER
                     report = analyze_paper_text(paper_text, source_name="sample-paper.txt")
+                    run_kind = "sample"
                 elif upload is not None:
                     loaded_document = load_document_from_bytes(upload.name, upload.getvalue())
                     paper_text = loaded_document.text
@@ -855,11 +950,11 @@ def render_upload_panel() -> None:
             except Exception as exc:  # Streamlit should show clean user-facing errors.
                 st.error(str(exc))
                 return
-            save_report(report, paper_text)
+            save_report(report, paper_text, run_kind=run_kind)
             st.rerun()
 
         st.markdown(
-            '<p class="local-note">Analysis is 100% local. No data is sent to any AI provider.</p>',
+            '<p class="local-note">Analysis is 100% local. Completed reports auto-save under .gauntlet/workspace/runs/ without saving the uploaded file.</p>',
             unsafe_allow_html=True,
         )
 
@@ -1296,7 +1391,7 @@ def render_benchmarks_page() -> None:
         if st.button("Run Benchmark Sample", type="primary", use_container_width=True):
             comparison = run_benchmark_sample(sample.id)
             save_benchmark_result(comparison)
-            save_report(comparison.report, sample.paper_text)
+            save_report(comparison.report, sample.paper_text, run_kind="benchmark", benchmark_result=comparison)
             st.rerun()
 
     with right:
@@ -1392,6 +1487,210 @@ def render_benchmark_comparison_card(title: str, items) -> None:
         <div class="audit-card">
           <strong>{html.escape(title)}</strong>
           <ul class="comparison-list">{''.join(f'<li>{html.escape(item)}</li>' for item in items) or '<li>none</li>'}</ul>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_workspace_page() -> None:
+    summaries = list_saved_runs()
+    active_run_id = st.session_state.get("workspace_run_id") or report_store().get("workspace_run_id")
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="detail-title">Saved Workspace</div>
+          <div class="detail-subtitle">Local run history for reloadable reports, reviewer notes, exports, and side-by-side comparisons.</div>
+        </div>
+        <div class="workspace-privacy">
+          Reports auto-save to <strong>{html.escape(str(workspace_runs_dir()))}</strong>. The workspace stores report JSON, source anchors, snippets, and notes, but not the uploaded paper file or any API keys. If this folder is inside OneDrive or another synced directory, those local report files may sync through that service.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if not summaries:
+        st.markdown(
+            """
+            <div class="empty-detail">No saved runs yet. Analyze a paper, built-in sample, or benchmark case and it will appear here automatically.</div>
+            """,
+            unsafe_allow_html=True,
+        )
+        return
+
+    left, right = st.columns([0.36, 0.64], gap="medium")
+    with left:
+        render_saved_run_list(summaries, active_run_id)
+    with right:
+        selected_summary = render_saved_run_controls(summaries)
+        if selected_summary:
+            render_workspace_compare(summaries)
+
+
+def render_saved_run_list(summaries, active_run_id: str | None) -> None:
+    st.markdown('<div class="panel-title">Saved Runs</div>', unsafe_allow_html=True)
+    for summary in summaries[:12]:
+        active_class = " active" if summary.run_id == active_run_id else ""
+        notes_label = "Notes saved" if summary.notes.strip() else "No notes"
+        st.markdown(
+            f"""
+            <div class="workspace-card{active_class}">
+              <div class="small-label">{html.escape(summary.run_kind.title())} | {html.escape(format_review_status(summary.review_status))}</div>
+              <div class="panel-title">{html.escape(summary.source_name)}</div>
+              <div class="source-ref">{html.escape(summary.verdict)} | Confidence {summary.confidence:.0%}</div>
+              <div class="workspace-meta">
+                <div><strong>{summary.claim_count}</strong>claims</div>
+                <div><strong>{summary.finding_count}</strong>findings</div>
+                <div><strong>{summary.evidence_score:.2f}</strong>evidence</div>
+                <div><strong>{html.escape(summary.saved_at[:10])}</strong>{html.escape(notes_label)}</div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    if len(summaries) > 12:
+        st.markdown(
+            f'<div class="muted-note">{len(summaries) - 12} older runs are still available in the selector.</div>',
+            unsafe_allow_html=True,
+        )
+
+
+def render_saved_run_controls(summaries):
+    labels = {workspace_run_label(summary): summary.run_id for summary in summaries}
+    selected_label = st.selectbox("Saved run", list(labels.keys()), key="workspace_saved_run")
+    selected_run = load_saved_run(labels[selected_label])
+    summary = selected_run.summary
+    st.markdown(
+        f"""
+        <div class="workspace-card active">
+          <div class="small-label">{html.escape(summary.run_kind.title())}</div>
+          <div class="detail-title">{html.escape(summary.source_name)}</div>
+          <div class="verdict-meta">
+            <div>Verdict:<span>{html.escape(summary.verdict)}</span></div>
+            <div>Confidence:<span>{summary.confidence:.0%}</span></div>
+            <div>Claims:<span>{summary.claim_count}</span></div>
+            <div>Findings:<span>{summary.finding_count}</span></div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if selected_run.benchmark_metadata:
+        benchmark = selected_run.benchmark_metadata
+        st.markdown(
+            f"""
+            <div class="audit-card">
+              <strong>Benchmark metadata</strong>
+              <div class="muted-note">{html.escape(benchmark.get("title", ""))} | Expected {html.escape(benchmark.get("expected_verdict", ""))} | Match {float(benchmark.get("score", 0.0)):.0%}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    status_options = list(REVIEW_STATUSES)
+    current_status = selected_run.review_status if selected_run.review_status in status_options else status_options[0]
+    status = st.selectbox(
+        "Review status",
+        status_options,
+        index=status_options.index(current_status),
+        format_func=format_review_status,
+        key=f"workspace_status_{selected_run.run_id}",
+    )
+    notes = st.text_area(
+        "Reviewer notes",
+        value=selected_run.notes,
+        height=120,
+        key=f"workspace_notes_{selected_run.run_id}",
+    )
+
+    open_col, save_col, delete_col = st.columns(3)
+    if open_col.button("Open Saved Run", type="primary", use_container_width=True):
+        open_saved_run(selected_run)
+        st.rerun()
+    if save_col.button("Save Review Notes", use_container_width=True):
+        update_saved_run_notes(selected_run.run_id, notes, status)
+        st.success("Review notes saved.")
+        st.rerun()
+    if delete_col.button("Delete Saved Run", use_container_width=True):
+        delete_saved_run(selected_run.run_id)
+        if st.session_state.get("workspace_run_id") == selected_run.run_id:
+            st.session_state.pop("workspace_run_id", None)
+            report_store().pop("workspace_run_id", None)
+        st.rerun()
+
+    render_exports(selected_run.report)
+    return summary
+
+
+def render_workspace_compare(summaries) -> None:
+    st.markdown(
+        """
+        <div class="wide-detail-card">
+          <div class="detail-title">Compare Saved Runs</div>
+          <div class="detail-subtitle">Pick two saved reports to compare verdict, evidence, claim volume, and finding types.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if len(summaries) < 2:
+        st.markdown('<div class="empty-detail">Save at least two runs to enable comparison.</div>', unsafe_allow_html=True)
+        return
+    labels = {workspace_run_label(summary): summary.run_id for summary in summaries}
+    label_list = list(labels.keys())
+    compare_left, compare_right = st.columns(2)
+    left_label = compare_left.selectbox("Compare A", label_list, key="workspace_compare_a")
+    right_label = compare_right.selectbox(
+        "Compare B",
+        label_list,
+        index=1 if len(label_list) > 1 else 0,
+        key="workspace_compare_b",
+    )
+    if labels[left_label] == labels[right_label]:
+        st.markdown('<div class="muted-note">Choose two different saved runs to compare differences.</div>', unsafe_allow_html=True)
+        return
+    left_run = load_saved_run(labels[left_label])
+    right_run = load_saved_run(labels[right_label])
+    render_run_comparison(left_run, right_run)
+
+
+def render_run_comparison(left_run, right_run) -> None:
+    left = left_run.report
+    right = right_run.report
+    rows = [
+        ("Verdict", left.verdict, right.verdict),
+        ("Confidence", f"{left.confidence:.0%}", f"{right.confidence:.0%}"),
+        ("Evidence score", f"{left.evidence.score:.2f}", f"{right.evidence.score:.2f}"),
+        ("Claims", str(len(left.claims)), str(len(right.claims))),
+        ("Findings", str(len(left.findings)), str(len(right.findings))),
+        ("High severity", str(left.high_severity_findings), str(right.high_severity_findings)),
+    ]
+    table_rows = "".join(
+        f"<tr><td>{html.escape(label)}</td><td>{html.escape(left_value)}</td><td>{html.escape(right_value)}</td></tr>"
+        for label, left_value, right_value in rows
+    )
+    left_types = sorted({finding.type for finding in left.findings})
+    right_types = sorted({finding.type for finding in right.findings})
+    left_only = sorted(set(left_types) - set(right_types))
+    right_only = sorted(set(right_types) - set(left_types))
+    shared = sorted(set(left_types) & set(right_types))
+    st.markdown(
+        f"""
+        <table class="compare-table">
+          <thead><tr><th>Metric</th><th>{html.escape(left.source_name)}</th><th>{html.escape(right.source_name)}</th></tr></thead>
+          <tbody>{table_rows}</tbody>
+        </table>
+        <div class="benchmark-grid">
+          <div class="benchmark-card">
+            <div class="panel-title">Shared Finding Types</div>
+            <ul class="comparison-list">{''.join(f'<li>{html.escape(item)}</li>' for item in shared) or '<li>none</li>'}</ul>
+          </div>
+          <div class="benchmark-card">
+            <div class="panel-title">Finding Type Differences</div>
+            <ul class="comparison-list">
+              <li>{html.escape(left.source_name)} only: {html.escape(', '.join(left_only) or 'none')}</li>
+              <li>{html.escape(right.source_name)} only: {html.escape(', '.join(right_only) or 'none')}</li>
+            </ul>
+          </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1720,6 +2019,21 @@ def safe_stem(filename: str) -> str:
     stem = filename.rsplit(".", 1)[0]
     cleaned = "".join(character if character.isalnum() or character in "-_" else "-" for character in stem)
     return cleaned.strip("-") or "paper"
+
+
+def workspace_run_label(summary) -> str:
+    date = summary.saved_at[:19].replace("T", " ") if summary.saved_at else "unknown date"
+    return f"{summary.source_name} | {summary.verdict} | {date} | {summary.run_id[-8:]}"
+
+
+def format_review_status(status: str) -> str:
+    labels = {
+        "unreviewed": "Unreviewed",
+        "confirmed": "Confirmed",
+        "false-positive": "False Positive",
+        "needs-follow-up": "Needs Follow-Up",
+    }
+    return labels.get(status, status.replace("-", " ").title())
 
 
 def provider_index(provider: str) -> int:

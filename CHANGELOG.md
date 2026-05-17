@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added local saved workspace history for completed analyses.
+- Added saved-run reload, reviewer notes/status, deletion, export, and
+  two-report comparison controls.
+- Added report JSON restore support for workspace reloads.
 - Added source-map traceability for claims, findings, contradictions, and
   evidence snippets.
 - Added structured document loading with best-effort PDF page numbers and

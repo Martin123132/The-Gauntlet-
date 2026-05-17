@@ -116,6 +116,26 @@ class AnalysisReport:
     issue_brief: str = ""
     source_spans: list[SourceSpan] = field(default_factory=list)
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "AnalysisReport":
+        return cls(
+            source_name=data.get("source_name", "paper"),
+            verdict=data.get("verdict", "FAILS"),
+            confidence=float(data.get("confidence", 0.0)),
+            created_at=data.get("created_at", utc_now_iso()),
+            word_count=int(data.get("word_count", 0)),
+            sentence_count=int(data.get("sentence_count", 0)),
+            claims=[claim_result_from_dict(item) for item in data.get("claims", [])],
+            findings=[finding_from_dict(item) for item in data.get("findings", [])],
+            evidence=evidence_profile_from_dict(data.get("evidence", {})),
+            summary=data.get("summary", ""),
+            sections=list(data.get("sections", [])),
+            audit_events=[audit_event_from_dict(item) for item in data.get("audit_events", [])],
+            verdict_rubric=[rubric_score_from_dict(item) for item in data.get("verdict_rubric", [])],
+            issue_brief=data.get("issue_brief", ""),
+            source_spans=[source_span_from_dict(item) for item in data.get("source_spans", []) if item],
+        )
+
     @property
     def resolved_claims(self) -> int:
         return sum(1 for claim in self.claims if claim.status == "resolved")
@@ -276,6 +296,121 @@ class AnalysisReport:
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def source_span_from_dict(data: SourceSpan | dict[str, Any] | None) -> SourceSpan | None:
+    if data is None or isinstance(data, SourceSpan):
+        return data
+    return SourceSpan(
+        anchor_id=data.get("anchor_id", ""),
+        section=data.get("section", "Document"),
+        sentence_index=int(data.get("sentence_index", 0)),
+        page_number=data.get("page_number"),
+        char_start=int(data.get("char_start", -1)),
+        char_end=int(data.get("char_end", -1)),
+        text=data.get("text", ""),
+    )
+
+
+def evidence_link_from_dict(data: EvidenceLink | dict[str, Any]) -> EvidenceLink:
+    if isinstance(data, EvidenceLink):
+        return data
+    return EvidenceLink(
+        id=data.get("id", ""),
+        type=data.get("type", ""),
+        snippet=data.get("snippet", ""),
+        section=data.get("section", "Document"),
+        sentence_index=int(data.get("sentence_index", 0)),
+        confidence=float(data.get("confidence", 0.0)),
+        source_span=source_span_from_dict(data.get("source_span")),
+    )
+
+
+def rubric_score_from_dict(data: RubricScore | dict[str, Any]) -> RubricScore:
+    if isinstance(data, RubricScore):
+        return data
+    return RubricScore(
+        name=data.get("name", ""),
+        score=float(data.get("score", 0.0)),
+        weight=float(data.get("weight", 0.0)),
+        reason=data.get("reason", ""),
+    )
+
+
+def audit_event_from_dict(data: AuditEvent | dict[str, Any]) -> AuditEvent:
+    if isinstance(data, AuditEvent):
+        return data
+    raw_score = data.get("score")
+    return AuditEvent(
+        step=data.get("step", ""),
+        status=data.get("status", ""),
+        detail=data.get("detail", ""),
+        score=None if raw_score is None else float(raw_score),
+    )
+
+
+def finding_from_dict(data: Finding | dict[str, Any]) -> Finding:
+    if isinstance(data, Finding):
+        return data
+    return Finding(
+        type=data.get("type", ""),
+        severity=data.get("severity", "low"),
+        sentence=data.get("sentence", ""),
+        explanation=data.get("explanation", ""),
+        repair_suggestion=data.get("repair_suggestion", ""),
+        confidence=float(data.get("confidence", 0.0)),
+        related_sentence=data.get("related_sentence"),
+        id=data.get("id", ""),
+        section=data.get("section", "Document"),
+        trigger=data.get("trigger", ""),
+        claim_id=data.get("claim_id"),
+        source_span=source_span_from_dict(data.get("source_span")),
+        related_source_span=source_span_from_dict(data.get("related_source_span")),
+    )
+
+
+def claim_result_from_dict(data: ClaimResult | dict[str, Any]) -> ClaimResult:
+    if isinstance(data, ClaimResult):
+        return data
+    return ClaimResult(
+        claim=data.get("claim", ""),
+        status=data.get("status", "failed"),
+        quality=float(data.get("quality", 0.0)),
+        mechanism=data.get("mechanism", ""),
+        evidence_strength=float(data.get("evidence_strength", 0.0)),
+        gaps=list(data.get("gaps", [])),
+        id=data.get("id", ""),
+        section=data.get("section", "Document"),
+        sentence_index=int(data.get("sentence_index", 0)),
+        evidence_links=[evidence_link_from_dict(item) for item in data.get("evidence_links", [])],
+        rubric_scores=[rubric_score_from_dict(item) for item in data.get("rubric_scores", [])],
+        audit_events=[audit_event_from_dict(item) for item in data.get("audit_events", [])],
+        repair_suggestion=data.get("repair_suggestion", ""),
+        trigger_terms=list(data.get("trigger_terms", [])),
+        source_span=source_span_from_dict(data.get("source_span")),
+    )
+
+
+def evidence_profile_from_dict(data: EvidenceProfile | dict[str, Any]) -> EvidenceProfile:
+    if isinstance(data, EvidenceProfile):
+        return data
+    return EvidenceProfile(
+        score=float(data.get("score", 0.0)),
+        quantitative_evidence=int(data.get("quantitative_evidence", 0)),
+        mathematical_content=int(data.get("mathematical_content", 0)),
+        citations=int(data.get("citations", 0)),
+        methodology_terms=int(data.get("methodology_terms", 0)),
+        evidence_terms=int(data.get("evidence_terms", 0)),
+        linked_evidence=int(data.get("linked_evidence", 0)),
+        section_counts=dict(data.get("section_counts", {})),
+        evidence_links=[evidence_link_from_dict(item) for item in data.get("evidence_links", [])],
+    )
+
+
+def analysis_report_from_dict(data: AnalysisReport | dict[str, Any]) -> AnalysisReport:
+    if isinstance(data, AnalysisReport):
+        return data
+    return AnalysisReport.from_dict(data)
 
 
 def source_reference(span: SourceSpan | None) -> str:
