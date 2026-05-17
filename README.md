@@ -22,6 +22,13 @@ evidence linking, and verdict scoring.
 key. Optional AI refinement only runs when you paste a session key on the
 `Refinement` page.
 
+Completed analyses auto-save to `.gauntlet/workspace/runs/` inside the repo
+folder so you can reopen reports, compare runs, and add reviewer notes. The
+workspace stores report JSON, source anchors, snippets, and notes, but not the
+uploaded paper file or API keys. If your repo folder lives inside OneDrive,
+Dropbox, or another synced folder, those local report files may still sync
+through that service.
+
 ## Screenshots
 
 ![The Gauntlet summary dashboard](docs/images/gauntlet-summary.png)
@@ -104,6 +111,17 @@ Each benchmark shows the expected verdict, actual verdict, matched findings,
 missed findings, extra findings, matched claim gaps, and export buttons. The
 same benchmark corpus is used by the test suite so future rule changes cannot
 quietly break known behavior.
+
+## Local Saved Workspace
+
+The `Workspace` page keeps a private local history of completed analyses. Use it
+to reopen a previous report, export JSON or Markdown again, add reviewer notes,
+mark review status, delete a saved run, or compare two saved reports side by
+side.
+
+Saved workspace files live under `.gauntlet/workspace/runs/` and are ignored by
+Git. The app saves the deterministic report and source snippets needed for
+auditability, but it does not save the original uploaded document.
 
 ## Optional Refinement Chamber
 

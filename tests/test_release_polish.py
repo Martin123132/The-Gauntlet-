@@ -63,3 +63,9 @@ def test_github_actions_runs_non_ai_test_suite():
     assert "requirements-dev.txt" in workflow
     assert "python -m pytest" in workflow
     assert "requirements-ai.txt" not in workflow
+
+
+def test_local_workspace_data_is_gitignored():
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+
+    assert ".gauntlet/" in gitignore

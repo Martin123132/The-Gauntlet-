@@ -3,6 +3,7 @@ __pycache__/
 .pytest_cache/
 *.py[cod]
 .streamlit/
+.gauntlet/
 artifacts/
 streamlit*.log
 ui-*.png
