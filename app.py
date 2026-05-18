@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+from urllib.parse import quote
 
 import streamlit as st
 
@@ -31,10 +32,21 @@ from gauntlet_core.workspace import (
 
 st.set_page_config(page_title="The Gauntlet", page_icon="G", layout="wide")
 
-VALID_PAGES = ("summary", "workspace", "breakdown", "benchmarks", "claims", "contradictions", "evidence", "refinement")
+VALID_PAGES = (
+    "summary",
+    "workspace",
+    "source",
+    "breakdown",
+    "benchmarks",
+    "claims",
+    "contradictions",
+    "evidence",
+    "refinement",
+)
 PAGE_LABELS = {
     "summary": "Summary",
     "workspace": "Workspace",
+    "source": "Source",
     "breakdown": "Breakdown",
     "benchmarks": "Benchmarks",
     "claims": "Claims",
@@ -604,6 +616,49 @@ div[data-baseweb="tab-highlight"] {
   padding: .6rem .75rem;
   margin: .45rem 0;
 }
+.source-jump {
+  display: inline-block;
+  border: 1px solid #c7e2df;
+  border-radius: 6px;
+  background: #effaf8;
+  color: var(--gauntlet-teal) !important;
+  font-size: .76rem;
+  font-weight: 850;
+  padding: .22rem .48rem;
+  margin-top: .45rem;
+  text-decoration: none !important;
+}
+.source-viewer-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, .32fr) minmax(0, .68fr);
+  gap: .9rem;
+}
+.source-lens {
+  border: 1px solid var(--gauntlet-border);
+  border-radius: 8px;
+  background: white;
+  padding: 1rem;
+  box-shadow: var(--gauntlet-shadow);
+}
+.source-context-line {
+  border-left: 3px solid var(--gauntlet-border);
+  background: #fbfcfd;
+  color: #394653;
+  padding: .75rem .85rem;
+  margin: .55rem 0;
+  line-height: 1.55;
+}
+.source-context-line.active {
+  border-left-color: var(--gauntlet-teal);
+  background: #effaf8;
+  color: #132f2c;
+  font-weight: 720;
+}
+.source-anchor-list {
+  max-height: 520px;
+  overflow: auto;
+  padding-right: .25rem;
+}
 .rubric-row {
   display: grid;
   grid-template-columns: 150px 1fr 58px;
@@ -763,6 +818,7 @@ div[data-baseweb="tab-highlight"] {
   .audit-grid,
   .benchmark-grid,
   .workspace-grid,
+  .source-viewer-grid,
   .detail-grid,
   .stat-strip,
   .footer-status {
@@ -1036,6 +1092,8 @@ def render_detail_page(page: str, report) -> None:
 
     if page == "breakdown":
         render_breakdown_page(report)
+    elif page == "source":
+        render_source_viewer_page(report)
     elif page == "claims":
         render_claims_page(report)
     elif page == "contradictions":
@@ -1122,6 +1180,7 @@ def render_curtain_up(report) -> None:
               <strong>{html.escape(link.id)} - {html.escape(link.type.title())}</strong>
               <div class="muted-note">{html.escape(link.section)} | Sentence {link.sentence_index} | Confidence {link.confidence:.0%}</div>
               <div class="source-ref">{html.escape(source_reference(link.source_span))}</div>
+              {source_view_link(link.source_span)}
               <div class="claim-text">{html.escape(link.snippet)}</div>
             </div>
             """
@@ -1192,6 +1251,7 @@ def render_claim_card(index: int, claim) -> None:
           </div>
           <div class="claim-text">{html.escape(claim.claim)}</div>
           <div class="source-ref">{html.escape(source_reference(claim.source_span))}</div>
+          {source_view_link(claim.source_span)}
           <div class="claim-meta">Quality: {claim.quality:.2f} | Evidence: {claim.evidence_strength:.2f} | Mechanism: {html.escape(claim.mechanism)} | Gaps: {html.escape(gaps)} | Links: {html.escape(evidence_links)}</div>
           <div class="claim-meta"><strong>Repair:</strong> {html.escape(claim.repair_suggestion)}</div>
           <ul class="mini-list">{rubric}</ul>
@@ -1261,6 +1321,7 @@ def render_evidence_page(report, compact: bool = False) -> None:
                   <strong>{html.escape(link.id)} - {html.escape(link.type.title())}</strong>
                   <div class="muted-note">{html.escape(link.section)} | Sentence {link.sentence_index} | Confidence {link.confidence:.0%}</div>
                   <div class="source-ref">{html.escape(source_reference(link.source_span))}</div>
+                  {source_view_link(link.source_span)}
                   <div class="claim-text">{html.escape(link.snippet)}</div>
                 </div>
                 """,
@@ -1490,6 +1551,162 @@ def render_benchmark_comparison_card(title: str, items) -> None:
         </div>
         """,
         unsafe_allow_html=True,
+    )
+
+
+def render_source_viewer_page(report) -> None:
+    source_spans = list(getattr(report, "source_spans", []) or [])
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="detail-title">Source Viewer</div>
+          <div class="detail-subtitle">Source: {html.escape(report.source_name)}. Jump from any claim, finding, evidence snippet, or trace anchor to the exact sentence used by the audit.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if not source_spans:
+        st.markdown(
+            '<div class="empty-detail">This report does not contain source anchors. Run a fresh analysis to rebuild the source trace.</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    anchors = {span.anchor_id: span for span in source_spans}
+    requested_anchor = current_source_anchor()
+    selected_anchor = requested_anchor if requested_anchor in anchors else source_spans[0].anchor_id
+    labels = [source_anchor_label(span) for span in source_spans]
+    label_to_anchor = {source_anchor_label(span): span.anchor_id for span in source_spans}
+    selected_label = source_anchor_label(anchors[selected_anchor])
+    selected_index = labels.index(selected_label) if selected_label in labels else 0
+
+    left, right = st.columns([0.32, 0.68], gap="medium")
+    with left:
+        st.markdown('<div class="panel-title">Source Navigator</div>', unsafe_allow_html=True)
+        selector_key = f"source_anchor_selector_{selected_anchor}"
+        selected_label = st.selectbox("Source anchor", labels, index=selected_index, key=selector_key)
+        if selected_label not in label_to_anchor:
+            selected_label = labels[0]
+        selected_span = anchors[label_to_anchor[selected_label]]
+        render_source_anchor_list(source_spans, selected_span.anchor_id)
+    with right:
+        render_source_lens(report, selected_span)
+
+
+def render_source_anchor_list(source_spans, selected_anchor: str, limit: int = 80) -> None:
+    visible_spans = source_spans[:limit]
+    cards = []
+    for span in visible_spans:
+        active_class = " active" if span.anchor_id == selected_anchor else ""
+        cards.append(
+            f'<div class="workspace-card{active_class}">'
+            f'<div class="small-label">{html.escape(span.anchor_id)}</div>'
+            f'<div class="muted-note">{html.escape(source_reference(span))}</div>'
+            f'{source_view_link(span, label="Open")}'
+            f'<div class="claim-text">{html.escape(truncate_text(span.text, 160))}</div>'
+            "</div>"
+        )
+    remaining = len(source_spans) - len(visible_spans)
+    remaining_note = (
+        f'<div class="muted-note">{remaining} more anchors are included in exports.</div>' if remaining > 0 else ""
+    )
+    st.markdown(
+        f'<div class="source-anchor-list">{"".join(cards)}</div>{remaining_note}',
+        unsafe_allow_html=True,
+    )
+
+
+def render_source_lens(report, selected_span) -> None:
+    st.markdown(
+        f"""
+        <div class="source-lens">
+          <div class="small-label">Selected Anchor</div>
+          <div class="detail-title">{html.escape(selected_span.anchor_id)}</div>
+          <div class="verdict-meta">
+            <div>Page:<span>{html.escape(str(selected_span.page_number) if selected_span.page_number is not None else "n/a")}</span></div>
+            <div>Section:<span>{html.escape(selected_span.section or "Document")}</span></div>
+            <div>Sentence:<span>{selected_span.sentence_index}</span></div>
+            <div>Chars:<span>{selected_span.char_start}-{selected_span.char_end}</span></div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    render_source_context(report, selected_span)
+    render_related_audit_items(report, selected_span)
+
+
+def render_source_context(report, selected_span) -> None:
+    source_spans = list(getattr(report, "source_spans", []) or [])
+    selected_index = next(
+        (index for index, span in enumerate(source_spans) if span.anchor_id == selected_span.anchor_id),
+        0,
+    )
+    context_spans = source_spans[max(0, selected_index - 2) : min(len(source_spans), selected_index + 3)]
+    lines = []
+    for span in context_spans:
+        active_class = " active" if span.anchor_id == selected_span.anchor_id else ""
+        title = "Highlighted source sentence" if active_class else "Nearby source sentence"
+        lines.append(
+            f'<div class="source-context-line{active_class}">'
+            f"<strong>{html.escape(title)} | {html.escape(span.anchor_id)}</strong>"
+            f'<div class="muted-note">{html.escape(source_reference(span))}</div>'
+            f"<div>{html.escape(span.text)}</div>"
+            "</div>"
+        )
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="detail-title">Highlighted Source</div>
+          <div class="detail-subtitle">The selected sentence is shown with nearby extracted sentences for context.</div>
+        </div>
+        {''.join(lines)}
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_related_audit_items(report, selected_span) -> None:
+    related_cards = []
+    anchor_id = selected_span.anchor_id
+    for claim in report.claims:
+        if same_anchor(claim.source_span, anchor_id):
+            related_cards.append(
+                audit_relation_card("Claim", claim.id or "Claim", claim.status, claim.claim)
+            )
+    for finding in report.findings:
+        if same_anchor(finding.source_span, anchor_id):
+            related_cards.append(
+                audit_relation_card("Finding", finding.id or finding.type, finding.severity, finding.sentence)
+            )
+        if same_anchor(finding.related_source_span, anchor_id):
+            related_cards.append(
+                audit_relation_card("Related Finding Source", finding.id or finding.type, finding.type, finding.related_sentence or finding.sentence)
+            )
+    for link in report.evidence.evidence_links:
+        if same_anchor(link.source_span, anchor_id):
+            related_cards.append(
+                audit_relation_card("Evidence", link.id, link.type, link.snippet)
+            )
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="detail-title">Linked Audit Items</div>
+          <div class="detail-subtitle">Claims, findings, and evidence snippets attached to this exact source anchor.</div>
+        </div>
+        <div class="audit-grid">{''.join(related_cards) or '<div class="empty-detail">No claim, finding, or evidence item points directly to this anchor.</div>'}</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def audit_relation_card(kind: str, title: str, meta: str, body: str) -> str:
+    return (
+        '<div class="audit-card">'
+        f"<strong>{html.escape(kind)}: {html.escape(title)}</strong>"
+        f'<div class="muted-note">{html.escape(meta)}</div>'
+        f'<div class="claim-text">{html.escape(truncate_text(body, 260))}</div>'
+        "</div>"
     )
 
 
@@ -1944,6 +2161,7 @@ def render_finding(finding) -> None:
           <div class="finding-body">
             <p>{html.escape(finding.sentence)}</p>
             <div class="source-ref">{html.escape(source_reference(finding.source_span))}</div>
+            {source_view_link(finding.source_span)}
             {related}
             <p><strong>Why it matters:</strong> {html.escape(finding.explanation)}</p>
             <p><strong>Repair:</strong> {html.escape(finding.repair_suggestion)}</p>
@@ -1978,6 +2196,7 @@ def render_source_span_block(title: str, span) -> None:
         '<div class="source-snippet">'
         f"<strong>{html.escape(title)}</strong>"
         f'<div class="muted-note">{html.escape(source_reference(span))}</div>'
+        f"{source_view_link(span)}"
         f"<div>{html.escape(span.text)}</div>"
         "</div>"
     )
@@ -1994,6 +2213,7 @@ def render_source_trace(report, limit: int = 12) -> None:
             '<div class="audit-card">'
             f"<strong>{html.escape(span.anchor_id)}</strong>"
             f'<div class="muted-note">{html.escape(source_reference(span))}</div>'
+            f"{source_view_link(span)}"
             f'<div class="claim-text">{html.escape(span.text)}</div>'
             "</div>"
         )
@@ -2019,6 +2239,35 @@ def safe_stem(filename: str) -> str:
     stem = filename.rsplit(".", 1)[0]
     cleaned = "".join(character if character.isalnum() or character in "-_" else "-" for character in stem)
     return cleaned.strip("-") or "paper"
+
+
+def current_source_anchor() -> str:
+    anchor = st.query_params.get("anchor", "")
+    if isinstance(anchor, list):
+        anchor = anchor[0] if anchor else ""
+    return anchor
+
+
+def source_view_link(span, label: str = "View Source") -> str:
+    if not span:
+        return ""
+    anchor = quote(span.anchor_id, safe="")
+    return f'<a class="source-jump" href="?page=source&anchor={anchor}" target="_self">{html.escape(label)}</a>'
+
+
+def source_anchor_label(span) -> str:
+    return f"{span.anchor_id} | {source_reference(span)}"
+
+
+def same_anchor(span, anchor_id: str) -> bool:
+    return bool(span and span.anchor_id == anchor_id)
+
+
+def truncate_text(text: str, limit: int) -> str:
+    clean = " ".join((text or "").split())
+    if len(clean) <= limit:
+        return clean
+    return clean[: max(0, limit - 3)].rstrip() + "..."
 
 
 def workspace_run_label(summary) -> str:
