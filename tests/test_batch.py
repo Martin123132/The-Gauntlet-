@@ -7,6 +7,7 @@ from gauntlet_core import analyze_paper_text
 from gauntlet_core.batch import (
     BatchScanItem,
     batch_items_to_csv,
+    batch_items_to_html,
     batch_items_to_json,
     batch_items_to_markdown,
     build_demo_batch_items,
@@ -34,17 +35,23 @@ def test_batch_summary_exports_include_expected_fields(tmp_path):
     assert json.loads(json_text)[1]["status"] == "failed"
     assert "The Gauntlet Batch Scan" in markdown
     assert "bad.pdf" in markdown
+    html = batch_items_to_html(items)
+    assert "The Gauntlet Batch Bundle" in html
+    assert "reports/paper/paper-gauntlet-report.html" in html
+    assert "bad.pdf" in html
 
     bundle_path = tmp_path / "batch.zip"
     bundle_path.write_bytes(build_batch_report_bundle(items))
     with ZipFile(bundle_path) as archive:
         names = set(archive.namelist())
+        assert "index.html" in names
         assert "batch-summary.csv" in names
         assert "batch-summary.json" in names
         assert "batch-summary.md" in names
         assert "README.txt" in names
         assert "reports/paper/paper-gauntlet-report.html" in names
         assert "reports/paper/paper-reviewer-action-plan.md" in names
+        assert "index.html" in archive.read("README.txt").decode("utf-8")
 
 
 def test_batch_filter_and_sort_helpers():

@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added an offline `index.html` dashboard to batch ZIP bundles.
+
+## v0.7.0 - Demo Batch Mode
+
+This release adds a ready-made demo path for Batch Scan.
+
+### Added
+
 - Added Demo Batch Mode so users can load the synthetic benchmark corpus into
   the Batch page without uploading files.
 
