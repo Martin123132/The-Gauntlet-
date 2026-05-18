@@ -169,6 +169,17 @@ def test_streamlit_batch_page_renders_controls():
     assert any("Filter & Sort" in item.value for item in app.markdown)
 
 
+def test_streamlit_share_demo_page_renders_share_kit():
+    app = AppTest.from_file("app.py")
+    app.query_params["page"] = "share"
+    app.run(timeout=20)
+
+    assert not app.exception
+    assert any("Share Demo Kit" in item.value for item in app.markdown)
+    assert any("X Post Draft" in item.value for item in app.markdown)
+    assert any("synthetic benchmark papers only" in item.value for item in app.markdown)
+
+
 def test_streamlit_workspace_page_lists_opens_compares_and_deletes(tmp_path, monkeypatch):
     monkeypatch.setenv("GAUNTLET_WORKSPACE_DIR", str(tmp_path / "runs"))
     app = AppTest.from_file("app.py")

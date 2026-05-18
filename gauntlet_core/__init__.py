@@ -17,6 +17,14 @@ from .document_loader import LoadedDocument, load_document_from_bytes, load_docu
 from .models import AnalysisReport, SourceSpan
 from .report_bundle import build_report_bundle
 from .refinement import ProviderSelection, RefinementReport, run_provider_refinement, run_refinement
+from .share import (
+    DemoShareSummary,
+    build_demo_share_pack,
+    build_demo_share_summary,
+    build_share_card_html,
+    build_share_card_svg,
+    build_x_post,
+)
 from .workspace import (
     SavedRun,
     SavedRunSummary,
@@ -32,6 +40,7 @@ __all__ = [
     "BatchScanItem",
     "BenchmarkComparison",
     "BenchmarkSample",
+    "DemoShareSummary",
     "LoadedDocument",
     "ProviderSelection",
     "RefinementReport",
@@ -49,6 +58,11 @@ __all__ = [
     "build_reviewer_action_plan",
     "build_batch_report_bundle",
     "build_report_bundle",
+    "build_demo_share_pack",
+    "build_demo_share_summary",
+    "build_share_card_html",
+    "build_share_card_svg",
+    "build_x_post",
     "delete_saved_run",
     "filter_batch_items",
     "list_benchmark_samples",

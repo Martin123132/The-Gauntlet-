@@ -4,6 +4,15 @@
 
 ### Added
 
+- Added a Share Demo Kit for X-ready post drafts, social cards, demo summaries,
+  and a downloadable synthetic demo bundle.
+
+## v0.8.0 - Batch Bundle HTML Index
+
+This release makes exported batch ZIP bundles easier to open and share offline.
+
+### Added
+
 - Added an offline `index.html` dashboard to batch ZIP bundles.
 
 ## v0.7.0 - Demo Batch Mode

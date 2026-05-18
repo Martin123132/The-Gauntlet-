@@ -30,6 +30,13 @@ from gauntlet_core.refinement import (
     run_provider_refinement,
 )
 from gauntlet_core.sample_text import SAMPLE_PAPER
+from gauntlet_core.share import (
+    build_demo_share_pack,
+    build_demo_share_summary,
+    build_share_card_html,
+    build_share_card_svg,
+    build_x_post,
+)
 from gauntlet_core.workspace import (
     REVIEW_STATUSES,
     delete_saved_run,
@@ -47,6 +54,7 @@ VALID_PAGES = (
     "summary",
     "workspace",
     "batch",
+    "share",
     "action",
     "source",
     "breakdown",
@@ -60,6 +68,7 @@ PAGE_LABELS = {
     "summary": "Summary",
     "workspace": "Workspace",
     "batch": "Batch",
+    "share": "Share Demo",
     "action": "Action Plan",
     "source": "Source",
     "breakdown": "Breakdown",
@@ -861,6 +870,8 @@ def main() -> None:
         render_workspace_page()
     elif page == "batch":
         render_batch_page()
+    elif page == "share":
+        render_share_demo_page()
     elif page == "benchmarks":
         render_benchmarks_page()
     else:
@@ -1742,6 +1753,85 @@ def batch_row_for_display(item: BatchScanItem) -> dict[str, str | int]:
         "Findings": item.finding_count if item.status == "analyzed" else 0,
         "Top Risks": "; ".join(item.top_findings) or item.error or "-",
     }
+
+
+def render_share_demo_page() -> None:
+    summary = build_demo_share_summary()
+    x_post = build_x_post()
+    st.markdown(
+        """
+        <div class="wide-detail-card">
+          <div class="detail-title">Share Demo Kit</div>
+          <div class="detail-subtitle">Generate a public demo pack for X: post copy, screenshot-ready cards, demo batch summaries, and the full offline batch bundle.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"""
+        <div class="stat-strip">
+          <div class="stat-tile"><div class="stat-title">Demo Papers</div><div class="stat-number">{summary.paper_count}</div><div class="stat-note">synthetic benchmark cases</div></div>
+          <div class="stat-tile"><div class="stat-title">Analyzed</div><div class="stat-number">{summary.analyzed_count}</div><div class="stat-note">local deterministic reports</div></div>
+          <div class="stat-tile"><div class="stat-title">High Risk</div><div class="stat-number">{summary.high_risk_count}</div><div class="stat-note">fails, paradoxes, or severe findings</div></div>
+          <div class="stat-tile"><div class="stat-title">Avg Evidence</div><div class="stat-number">{summary.avg_evidence:.2f}</div><div class="stat-note">demo batch evidence score</div></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    left, right = st.columns([0.48, 0.52], gap="medium")
+    with left:
+        with st.container(border=True):
+            st.markdown('<div class="panel-title">X Post Draft</div>', unsafe_allow_html=True)
+            st.code(x_post, language="text")
+            st.download_button(
+                "Download X Post",
+                data=x_post,
+                file_name="gauntlet-x-post.txt",
+                mime="text/plain",
+                use_container_width=True,
+            )
+        st.download_button(
+            "Download Demo Share Pack",
+            data=build_demo_share_pack(),
+            file_name="gauntlet-demo-share-pack.zip",
+            mime="application/zip",
+            type="primary",
+            use_container_width=True,
+        )
+        st.markdown(
+            '<p class="local-note">The share pack uses synthetic benchmark papers only. It does not include private uploaded documents, API keys, or model output.</p>',
+            unsafe_allow_html=True,
+        )
+
+    with right:
+        findings = ", ".join(summary.top_findings) or "No top findings"
+        st.markdown(
+            f"""
+            <div class="wide-detail-card">
+              <div class="small-label">Card Preview</div>
+              <div class="detail-title">Local Non-AI Paper Checker</div>
+              <div class="detail-subtitle">Transparent verdicts for claims, evidence, contradictions, source anchors, benchmarks, and batch exports.</div>
+              <div class="muted-note">Demo catches: {html.escape(findings)}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        card_col, svg_col = st.columns(2)
+        card_col.download_button(
+            "Download Share Card HTML",
+            data=build_share_card_html(summary),
+            file_name="gauntlet-share-card.html",
+            mime="text/html",
+            use_container_width=True,
+        )
+        svg_col.download_button(
+            "Download Share Card SVG",
+            data=build_share_card_svg(summary),
+            file_name="gauntlet-share-card.svg",
+            mime="image/svg+xml",
+            use_container_width=True,
+        )
 
 
 def render_benchmarks_page() -> None:

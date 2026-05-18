@@ -154,13 +154,20 @@ The `Batch` page lets you upload several papers at once and produces a verdict
 table with confidence, evidence score, claim count, finding count, and top risk
 types. Export the table as CSV or download a batch ZIP bundle containing the
 summary, an offline `index.html` dashboard, and individual JSON, Markdown, and
-HTML reports for each analyzed paper. Use the filter and sort controls to focus on `FAILS`,
-`CREATES_NEW_PARADOXES`, high-risk papers, weak evidence, most findings, or low
-confidence before exporting.
+HTML reports for each analyzed paper. Use the filter and sort controls to focus
+on `FAILS`, `CREATES_NEW_PARADOXES`, high-risk papers, weak evidence, most
+findings, or low confidence before exporting.
 
 Use `Load Demo Batch` to run the built-in synthetic benchmark papers as a
 ready-made batch scan. It is useful for testing the table, filters, sorting, and
 exports before uploading private documents.
+
+## Share Demo Kit
+
+The `Share Demo` page generates a public demo ZIP for posting project updates.
+It includes an X post draft, a longer thread draft, screenshot-ready HTML/SVG
+cards, demo batch summaries, and the full offline demo batch bundle. The kit is
+generated from synthetic benchmark papers only.
 
 ## Reviewer Action Plan
 
