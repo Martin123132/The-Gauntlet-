@@ -1,6 +1,7 @@
 """Public API for the non-AI Gauntlet analyzer."""
 
 from .analysis import analyze_loaded_document, analyze_paper_text
+from .action_plan import ReviewerAction, action_plan_to_markdown, build_reviewer_action_plan
 from .batch import BatchScanItem, batch_items_to_csv, batch_items_to_json, build_batch_report_bundle
 from .benchmarks import BenchmarkComparison, BenchmarkSample, list_benchmark_samples, run_benchmark_sample
 from .document_loader import LoadedDocument, load_document_from_bytes, load_document_from_path
@@ -25,13 +26,16 @@ __all__ = [
     "LoadedDocument",
     "ProviderSelection",
     "RefinementReport",
+    "ReviewerAction",
     "SavedRun",
     "SavedRunSummary",
     "SourceSpan",
     "analyze_loaded_document",
     "analyze_paper_text",
+    "action_plan_to_markdown",
     "batch_items_to_csv",
     "batch_items_to_json",
+    "build_reviewer_action_plan",
     "build_batch_report_bundle",
     "build_report_bundle",
     "delete_saved_run",

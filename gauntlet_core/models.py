@@ -290,6 +290,28 @@ class AnalysisReport:
         else:
             lines.append("- No rubric details were recorded.")
 
+        from .action_plan import build_reviewer_action_plan
+
+        lines.extend(["", "## Reviewer Action Plan", ""])
+        actions = build_reviewer_action_plan(self)
+        if actions:
+            for action in actions:
+                lines.extend(
+                    [
+                        f"### {action.id} - {action.title}",
+                        "",
+                        f"- Priority: {action.priority.upper()}",
+                        f"- Category: {action.category}",
+                        f"- Target: {action.target}",
+                        f"- Source: {source_reference(action.source_span)}",
+                        f"- Why it matters: {action.detail}",
+                        f"- Suggested fix: {action.suggested_fix}",
+                        "",
+                    ]
+                )
+        else:
+            lines.extend(["No reviewer actions were generated.", ""])
+
         lines.extend(
             [
                 "",

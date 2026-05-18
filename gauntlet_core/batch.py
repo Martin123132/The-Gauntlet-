@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from io import BytesIO, StringIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from .action_plan import action_plan_to_markdown
 from .models import AnalysisReport
 from .report_bundle import safe_report_stem
 
@@ -133,6 +134,7 @@ def build_batch_report_bundle(items: list[BatchScanItem]) -> bytes:
             bundle.writestr(f"reports/{stem}/{stem}-gauntlet-report.json", item.report.to_json())
             bundle.writestr(f"reports/{stem}/{stem}-gauntlet-report.md", item.report.to_markdown())
             bundle.writestr(f"reports/{stem}/{stem}-gauntlet-report.html", item.report.to_html())
+            bundle.writestr(f"reports/{stem}/{stem}-reviewer-action-plan.md", action_plan_to_markdown(item.report))
     return buffer.getvalue()
 
 
@@ -154,6 +156,7 @@ def batch_bundle_readme(items: list[BatchScanItem]) -> str:
             "- reports/<paper>/<paper>-gauntlet-report.json",
             "- reports/<paper>/<paper>-gauntlet-report.md",
             "- reports/<paper>/<paper>-gauntlet-report.html",
+            "- reports/<paper>/<paper>-reviewer-action-plan.md",
             "",
             "Privacy note: this bundle contains deterministic report metadata plus source snippets and anchors already present in each report. It does not include full uploaded paper files or API keys.",
             "",

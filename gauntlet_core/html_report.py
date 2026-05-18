@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from html import escape
 
+from .action_plan import build_reviewer_action_plan
 from .models import AnalysisReport, SourceSpan, source_reference
 
 
@@ -27,6 +28,7 @@ def analysis_report_to_html(report: AnalysisReport) -> str:
             render_evidence(report),
             render_source_highlights(source_spans),
             render_rubric(report),
+            render_action_plan(report),
             render_issue_brief(report),
             render_footer(),
             "</main>",
@@ -251,6 +253,37 @@ def render_issue_brief(report: AnalysisReport) -> str:
 """
 
 
+def render_action_plan(report: AnalysisReport) -> str:
+    actions = build_reviewer_action_plan(report)
+    if not actions:
+        content = '<p class="empty">No reviewer actions were generated.</p>'
+    else:
+        content = "".join(render_action_card(action) for action in actions)
+    return f"""
+<section class="panel">
+  <h2>Reviewer Action Plan</h2>
+  <p class="muted">Prioritized fixes generated from deterministic claim gaps, findings, evidence score, and source anchors.</p>
+  <div class="card-grid">{content}</div>
+</section>
+"""
+
+
+def render_action_card(action) -> str:
+    return f"""
+<article class="card action {escape(action.priority)}">
+  <div class="card-head">
+    <strong>{escape(action.id)} - {escape(action.title)}</strong>
+    <span class="pill {escape(action.priority)}">{escape(action.priority.title())}</span>
+  </div>
+  <p><strong>Target:</strong> {escape(action.target)}</p>
+  <p><strong>Why it matters:</strong> {escape(action.detail)}</p>
+  <p class="repair"><strong>Suggested fix:</strong> {escape(action.suggested_fix)}</p>
+  <p class="source-ref">{escape(source_reference(action.source_span))}</p>
+  {render_source_quote(action.source_span)}
+</article>
+"""
+
+
 def render_footer() -> str:
     return """
 <footer>
@@ -400,6 +433,7 @@ h2 { font-size: 22px; margin-bottom: 16px; }
 }
 .pill.partial, .pill.medium { background: #fff5df; color: var(--amber); }
 .pill.failed, .pill.high { background: #ffe8e6; color: var(--red); }
+.pill.low { background: #e6f6f3; color: var(--teal); }
 .source-ref {
   display: inline-block;
   color: var(--teal);
