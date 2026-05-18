@@ -4,6 +4,7 @@ __pycache__/
 *.py[cod]
 .streamlit/
 .gauntlet/
+gauntlet-reports/
 artifacts/
 streamlit*.log
 ui-*.png

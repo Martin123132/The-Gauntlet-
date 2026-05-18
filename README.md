@@ -54,8 +54,8 @@ through that service.
 The launcher creates a local `.venv`, installs the requirements, and opens the
 Streamlit app in your browser.
 
-You can also drag a paper onto `Analyze-Paper.bat` to write reports without
-opening the app.
+You can also drag a paper or folder onto `Analyze-Paper.bat` to write reports
+without opening the app.
 
 ## Manual Start
 
@@ -69,15 +69,16 @@ On macOS or Linux, use the equivalent activation path for your shell.
 
 ## Analyze Without Opening the UI
 
-For a quick one-file check, drag a `.pdf`, `.docx`, `.txt`, or `.md` paper onto
-`Analyze-Paper.bat`. It installs only the local non-AI requirements, runs the
-deterministic checker, and writes JSON, Markdown, HTML, and ZIP bundle reports
-to `gauntlet-reports/`.
+For a quick one-file or folder check, drag a `.pdf`, `.docx`, `.txt`, `.md`, or
+folder onto `Analyze-Paper.bat`. It installs only the local non-AI requirements,
+runs the deterministic checker, and writes JSON, Markdown, HTML, CSV, and ZIP
+bundle reports to `gauntlet-reports/`.
 
 The same path is available from the command line:
 
 ```bash
 .venv\Scripts\python -m gauntlet_core.cli path\to\paper.pdf --out gauntlet-reports
+.venv\Scripts\python -m gauntlet_core.cli path\to\papers --out gauntlet-reports
 ```
 
 ## What the Verdict Means
@@ -144,6 +145,14 @@ compare two saved reports side by side.
 Saved workspace files live under `.gauntlet/workspace/runs/` and are ignored by
 Git. The app saves the deterministic report and source snippets needed for
 auditability, but it does not save the original uploaded document.
+
+## Batch Scan
+
+The `Batch` page lets you upload several papers at once and produces a verdict
+table with confidence, evidence score, claim count, finding count, and top risk
+types. Export the table as CSV or download a batch ZIP bundle containing the
+summary plus individual JSON, Markdown, and HTML reports for each analyzed
+paper.
 
 ## Source Viewer
 

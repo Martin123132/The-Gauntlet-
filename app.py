@@ -6,6 +6,13 @@ from urllib.parse import quote
 import streamlit as st
 
 from gauntlet_core import analyze_loaded_document, analyze_paper_text
+from gauntlet_core.batch import (
+    BatchScanItem,
+    batch_items_to_csv,
+    build_batch_report_bundle,
+    failed_batch_item,
+    summarize_report,
+)
 from gauntlet_core.benchmarks import list_benchmark_samples, run_benchmark_sample
 from gauntlet_core.document_loader import SUPPORTED_EXTENSIONS, load_document_from_bytes
 from gauntlet_core.models import source_reference
@@ -35,6 +42,7 @@ st.set_page_config(page_title="The Gauntlet", page_icon="G", layout="wide")
 VALID_PAGES = (
     "summary",
     "workspace",
+    "batch",
     "source",
     "breakdown",
     "benchmarks",
@@ -46,6 +54,7 @@ VALID_PAGES = (
 PAGE_LABELS = {
     "summary": "Summary",
     "workspace": "Workspace",
+    "batch": "Batch",
     "source": "Source",
     "breakdown": "Breakdown",
     "benchmarks": "Benchmarks",
@@ -818,6 +827,7 @@ div[data-baseweb="tab-highlight"] {
   .audit-grid,
   .benchmark-grid,
   .workspace-grid,
+  .batch-grid,
   .source-viewer-grid,
   .detail-grid,
   .stat-strip,
@@ -843,6 +853,8 @@ def main() -> None:
         render_summary_page(report)
     elif page == "workspace":
         render_workspace_page()
+    elif page == "batch":
+        render_batch_page()
     elif page == "benchmarks":
         render_benchmarks_page()
     else:
@@ -886,6 +898,12 @@ def active_benchmark_result():
     return report_store().get("benchmark_result")
 
 
+def active_batch_items() -> list[BatchScanItem]:
+    if "batch_items" in st.session_state:
+        return st.session_state["batch_items"]
+    return report_store().get("batch_items", [])
+
+
 def save_report(report, paper_text: str, run_kind: str = "analysis", benchmark_result=None) -> None:
     st.session_state["report"] = report
     st.session_state["paper_text"] = paper_text
@@ -927,6 +945,11 @@ def save_refinement(refinement_report) -> None:
 def save_benchmark_result(benchmark_result) -> None:
     st.session_state["benchmark_result"] = benchmark_result
     report_store()["benchmark_result"] = benchmark_result
+
+
+def save_batch_items(items: list[BatchScanItem]) -> None:
+    st.session_state["batch_items"] = items
+    report_store()["batch_items"] = items
 
 
 def render_topbar(active_page: str) -> None:
@@ -1429,6 +1452,154 @@ def render_exports(report) -> None:
         mime="application/zip",
         use_container_width=True,
     )
+
+
+def render_batch_page() -> None:
+    st.markdown(
+        """
+        <div class="wide-detail-card">
+          <div class="detail-title">Batch Scan</div>
+          <div class="detail-subtitle">Upload several papers, run the local checker once, then export a CSV summary or a ZIP bundle with per-paper reports.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    left, right = st.columns([0.34, 0.66], gap="medium")
+    with left:
+        with st.container(border=True):
+            st.markdown('<div class="panel-title">Batch Input</div>', unsafe_allow_html=True)
+            uploads = st.file_uploader(
+                "Choose papers",
+                type=[extension.lstrip(".") for extension in sorted(SUPPORTED_EXTENSIONS)],
+                accept_multiple_files=True,
+                help="Select multiple PDF, DOCX, TXT, or MD papers.",
+            )
+            uploaded_count = len(uploads or [])
+            st.markdown(
+                f"""
+                <div class="document-card">
+                  <div class="small-label">Batch privacy</div>
+                  <div class="doc-row"><span>Selected</span><strong>{uploaded_count}</strong></div>
+                  <div class="doc-row"><span>Saved</span><strong>Reports only</strong></div>
+                  <div class="doc-row"><span>AI</span><strong>Not used</strong></div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            run_clicked = st.button(
+                "Run Batch Scan",
+                type="primary",
+                use_container_width=True,
+                disabled=not uploads,
+            )
+            if run_clicked:
+                run_batch_uploads(uploads)
+                st.rerun()
+            st.markdown(
+                '<p class="local-note">Batch scan runs on local deterministic rules. It saves report JSON/snippets to the workspace, not the uploaded paper files.</p>',
+                unsafe_allow_html=True,
+            )
+
+    with right:
+        items = active_batch_items()
+        if items:
+            render_batch_results(items)
+        else:
+            st.markdown(
+                """
+                <div class="empty-detail">Select two or more papers to create a verdict table with confidence, evidence score, claim count, finding count, and top risk types.</div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+def run_batch_uploads(uploads) -> None:
+    items: list[BatchScanItem] = []
+    progress = st.progress(0, text="Starting batch scan...")
+    for index, upload in enumerate(uploads, start=1):
+        progress.progress((index - 1) / max(1, len(uploads)), text=f"Analyzing {upload.name}...")
+        try:
+            loaded_document = load_document_from_bytes(upload.name, upload.getvalue())
+            if not loaded_document.text.strip():
+                raise ValueError("No readable text was found in that file.")
+            report = analyze_loaded_document(loaded_document)
+            try:
+                save_analysis_run(report, run_kind="batch")
+            except OSError as exc:
+                st.warning(f"{upload.name} analyzed, but the workspace could not save it: {exc}")
+            items.append(summarize_report(report))
+        except Exception as exc:
+            items.append(failed_batch_item(upload.name, str(exc)))
+    progress.progress(1.0, text="Batch scan complete.")
+    save_batch_items(items)
+
+
+def render_batch_results(items: list[BatchScanItem]) -> None:
+    analyzed = sum(1 for item in items if item.status == "analyzed")
+    failed = sum(1 for item in items if item.status == "failed")
+    high_risk = sum(1 for item in items if item.high_severity_findings > 0 or item.verdict == "CREATES_NEW_PARADOXES")
+    avg_evidence = (
+        sum(item.evidence_score for item in items if item.status == "analyzed") / analyzed if analyzed else 0
+    )
+    st.markdown(
+        f"""
+        <div class="stat-strip">
+          <div class="stat-tile"><div class="stat-title">Papers</div><div class="stat-number">{len(items)}</div><div class="stat-note">{analyzed} analyzed, {failed} failed</div></div>
+          <div class="stat-tile"><div class="stat-title">High Risk</div><div class="stat-number">{high_risk}</div><div class="stat-note">New paradoxes or high severity</div></div>
+          <div class="stat-tile"><div class="stat-title">Avg Evidence</div><div class="stat-number">{avg_evidence:.2f}</div><div class="stat-note">Analyzed papers only</div></div>
+          <div class="stat-tile"><div class="stat-title">Export</div><div class="stat-number">CSV</div><div class="stat-note">Plus ZIP bundle</div></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    rows = [batch_row_for_display(item) for item in items]
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+
+    csv_col, zip_col = st.columns(2)
+    csv_col.download_button(
+        "Export Batch CSV",
+        data=batch_items_to_csv(items),
+        file_name="gauntlet-batch-summary.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
+    zip_col.download_button(
+        "Export Batch Bundle",
+        data=build_batch_report_bundle(items),
+        file_name="gauntlet-batch-report-bundle.zip",
+        mime="application/zip",
+        use_container_width=True,
+    )
+
+    completed = [item for item in items if item.report]
+    if completed:
+        labels = {
+            f"{item.source_name} | {item.verdict} | {item.confidence:.0%}": index
+            for index, item in enumerate(completed)
+        }
+        selected_label = st.selectbox("Open batch report", list(labels.keys()))
+        if st.button("Open Selected Batch Report", use_container_width=True):
+            selected = completed[labels[selected_label]]
+            st.session_state["report"] = selected.report
+            st.session_state["paper_text"] = ""
+            report_store()["report"] = selected.report
+            report_store()["paper_text"] = ""
+            st.query_params["page"] = "breakdown"
+            st.rerun()
+
+
+def batch_row_for_display(item: BatchScanItem) -> dict[str, str | int]:
+    return {
+        "File": item.source_name,
+        "Status": item.status,
+        "Verdict": item.verdict or "-",
+        "Confidence": f"{item.confidence:.0%}" if item.status == "analyzed" else "-",
+        "Evidence": f"{item.evidence_score:.2f}" if item.status == "analyzed" else "-",
+        "Claims": item.claim_count if item.status == "analyzed" else 0,
+        "Findings": item.finding_count if item.status == "analyzed" else 0,
+        "Top Risks": "; ".join(item.top_findings) or item.error or "-",
+    }
 
 
 def render_benchmarks_page() -> None:

@@ -89,3 +89,4 @@ def test_local_workspace_data_is_gitignored():
     gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
 
     assert ".gauntlet/" in gitignore
+    assert "gauntlet-reports/" in gitignore
