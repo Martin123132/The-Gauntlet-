@@ -10,6 +10,7 @@ from gauntlet_core.action_plan import action_plan_to_markdown, build_reviewer_ac
 from gauntlet_core.batch import (
     BatchScanItem,
     batch_items_to_csv,
+    build_demo_batch_items,
     build_batch_report_bundle,
     failed_batch_item,
     filter_batch_items,
@@ -1575,8 +1576,15 @@ def render_batch_page() -> None:
             if run_clicked:
                 run_batch_uploads(uploads)
                 st.rerun()
+            if st.button(
+                "Load Demo Batch",
+                use_container_width=True,
+                help="Run the synthetic benchmark papers as a ready-made batch scan.",
+            ):
+                run_demo_batch()
+                st.rerun()
             st.markdown(
-                '<p class="local-note">Batch scan runs on local deterministic rules. It saves report JSON/snippets to the workspace, not the uploaded paper files.</p>',
+                '<p class="local-note">Batch scan runs on local deterministic rules. The demo batch uses synthetic benchmark papers. Workspace saves report JSON/snippets, not full paper files.</p>',
                 unsafe_allow_html=True,
             )
 
@@ -1587,7 +1595,7 @@ def render_batch_page() -> None:
         else:
             st.markdown(
                 """
-                <div class="empty-detail">Select two or more papers to create a verdict table with confidence, evidence score, claim count, finding count, and top risk types.</div>
+                <div class="empty-detail">Select two or more papers, or load the synthetic demo batch, to create a verdict table with confidence, evidence score, claim count, finding count, and top risk types.</div>
                 """,
                 unsafe_allow_html=True,
             )
@@ -1611,6 +1619,18 @@ def run_batch_uploads(uploads) -> None:
         except Exception as exc:
             items.append(failed_batch_item(upload.name, str(exc)))
     progress.progress(1.0, text="Batch scan complete.")
+    save_batch_items(items)
+
+
+def run_demo_batch() -> None:
+    items = build_demo_batch_items()
+    for item in items:
+        if not item.report:
+            continue
+        try:
+            save_analysis_run(item.report, run_kind="demo-batch")
+        except OSError as exc:
+            st.warning(f"{item.source_name} analyzed, but the workspace could not save it: {exc}")
     save_batch_items(items)
 
 

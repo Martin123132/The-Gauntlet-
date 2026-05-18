@@ -156,7 +156,17 @@ def test_streamlit_batch_page_renders_controls():
     assert not app.exception
     assert any("Batch Scan" in item.value for item in app.markdown)
     assert any("Run Batch Scan" == button.label for button in app.button)
+    assert any("Load Demo Batch" == button.label for button in app.button)
     assert app.file_uploader
+
+    demo_button = next(button for button in app.button if button.label == "Load Demo Batch")
+    demo_button.click()
+    app.run(timeout=30)
+
+    assert not app.exception
+    assert len(app.session_state["batch_items"]) >= 8
+    assert list_saved_runs()
+    assert any("Filter & Sort" in item.value for item in app.markdown)
 
 
 def test_streamlit_workspace_page_lists_opens_compares_and_deletes(tmp_path, monkeypatch):

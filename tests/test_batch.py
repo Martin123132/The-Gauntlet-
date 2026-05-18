@@ -9,6 +9,7 @@ from gauntlet_core.batch import (
     batch_items_to_csv,
     batch_items_to_json,
     batch_items_to_markdown,
+    build_demo_batch_items,
     build_batch_report_bundle,
     failed_batch_item,
     filter_batch_items,
@@ -70,3 +71,13 @@ def test_batch_filter_and_sort_helpers():
         "weak.txt",
         "resolved.txt",
     ]
+
+
+def test_demo_batch_items_use_synthetic_benchmark_reports():
+    items = build_demo_batch_items()
+
+    assert len(items) >= 8
+    assert all(item.status == "analyzed" for item in items)
+    assert all(item.report for item in items)
+    assert "benchmark-weak-evidence.txt" in {item.source_name for item in items}
+    assert {"RESOLVES", "PARTIAL", "FAILS", "CREATES_NEW_PARADOXES"}.issubset({item.verdict for item in items})

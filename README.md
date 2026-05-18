@@ -158,6 +158,10 @@ paper. Use the filter and sort controls to focus on `FAILS`,
 `CREATES_NEW_PARADOXES`, high-risk papers, weak evidence, most findings, or low
 confidence before exporting.
 
+Use `Load Demo Batch` to run the built-in synthetic benchmark papers as a
+ready-made batch scan. It is useful for testing the table, filters, sorting, and
+exports before uploading private documents.
+
 ## Reviewer Action Plan
 
 The `Action Plan` page turns the deterministic audit into a fix-first checklist.

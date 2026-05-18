@@ -65,6 +65,12 @@ def summarize_report(report: AnalysisReport) -> BatchScanItem:
     )
 
 
+def build_demo_batch_items() -> list[BatchScanItem]:
+    from .benchmarks import run_all_benchmarks
+
+    return [summarize_report(comparison.report) for comparison in run_all_benchmarks()]
+
+
 def failed_batch_item(source_name: str, error: str) -> BatchScanItem:
     return BatchScanItem(source_name=source_name, status="failed", error=error)
 
