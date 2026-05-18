@@ -154,7 +154,9 @@ The `Batch` page lets you upload several papers at once and produces a verdict
 table with confidence, evidence score, claim count, finding count, and top risk
 types. Export the table as CSV or download a batch ZIP bundle containing the
 summary plus individual JSON, Markdown, and HTML reports for each analyzed
-paper.
+paper. Use the filter and sort controls to focus on `FAILS`,
+`CREATES_NEW_PARADOXES`, high-risk papers, weak evidence, most findings, or low
+confidence before exporting.
 
 ## Reviewer Action Plan
 

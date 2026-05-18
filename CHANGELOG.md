@@ -4,6 +4,16 @@
 
 ### Added
 
+- Added Batch Scan sorting and filters for verdict, high-risk papers, weak
+  evidence, confidence, finding count, and filename.
+
+## v0.5.0 - Reviewer Action Plan
+
+This release adds prioritized repair checklists to help reviewers move from
+finding problems to fixing them.
+
+### Added
+
 - Added Reviewer Action Plan for prioritized repair steps in the app,
   Markdown exports, HTML reports, and report bundles.
 

@@ -3,6 +3,7 @@ import pytest
 
 import app as gauntlet_app
 from gauntlet_core import analyze_paper_text
+from gauntlet_core.batch import BatchScanItem
 from gauntlet_core.workspace import list_saved_runs, save_analysis_run
 
 
@@ -218,3 +219,33 @@ def test_render_exports_registers_html_download(monkeypatch):
     assert calls[2][1]["file_name"].endswith("-gauntlet-report.html")
     assert calls[-1][1]["mime"] == "application/zip"
     assert calls[-1][1]["file_name"].endswith("-gauntlet-report-bundle.zip")
+
+
+def test_batch_filter_controls_apply_selected_view(monkeypatch):
+    items = [
+        BatchScanItem("resolved.txt", "analyzed", verdict="RESOLVES", confidence=0.9, evidence_score=0.8),
+        BatchScanItem("failed.txt", "analyzed", verdict="FAILS", confidence=0.3, evidence_score=0.1, finding_count=3),
+    ]
+
+    class FakeColumn:
+        def multiselect(self, label, options, default=None):
+            return ["FAILS"]
+
+        def checkbox(self, label):
+            return False
+
+        def selectbox(self, label, options):
+            return "Most findings"
+
+    class FakeStreamlit:
+        def markdown(self, *args, **kwargs):
+            return None
+
+        def columns(self, spec):
+            return [FakeColumn(), FakeColumn(), FakeColumn()]
+
+    monkeypatch.setattr(gauntlet_app, "st", FakeStreamlit())
+
+    visible = gauntlet_app.render_batch_filter_controls(items)
+
+    assert [item.source_name for item in visible] == ["failed.txt"]
