@@ -1,6 +1,7 @@
 """Public API for the non-AI Gauntlet analyzer."""
 
 from .analysis import analyze_loaded_document, analyze_paper_text
+from .batch import BatchScanItem, batch_items_to_csv, batch_items_to_json, build_batch_report_bundle
 from .benchmarks import BenchmarkComparison, BenchmarkSample, list_benchmark_samples, run_benchmark_sample
 from .document_loader import LoadedDocument, load_document_from_bytes, load_document_from_path
 from .models import AnalysisReport, SourceSpan
@@ -18,6 +19,7 @@ from .workspace import (
 
 __all__ = [
     "AnalysisReport",
+    "BatchScanItem",
     "BenchmarkComparison",
     "BenchmarkSample",
     "LoadedDocument",
@@ -28,6 +30,9 @@ __all__ = [
     "SourceSpan",
     "analyze_loaded_document",
     "analyze_paper_text",
+    "batch_items_to_csv",
+    "batch_items_to_json",
+    "build_batch_report_bundle",
     "build_report_bundle",
     "delete_saved_run",
     "list_benchmark_samples",

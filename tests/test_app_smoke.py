@@ -133,6 +133,17 @@ def test_streamlit_benchmarks_page_runs_sample_and_compares_results():
     assert "The Gauntlet Benchmark" in app.session_state["benchmark_result"].to_markdown()
 
 
+def test_streamlit_batch_page_renders_controls():
+    app = AppTest.from_file("app.py")
+    app.query_params["page"] = "batch"
+    app.run(timeout=20)
+
+    assert not app.exception
+    assert any("Batch Scan" in item.value for item in app.markdown)
+    assert any("Run Batch Scan" == button.label for button in app.button)
+    assert app.file_uploader
+
+
 def test_streamlit_workspace_page_lists_opens_compares_and_deletes(tmp_path, monkeypatch):
     monkeypatch.setenv("GAUNTLET_WORKSPACE_DIR", str(tmp_path / "runs"))
     app = AppTest.from_file("app.py")

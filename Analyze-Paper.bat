@@ -8,13 +8,13 @@ echo ======================================
 echo   The Gauntlet - Analyze One Paper
 echo ======================================
 echo.
-echo Drag a .pdf, .docx, .txt, or .md file onto this batch file,
-echo or paste a paper path when prompted.
+echo Drag a .pdf, .docx, .txt, .md file, or a folder onto this batch file,
+echo or paste a paper/folder path when prompted.
 echo.
 
 set "TARGET=%~1"
 if "%TARGET%"=="" (
-    set /p "TARGET=Paper path: "
+    set /p "TARGET=Paper or folder path: "
 )
 set "TARGET=%TARGET:"=%"
 

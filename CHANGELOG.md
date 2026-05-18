@@ -2,7 +2,11 @@
 
 ## Unreleased
 
-No unreleased changes yet.
+### Added
+
+- Added Batch Scan for multi-paper upload, verdict tables, CSV export, and
+  batch report ZIP bundles.
+- Added CLI folder scanning for supported paper files.
 
 ## v0.3.0 - Report Sharing and Headless Analysis
 
