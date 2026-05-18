@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-No unreleased changes yet.
+### Added
+
+- Added Demo Batch Mode so users can load the synthetic benchmark corpus into
+  the Batch page without uploading files.
 
 ## v0.6.0 - Batch Sorting and Filters
 
