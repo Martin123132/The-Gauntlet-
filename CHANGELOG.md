@@ -6,6 +6,8 @@
 
 - Added self-contained HTML report exports for current analyses and saved
   workspace runs.
+- Added one-click ZIP report bundles containing JSON, Markdown, HTML, and a
+  short privacy/readme note.
 
 ## v0.2.0 - Source Viewer and Saved Workspace
 

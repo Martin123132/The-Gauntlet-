@@ -188,6 +188,8 @@ def test_render_exports_registers_html_download(monkeypatch):
     gauntlet_app.render_exports(report)
 
     labels = [label for label, _ in calls]
-    assert labels == ["Export JSON", "Export Markdown", "Export HTML Report"]
-    assert calls[-1][1]["mime"] == "text/html"
-    assert calls[-1][1]["file_name"].endswith("-gauntlet-report.html")
+    assert labels == ["Export JSON", "Export Markdown", "Export HTML Report", "Export Report Bundle"]
+    assert calls[2][1]["mime"] == "text/html"
+    assert calls[2][1]["file_name"].endswith("-gauntlet-report.html")
+    assert calls[-1][1]["mime"] == "application/zip"
+    assert calls[-1][1]["file_name"].endswith("-gauntlet-report-bundle.zip")

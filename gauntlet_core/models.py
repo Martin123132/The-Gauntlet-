@@ -163,6 +163,11 @@ class AnalysisReport:
 
         return analysis_report_to_html(self)
 
+    def to_bundle_bytes(self) -> bytes:
+        from .report_bundle import build_report_bundle
+
+        return build_report_bundle(self)
+
     def to_markdown(self) -> str:
         lines = [
             f"# The Gauntlet Report: {self.source_name}",
