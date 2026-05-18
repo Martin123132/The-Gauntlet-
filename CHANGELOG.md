@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+No unreleased changes yet.
+
+## v0.6.0 - Batch Sorting and Filters
+
+This release makes Batch Scan easier to use for larger paper sets.
+
 ### Added
 
 - Added Batch Scan sorting and filters for verdict, high-risk papers, weak
