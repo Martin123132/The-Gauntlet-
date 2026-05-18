@@ -5,6 +5,7 @@ from .action_plan import ReviewerAction, action_plan_to_markdown, build_reviewer
 from .batch import (
     BatchScanItem,
     batch_items_to_csv,
+    batch_items_to_html,
     batch_items_to_json,
     build_demo_batch_items,
     build_batch_report_bundle,
@@ -42,6 +43,7 @@ __all__ = [
     "analyze_paper_text",
     "action_plan_to_markdown",
     "batch_items_to_csv",
+    "batch_items_to_html",
     "batch_items_to_json",
     "build_demo_batch_items",
     "build_reviewer_action_plan",
