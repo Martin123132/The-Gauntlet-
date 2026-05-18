@@ -4,6 +4,20 @@
 
 No unreleased changes yet.
 
+## v0.3.0 - Report Sharing and Headless Analysis
+
+This release makes The Gauntlet easier to share, archive, and run outside the
+browser UI.
+
+### Added
+
+- Added self-contained HTML report exports for current analyses and saved
+  workspace runs.
+- Added one-click ZIP report bundles containing JSON, Markdown, HTML, and a
+  short privacy/readme note.
+- Added a command-line analyzer and `Analyze-Paper.bat` drag-and-drop launcher
+  for writing reports without opening Streamlit.
+
 ## v0.2.0 - Source Viewer and Saved Workspace
 
 The second public app update makes reports easier to audit and reuse across

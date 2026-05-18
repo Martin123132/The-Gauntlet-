@@ -1,6 +1,7 @@
 from streamlit.testing.v1 import AppTest
 import pytest
 
+import app as gauntlet_app
 from gauntlet_core import analyze_paper_text
 from gauntlet_core.workspace import list_saved_runs, save_analysis_run
 
@@ -165,3 +166,30 @@ def test_streamlit_workspace_page_lists_opens_compares_and_deletes(tmp_path, mon
     app.run(timeout=20)
 
     assert len(list_saved_runs()) == before_delete - 1
+
+
+def test_render_exports_registers_html_download(monkeypatch):
+    report = analyze_paper_text(
+        "The framework resolves the anomaly because the mechanism uses 12 measured observations.",
+        source_name="export-paper.txt",
+    )
+    calls = []
+
+    class FakeColumn:
+        def download_button(self, label, **kwargs):
+            calls.append((label, kwargs))
+
+    class FakeStreamlit:
+        def columns(self, count):
+            return [FakeColumn() for _ in range(count)]
+
+    monkeypatch.setattr(gauntlet_app, "st", FakeStreamlit())
+
+    gauntlet_app.render_exports(report)
+
+    labels = [label for label, _ in calls]
+    assert labels == ["Export JSON", "Export Markdown", "Export HTML Report", "Export Report Bundle"]
+    assert calls[2][1]["mime"] == "text/html"
+    assert calls[2][1]["file_name"].endswith("-gauntlet-report.html")
+    assert calls[-1][1]["mime"] == "application/zip"
+    assert calls[-1][1]["file_name"].endswith("-gauntlet-report-bundle.zip")

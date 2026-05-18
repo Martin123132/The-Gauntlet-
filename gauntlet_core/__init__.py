@@ -4,6 +4,7 @@ from .analysis import analyze_loaded_document, analyze_paper_text
 from .benchmarks import BenchmarkComparison, BenchmarkSample, list_benchmark_samples, run_benchmark_sample
 from .document_loader import LoadedDocument, load_document_from_bytes, load_document_from_path
 from .models import AnalysisReport, SourceSpan
+from .report_bundle import build_report_bundle
 from .refinement import ProviderSelection, RefinementReport, run_provider_refinement, run_refinement
 from .workspace import (
     SavedRun,
@@ -27,6 +28,7 @@ __all__ = [
     "SourceSpan",
     "analyze_loaded_document",
     "analyze_paper_text",
+    "build_report_bundle",
     "delete_saved_run",
     "list_benchmark_samples",
     "list_saved_runs",

@@ -54,6 +54,9 @@ through that service.
 The launcher creates a local `.venv`, installs the requirements, and opens the
 Streamlit app in your browser.
 
+You can also drag a paper onto `Analyze-Paper.bat` to write reports without
+opening the app.
+
 ## Manual Start
 
 ```bash
@@ -63,6 +66,19 @@ python -m venv .venv
 ```
 
 On macOS or Linux, use the equivalent activation path for your shell.
+
+## Analyze Without Opening the UI
+
+For a quick one-file check, drag a `.pdf`, `.docx`, `.txt`, or `.md` paper onto
+`Analyze-Paper.bat`. It installs only the local non-AI requirements, runs the
+deterministic checker, and writes JSON, Markdown, HTML, and ZIP bundle reports
+to `gauntlet-reports/`.
+
+The same path is available from the command line:
+
+```bash
+.venv\Scripts\python -m gauntlet_core.cli path\to\paper.pdf --out gauntlet-reports
+```
 
 ## What the Verdict Means
 
@@ -93,7 +109,7 @@ The verdict is a review aid, not a replacement for expert peer review.
   snippets, including PDF page numbers when available
 - a Source Viewer page that highlights the exact extracted sentence behind a
   claim, finding, evidence snippet, or source-trace anchor
-- exportable JSON and Markdown reports
+- exportable JSON, Markdown, self-contained HTML, and report bundle ZIP exports
 
 ## Benchmark Demo Gallery
 
@@ -121,9 +137,9 @@ quietly break known behavior.
 ## Local Saved Workspace
 
 The `Workspace` page keeps a private local history of completed analyses. Use it
-to reopen a previous report, export JSON or Markdown again, add reviewer notes,
-mark review status, delete a saved run, or compare two saved reports side by
-side.
+to reopen a previous report, export JSON, Markdown, HTML, or a report bundle
+ZIP again, add reviewer notes, mark review status, delete a saved run, or
+compare two saved reports side by side.
 
 Saved workspace files live under `.gauntlet/workspace/runs/` and are ignored by
 Git. The app saves the deterministic report and source snippets needed for
@@ -181,11 +197,15 @@ pytest
 The public Python entry point is:
 
 ```python
+from pathlib import Path
+
 from gauntlet_core import analyze_paper_text
 
 report = analyze_paper_text("Your paper text here", source_name="paper.txt")
 print(report.verdict)
 print(report.to_json())
+print(report.to_html())
+Path("paper-gauntlet-report-bundle.zip").write_bytes(report.to_bundle_bytes())
 ```
 
 Benchmark samples and optional refinement can be imported separately:
