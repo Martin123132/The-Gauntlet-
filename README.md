@@ -54,6 +54,9 @@ through that service.
 The launcher creates a local `.venv`, installs the requirements, and opens the
 Streamlit app in your browser.
 
+You can also drag a paper onto `Analyze-Paper.bat` to write reports without
+opening the app.
+
 ## Manual Start
 
 ```bash
@@ -63,6 +66,19 @@ python -m venv .venv
 ```
 
 On macOS or Linux, use the equivalent activation path for your shell.
+
+## Analyze Without Opening the UI
+
+For a quick one-file check, drag a `.pdf`, `.docx`, `.txt`, or `.md` paper onto
+`Analyze-Paper.bat`. It installs only the local non-AI requirements, runs the
+deterministic checker, and writes JSON, Markdown, HTML, and ZIP bundle reports
+to `gauntlet-reports/`.
+
+The same path is available from the command line:
+
+```bash
+.venv\Scripts\python -m gauntlet_core.cli path\to\paper.pdf --out gauntlet-reports
+```
 
 ## What the Verdict Means
 

@@ -8,6 +8,8 @@
   workspace runs.
 - Added one-click ZIP report bundles containing JSON, Markdown, HTML, and a
   short privacy/readme note.
+- Added a command-line analyzer and `Analyze-Paper.bat` drag-and-drop launcher
+  for writing reports without opening Streamlit.
 
 ## v0.2.0 - Source Viewer and Saved Workspace
 

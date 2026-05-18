@@ -10,6 +10,7 @@ def test_public_release_files_exist():
         "README.md",
         "LICENSE",
         "Start-Gauntlet.bat",
+        "Analyze-Paper.bat",
         "requirements.txt",
         "requirements-ai.txt",
         "docs/RELEASE_CHECKLIST.md",
@@ -43,6 +44,21 @@ def test_windows_launcher_keeps_default_install_non_ai():
     assert not any("pip install -r requirements-ai.txt" in line for line in command_lines)
     assert "requirements-ai.txt" in launcher
     assert "http://localhost:8501" in launcher
+
+
+def test_drag_drop_analyzer_keeps_default_install_non_ai():
+    launcher = (ROOT / "Analyze-Paper.bat").read_text(encoding="utf-8")
+    command_lines = [
+        line.strip().lower()
+        for line in launcher.splitlines()
+        if line.strip() and not line.strip().lower().startswith("echo")
+    ]
+
+    assert any("python 3.10" in line.lower() for line in launcher.splitlines())
+    assert any("pip install -r requirements.txt" in line for line in command_lines)
+    assert not any("pip install -r requirements-ai.txt" in line for line in command_lines)
+    assert "gauntlet_core.cli" in launcher
+    assert "requirements-ai.txt" not in launcher
 
 
 def test_readme_image_links_point_to_existing_files():
