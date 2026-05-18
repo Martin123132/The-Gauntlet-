@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-No unreleased changes yet.
+### Added
+
+- Added self-contained HTML report exports for current analyses and saved
+  workspace runs.
 
 ## v0.2.0 - Source Viewer and Saved Workspace
 

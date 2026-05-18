@@ -1400,7 +1400,7 @@ def render_breakdowns(report) -> None:
 
 
 def render_exports(report) -> None:
-    json_col, markdown_col = st.columns(2)
+    json_col, markdown_col, html_col = st.columns(3)
     json_col.download_button(
         "Export JSON",
         data=report.to_json(),
@@ -1413,6 +1413,13 @@ def render_exports(report) -> None:
         data=report.to_markdown(),
         file_name=f"{safe_stem(report.source_name)}-gauntlet-report.md",
         mime="text/markdown",
+        use_container_width=True,
+    )
+    html_col.download_button(
+        "Export HTML Report",
+        data=report.to_html(),
+        file_name=f"{safe_stem(report.source_name)}-gauntlet-report.html",
+        mime="text/html",
         use_container_width=True,
     )
 
