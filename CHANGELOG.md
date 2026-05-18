@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+No unreleased changes yet.
+
+## v0.3.0 - Report Sharing and Headless Analysis
+
+This release makes The Gauntlet easier to share, archive, and run outside the
+browser UI.
+
 ### Added
 
 - Added self-contained HTML report exports for current analyses and saved
