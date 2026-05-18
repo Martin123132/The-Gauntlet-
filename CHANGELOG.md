@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a Source Viewer page with click-through source links and highlighted
+  sentence context.
 - Added local saved workspace history for completed analyses.
 - Added saved-run reload, reviewer notes/status, deletion, export, and
   two-report comparison controls.

@@ -87,6 +87,33 @@ def test_streamlit_claims_and_evidence_pages_show_source_references():
     assert any("Source Trace" in item.value for item in app.markdown)
 
 
+def test_streamlit_source_viewer_highlights_selected_anchor():
+    app = AppTest.from_file("app.py")
+    app.run(timeout=20)
+    app.toggle[0].set_value(True)
+    app.button[0].click()
+    app.run(timeout=20)
+
+    anchor_id = app.session_state["report"].source_spans[0].anchor_id
+    app.query_params["page"] = "source"
+    app.query_params["anchor"] = anchor_id
+    app.run(timeout=20)
+
+    assert not app.exception
+    assert any("Source Viewer" in item.value for item in app.markdown)
+    assert any("Highlighted Source" in item.value for item in app.markdown)
+    assert any("Linked Audit Items" in item.value for item in app.markdown)
+    assert any("Source anchor" == selectbox.label for selectbox in app.selectbox)
+
+    if len(app.session_state["report"].source_spans) > 1:
+        second_anchor_id = app.session_state["report"].source_spans[1].anchor_id
+        app.query_params["anchor"] = second_anchor_id
+        app.run(timeout=20)
+
+        assert not app.exception
+        assert any(f"Highlighted source sentence | {second_anchor_id}" in item.value for item in app.markdown)
+
+
 def test_streamlit_benchmarks_page_runs_sample_and_compares_results():
     app = AppTest.from_file("app.py")
     app.query_params["page"] = "benchmarks"

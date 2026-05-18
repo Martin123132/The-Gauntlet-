@@ -87,6 +87,8 @@ The verdict is a review aid, not a replacement for expert peer review.
   evidence gaps, scope conflicts, circular support, and theory-as-fact wording
 - source trace anchors for claims, findings, contradictions, and evidence
   snippets, including PDF page numbers when available
+- a Source Viewer page that highlights the exact extracted sentence behind a
+  claim, finding, evidence snippet, or source-trace anchor
 - exportable JSON and Markdown reports
 
 ## Benchmark Demo Gallery
@@ -122,6 +124,13 @@ side.
 Saved workspace files live under `.gauntlet/workspace/runs/` and are ignored by
 Git. The app saves the deterministic report and source snippets needed for
 auditability, but it does not save the original uploaded document.
+
+## Source Viewer
+
+The `Source` page turns source anchors into a readable audit view. Open it from
+the nav or from any `View Source` link on a claim, finding, evidence card, or
+source-trace card. The selected sentence is highlighted with nearby extracted
+sentences for context, plus any linked claims, findings, or evidence snippets.
 
 ## Optional Refinement Chamber
 
