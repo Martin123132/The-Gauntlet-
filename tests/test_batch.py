@@ -40,3 +40,4 @@ def test_batch_summary_exports_include_expected_fields(tmp_path):
         assert "batch-summary.md" in names
         assert "README.txt" in names
         assert "reports/paper/paper-gauntlet-report.html" in names
+        assert "reports/paper/paper-reviewer-action-plan.md" in names

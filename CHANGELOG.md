@@ -4,6 +4,15 @@
 
 ### Added
 
+- Added Reviewer Action Plan for prioritized repair steps in the app,
+  Markdown exports, HTML reports, and report bundles.
+
+## v0.4.0 - Batch Scan
+
+This release adds multi-paper scanning for local review workflows.
+
+### Added
+
 - Added Batch Scan for multi-paper upload, verdict tables, CSV export, and
   batch report ZIP bundles.
 - Added CLI folder scanning for supported paper files.

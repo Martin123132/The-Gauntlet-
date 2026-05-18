@@ -88,6 +88,20 @@ def test_streamlit_claims_and_evidence_pages_show_source_references():
     assert any("Source Trace" in item.value for item in app.markdown)
 
 
+def test_streamlit_action_plan_page_exports_markdown():
+    app = AppTest.from_file("app.py")
+    app.run(timeout=20)
+    app.toggle[0].set_value(True)
+    app.button[0].click()
+    app.run(timeout=20)
+
+    app.query_params["page"] = "action"
+    app.run(timeout=20)
+
+    assert not app.exception
+    assert any("Reviewer Action Plan" in item.value for item in app.markdown)
+
+
 def test_streamlit_source_viewer_highlights_selected_anchor():
     app = AppTest.from_file("app.py")
     app.run(timeout=20)

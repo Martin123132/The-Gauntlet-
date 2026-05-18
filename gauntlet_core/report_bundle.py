@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from .action_plan import action_plan_to_markdown
 from .models import AnalysisReport
 
 
@@ -14,6 +15,7 @@ def build_report_bundle(report: AnalysisReport) -> bytes:
     json_name = f"{stem}-gauntlet-report.json"
     markdown_name = f"{stem}-gauntlet-report.md"
     html_name = f"{stem}-gauntlet-report.html"
+    action_plan_name = f"{stem}-reviewer-action-plan.md"
     readme_name = "README.txt"
 
     buffer = BytesIO()
@@ -21,7 +23,8 @@ def build_report_bundle(report: AnalysisReport) -> bytes:
         bundle.writestr(json_name, report.to_json())
         bundle.writestr(markdown_name, report.to_markdown())
         bundle.writestr(html_name, report.to_html())
-        bundle.writestr(readme_name, bundle_readme(report, [json_name, markdown_name, html_name]))
+        bundle.writestr(action_plan_name, action_plan_to_markdown(report))
+        bundle.writestr(readme_name, bundle_readme(report, [json_name, markdown_name, html_name, action_plan_name]))
     return buffer.getvalue()
 
 

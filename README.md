@@ -111,6 +111,8 @@ The verdict is a review aid, not a replacement for expert peer review.
 - a Source Viewer page that highlights the exact extracted sentence behind a
   claim, finding, evidence snippet, or source-trace anchor
 - exportable JSON, Markdown, self-contained HTML, and report bundle ZIP exports
+- a Reviewer Action Plan that turns claim gaps and findings into prioritized
+  repair steps
 
 ## Benchmark Demo Gallery
 
@@ -153,6 +155,13 @@ table with confidence, evidence score, claim count, finding count, and top risk
 types. Export the table as CSV or download a batch ZIP bundle containing the
 summary plus individual JSON, Markdown, and HTML reports for each analyzed
 paper.
+
+## Reviewer Action Plan
+
+The `Action Plan` page turns the deterministic audit into a fix-first checklist.
+It prioritizes high-severity findings, unsupported claims, missing mechanisms,
+weak evidence links, scope gaps, and low evidence coverage. The action plan can
+be exported as Markdown and is included in HTML reports and report bundles.
 
 ## Source Viewer
 

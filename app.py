@@ -6,6 +6,7 @@ from urllib.parse import quote
 import streamlit as st
 
 from gauntlet_core import analyze_loaded_document, analyze_paper_text
+from gauntlet_core.action_plan import action_plan_to_markdown, build_reviewer_action_plan
 from gauntlet_core.batch import (
     BatchScanItem,
     batch_items_to_csv,
@@ -43,6 +44,7 @@ VALID_PAGES = (
     "summary",
     "workspace",
     "batch",
+    "action",
     "source",
     "breakdown",
     "benchmarks",
@@ -55,6 +57,7 @@ PAGE_LABELS = {
     "summary": "Summary",
     "workspace": "Workspace",
     "batch": "Batch",
+    "action": "Action Plan",
     "source": "Source",
     "breakdown": "Breakdown",
     "benchmarks": "Benchmarks",
@@ -1115,6 +1118,8 @@ def render_detail_page(page: str, report) -> None:
 
     if page == "breakdown":
         render_breakdown_page(report)
+    elif page == "action":
+        render_action_plan_page(report)
     elif page == "source":
         render_source_viewer_page(report)
     elif page == "claims":
@@ -1158,6 +1163,7 @@ def render_breakdown_page(report) -> None:
     render_claims_page(report, compact=True)
     render_contradictions_page(report, compact=True)
     render_evidence_page(report, compact=True)
+    render_action_plan_page(report, compact=True)
     render_exports(report)
 
 
@@ -1452,6 +1458,77 @@ def render_exports(report) -> None:
         mime="application/zip",
         use_container_width=True,
     )
+
+
+def render_action_plan_page(report, compact: bool = False) -> None:
+    actions = build_reviewer_action_plan(report, limit=6 if compact else 12)
+    title = "Reviewer Action Plan" if not compact else "Top Reviewer Actions"
+    subtitle = (
+        "A prioritized fix checklist generated from deterministic findings, claim gaps, evidence score, and source anchors."
+        if not compact
+        else "The highest-value repairs before exporting or refining the paper."
+    )
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="detail-title">{title}</div>
+          <div class="detail-subtitle">{subtitle}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if not actions:
+        st.markdown('<div class="empty-detail">No reviewer actions were generated.</div>', unsafe_allow_html=True)
+        return
+
+    high = sum(1 for action in actions if action.priority == "high")
+    medium = sum(1 for action in actions if action.priority == "medium")
+    low = sum(1 for action in actions if action.priority == "low")
+    st.markdown(
+        f"""
+        <div class="stat-strip">
+          <div class="stat-tile"><div class="stat-title">Actions</div><div class="stat-number">{len(actions)}</div><div class="stat-note">Prioritized repairs</div></div>
+          <div class="stat-tile"><div class="stat-title">High</div><div class="stat-number">{high}</div><div class="stat-note">Do these first</div></div>
+          <div class="stat-tile"><div class="stat-title">Medium</div><div class="stat-number">{medium}</div><div class="stat-note">Strengthen the review</div></div>
+          <div class="stat-tile"><div class="stat-title">Low</div><div class="stat-number">{low}</div><div class="stat-note">Polish and traceability</div></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    action_cards = []
+    for action in actions:
+        action_cards.append(
+            f"""
+            <div class="finding-card {html.escape(action.priority)}">
+              <div class="finding-title">
+                <span>{html.escape(action.id)} - {html.escape(action.title)}</span>
+                <span class="severity-pill {html.escape(action.priority)}">{html.escape(action.priority.upper())}</span>
+              </div>
+              <div class="finding-meta">{html.escape(action.category)} | Target: {html.escape(action.target)}</div>
+              <div class="finding-body">{html.escape(action.detail)}</div>
+              <div class="repair-button-look">{html.escape(action.suggested_fix)}</div>
+              <div class="source-ref">{html.escape(source_reference(action.source_span))}</div>
+              {source_view_link(action.source_span)}
+            </div>
+            """
+        )
+    st.markdown(f'<div class="audit-grid">{"".join(action_cards)}</div>', unsafe_allow_html=True)
+
+    if not compact:
+        st.download_button(
+            "Export Action Plan Markdown",
+            data=action_plan_to_markdown(report),
+            file_name=f"{safe_stem(report.source_name)}-reviewer-action-plan.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+    else:
+        st.markdown(
+            '<a class="export-chip" href="?page=action" target="_self">Open full action plan</a>',
+            unsafe_allow_html=True,
+        )
 
 
 def render_batch_page() -> None:
