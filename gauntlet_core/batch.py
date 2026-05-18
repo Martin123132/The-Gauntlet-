@@ -11,6 +11,9 @@ from .models import AnalysisReport
 from .report_bundle import safe_report_stem
 
 
+BatchSortKey = str
+
+
 @dataclass(frozen=True)
 class BatchScanItem:
     source_name: str
@@ -64,6 +67,64 @@ def summarize_report(report: AnalysisReport) -> BatchScanItem:
 
 def failed_batch_item(source_name: str, error: str) -> BatchScanItem:
     return BatchScanItem(source_name=source_name, status="failed", error=error)
+
+
+def filter_batch_items(
+    items: list[BatchScanItem],
+    verdicts: set[str] | None = None,
+    high_risk_only: bool = False,
+    weak_evidence_only: bool = False,
+) -> list[BatchScanItem]:
+    filtered: list[BatchScanItem] = []
+    for item in items:
+        verdict_value = item.verdict if item.status == "analyzed" else "PARSE_FAILED"
+        if verdicts and verdict_value not in verdicts:
+            continue
+        if high_risk_only and not is_high_risk_item(item):
+            continue
+        if weak_evidence_only and not is_weak_evidence_item(item):
+            continue
+        filtered.append(item)
+    return filtered
+
+
+def sort_batch_items(items: list[BatchScanItem], sort_by: BatchSortKey) -> list[BatchScanItem]:
+    if sort_by == "Highest risk":
+        return sorted(items, key=batch_risk_sort_key)
+    if sort_by == "Most findings":
+        return sorted(items, key=lambda item: (-item.finding_count, -item.high_severity_findings, item.source_name.lower()))
+    if sort_by == "Lowest evidence":
+        return sorted(items, key=lambda item: (item.evidence_score if item.status == "analyzed" else 2, item.source_name.lower()))
+    if sort_by == "Highest confidence":
+        return sorted(items, key=lambda item: (-item.confidence, item.source_name.lower()))
+    if sort_by == "Lowest confidence":
+        return sorted(items, key=lambda item: (item.confidence if item.status == "analyzed" else 2, item.source_name.lower()))
+    if sort_by == "Filename":
+        return sorted(items, key=lambda item: item.source_name.lower())
+    if sort_by == "Verdict":
+        verdict_order = {"CREATES_NEW_PARADOXES": 0, "FAILS": 1, "PARTIAL": 2, "RESOLVES": 3, "": 4}
+        return sorted(items, key=lambda item: (verdict_order.get(item.verdict, 5), item.source_name.lower()))
+    return list(items)
+
+
+def is_high_risk_item(item: BatchScanItem) -> bool:
+    return item.status == "failed" or item.high_severity_findings > 0 or item.verdict in {"CREATES_NEW_PARADOXES", "FAILS"}
+
+
+def is_weak_evidence_item(item: BatchScanItem, threshold: float = 0.35) -> bool:
+    return item.status == "analyzed" and item.evidence_score < threshold
+
+
+def batch_risk_sort_key(item: BatchScanItem) -> tuple[int, float, int, str]:
+    verdict_order = {"CREATES_NEW_PARADOXES": 0, "FAILS": 1, "PARTIAL": 2, "RESOLVES": 3}
+    if item.status == "failed":
+        return (0, 0.0, 0, item.source_name.lower())
+    return (
+        verdict_order.get(item.verdict, 4),
+        item.evidence_score,
+        -item.finding_count,
+        item.source_name.lower(),
+    )
 
 
 def batch_items_to_csv(items: list[BatchScanItem]) -> str:

@@ -12,6 +12,8 @@ from gauntlet_core.batch import (
     batch_items_to_csv,
     build_batch_report_bundle,
     failed_batch_item,
+    filter_batch_items,
+    sort_batch_items,
     summarize_report,
 )
 from gauntlet_core.benchmarks import list_benchmark_samples, run_benchmark_sample
@@ -1613,43 +1615,48 @@ def run_batch_uploads(uploads) -> None:
 
 
 def render_batch_results(items: list[BatchScanItem]) -> None:
-    analyzed = sum(1 for item in items if item.status == "analyzed")
-    failed = sum(1 for item in items if item.status == "failed")
-    high_risk = sum(1 for item in items if item.high_severity_findings > 0 or item.verdict == "CREATES_NEW_PARADOXES")
+    visible_items = render_batch_filter_controls(items)
+    analyzed = sum(1 for item in visible_items if item.status == "analyzed")
+    failed = sum(1 for item in visible_items if item.status == "failed")
+    high_risk = sum(1 for item in visible_items if item.high_severity_findings > 0 or item.verdict == "CREATES_NEW_PARADOXES")
     avg_evidence = (
-        sum(item.evidence_score for item in items if item.status == "analyzed") / analyzed if analyzed else 0
+        sum(item.evidence_score for item in visible_items if item.status == "analyzed") / analyzed if analyzed else 0
     )
     st.markdown(
         f"""
         <div class="stat-strip">
-          <div class="stat-tile"><div class="stat-title">Papers</div><div class="stat-number">{len(items)}</div><div class="stat-note">{analyzed} analyzed, {failed} failed</div></div>
+          <div class="stat-tile"><div class="stat-title">Showing</div><div class="stat-number">{len(visible_items)}</div><div class="stat-note">of {len(items)} scanned papers</div></div>
           <div class="stat-tile"><div class="stat-title">High Risk</div><div class="stat-number">{high_risk}</div><div class="stat-note">New paradoxes or high severity</div></div>
           <div class="stat-tile"><div class="stat-title">Avg Evidence</div><div class="stat-number">{avg_evidence:.2f}</div><div class="stat-note">Analyzed papers only</div></div>
-          <div class="stat-tile"><div class="stat-title">Export</div><div class="stat-number">CSV</div><div class="stat-note">Plus ZIP bundle</div></div>
+          <div class="stat-tile"><div class="stat-title">Status</div><div class="stat-number">{failed}</div><div class="stat-note">failed to parse</div></div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    rows = [batch_row_for_display(item) for item in items]
+    if not visible_items:
+        st.markdown('<div class="empty-detail">No papers match the current filters.</div>', unsafe_allow_html=True)
+        return
+
+    rows = [batch_row_for_display(item) for item in visible_items]
     st.dataframe(rows, use_container_width=True, hide_index=True)
 
     csv_col, zip_col = st.columns(2)
     csv_col.download_button(
-        "Export Batch CSV",
-        data=batch_items_to_csv(items),
+        "Export Filtered CSV",
+        data=batch_items_to_csv(visible_items),
         file_name="gauntlet-batch-summary.csv",
         mime="text/csv",
         use_container_width=True,
     )
     zip_col.download_button(
-        "Export Batch Bundle",
-        data=build_batch_report_bundle(items),
+        "Export Filtered Bundle",
+        data=build_batch_report_bundle(visible_items),
         file_name="gauntlet-batch-report-bundle.zip",
         mime="application/zip",
         use_container_width=True,
     )
 
-    completed = [item for item in items if item.report]
+    completed = [item for item in visible_items if item.report]
     if completed:
         labels = {
             f"{item.source_name} | {item.verdict} | {item.confidence:.0%}": index
@@ -1664,6 +1671,44 @@ def render_batch_results(items: list[BatchScanItem]) -> None:
             report_store()["paper_text"] = ""
             st.query_params["page"] = "breakdown"
             st.rerun()
+
+
+def render_batch_filter_controls(items: list[BatchScanItem]) -> list[BatchScanItem]:
+    st.markdown(
+        """
+        <div class="wide-detail-card">
+          <div class="detail-title">Filter & Sort</div>
+          <div class="detail-subtitle">Focus the batch table before exporting the CSV or bundle.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    verdict_options = ["RESOLVES", "PARTIAL", "FAILS", "CREATES_NEW_PARADOXES", "PARSE_FAILED"]
+    present_verdicts = [
+        verdict
+        for verdict in verdict_options
+        if any((item.verdict if item.status == "analyzed" else "PARSE_FAILED") == verdict for item in items)
+    ]
+    filter_col, risk_col, sort_col = st.columns([0.42, 0.24, 0.34])
+    selected_verdicts = filter_col.multiselect(
+        "Verdicts",
+        verdict_options,
+        default=present_verdicts or verdict_options,
+    )
+    high_risk_only = risk_col.checkbox("High risk only")
+    weak_evidence_only = risk_col.checkbox("Weak evidence only")
+    sort_by = sort_col.selectbox(
+        "Sort by",
+        ["Highest risk", "Most findings", "Lowest evidence", "Highest confidence", "Lowest confidence", "Verdict", "Filename"],
+    )
+
+    filtered = filter_batch_items(
+        items,
+        verdicts=set(selected_verdicts) if selected_verdicts else set(),
+        high_risk_only=high_risk_only,
+        weak_evidence_only=weak_evidence_only,
+    )
+    return sort_batch_items(filtered, sort_by)
 
 
 def batch_row_for_display(item: BatchScanItem) -> dict[str, str | int]:

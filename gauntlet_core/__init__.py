@@ -2,7 +2,14 @@
 
 from .analysis import analyze_loaded_document, analyze_paper_text
 from .action_plan import ReviewerAction, action_plan_to_markdown, build_reviewer_action_plan
-from .batch import BatchScanItem, batch_items_to_csv, batch_items_to_json, build_batch_report_bundle
+from .batch import (
+    BatchScanItem,
+    batch_items_to_csv,
+    batch_items_to_json,
+    build_batch_report_bundle,
+    filter_batch_items,
+    sort_batch_items,
+)
 from .benchmarks import BenchmarkComparison, BenchmarkSample, list_benchmark_samples, run_benchmark_sample
 from .document_loader import LoadedDocument, load_document_from_bytes, load_document_from_path
 from .models import AnalysisReport, SourceSpan
@@ -39,6 +46,7 @@ __all__ = [
     "build_batch_report_bundle",
     "build_report_bundle",
     "delete_saved_run",
+    "filter_batch_items",
     "list_benchmark_samples",
     "list_saved_runs",
     "load_document_from_bytes",
@@ -48,5 +56,6 @@ __all__ = [
     "run_provider_refinement",
     "run_refinement",
     "save_analysis_run",
+    "sort_batch_items",
     "update_saved_run_notes",
 ]
