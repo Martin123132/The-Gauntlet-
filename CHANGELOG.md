@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+No unreleased changes yet.
+
+## v0.2.0 - Source Viewer and Saved Workspace
+
+The second public app update makes reports easier to audit and reuse across
+multiple paper checks.
+
+### Added
+
 - Added a Source Viewer page with click-through source links and highlighted
   sentence context.
 - Added local saved workspace history for completed analyses.

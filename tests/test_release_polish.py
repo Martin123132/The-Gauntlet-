@@ -15,6 +15,8 @@ def test_public_release_files_exist():
         "docs/RELEASE_CHECKLIST.md",
         "docs/images/gauntlet-summary.png",
         "docs/images/gauntlet-breakdown.png",
+        "docs/images/gauntlet-workspace.png",
+        "docs/images/gauntlet-source-viewer.png",
         "docs/images/gauntlet-benchmarks.png",
         "docs/images/gauntlet-refinement.png",
         ".github/workflows/tests.yml",
@@ -51,6 +53,8 @@ def test_readme_image_links_point_to_existing_files():
     assert {Path(path).name for path in image_paths} == {
         "gauntlet-summary.png",
         "gauntlet-breakdown.png",
+        "gauntlet-workspace.png",
+        "gauntlet-source-viewer.png",
         "gauntlet-benchmarks.png",
         "gauntlet-refinement.png",
     }

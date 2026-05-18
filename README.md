@@ -35,6 +35,10 @@ through that service.
 
 ![The Gauntlet breakdown page](docs/images/gauntlet-breakdown.png)
 
+![The Gauntlet saved workspace](docs/images/gauntlet-workspace.png)
+
+![The Gauntlet source viewer](docs/images/gauntlet-source-viewer.png)
+
 ![The Gauntlet benchmark gallery](docs/images/gauntlet-benchmarks.png)
 
 ![The Gauntlet refinement provider setup](docs/images/gauntlet-refinement.png)
