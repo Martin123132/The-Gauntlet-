@@ -148,6 +148,7 @@ def test_streamlit_benchmarks_page_runs_sample_and_compares_results():
     assert app.session_state["benchmark_result"].passed
     assert app.session_state["report"].source_name.startswith("benchmark-")
     assert any("Expected vs Actual" in item.value for item in app.markdown)
+    assert any("Guarded Findings Kept Out" in item.value for item in app.markdown)
     assert "The Gauntlet Benchmark" in app.session_state["benchmark_result"].to_markdown()
 
 

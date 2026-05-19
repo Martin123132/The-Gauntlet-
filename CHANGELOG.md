@@ -4,6 +4,28 @@
 
 No unreleased changes yet.
 
+## v0.11.0 - Analyzer Quality Guardrails
+
+This release calibrates the deterministic analyzer to reduce false positives
+before adding any new app surface.
+
+### Added
+
+- Expanded the synthetic benchmark corpus from 8 to 16 cases, including
+  guardrails for tentative hypotheses, scoped limitations, prior-work
+  comparisons, reference-like text, weak equation dumps, and caveated universal
+  claims.
+- Added benchmark expectations for findings and claim gaps that should stay
+  absent, so regressions can catch unwanted false positives.
+
+### Changed
+
+- Made claim extraction and verdict scoring more conservative around tentative,
+  background, comparison, and reference-like language.
+- Required stronger linked evidence before a paper can receive `RESOLVES`.
+- Improved audit/rubric language so reports explain the linked-evidence and
+  false-positive guardrail checks.
+
 ## v0.10.0 - Issue-Led Source Review
 
 This release upgrades source anchors into an issue-led review workflow.

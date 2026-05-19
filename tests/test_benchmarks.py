@@ -5,7 +5,7 @@ from gauntlet_core.benchmarks import BenchmarkSample, compare_report_to_sample, 
 def test_all_benchmark_samples_pass_expected_behavior():
     results = [run_benchmark_sample(sample.id) for sample in list_benchmark_samples()]
 
-    assert len(results) >= 8
+    assert len(results) >= 16
     assert all(result.passed for result in results)
     assert all(result.score == 1.0 for result in results)
 
@@ -17,6 +17,8 @@ def test_benchmark_metadata_is_public_and_explanatory():
         assert sample.category
         assert sample.paper_text.strip()
         assert sample.expected_verdict in {"RESOLVES", "PARTIAL", "FAILS", "CREATES_NEW_PARADOXES"}
+        assert isinstance(sample.expected_absent_findings, tuple)
+        assert isinstance(sample.expected_absent_claim_gaps, tuple)
         assert len(sample.why_it_matters) > 40
 
 
@@ -40,6 +42,8 @@ def test_benchmark_comparison_reports_misses_and_extras():
     assert comparison.missed_findings == ("Temporal Conflict",)
     assert "mechanism missing" in comparison.matched_claim_gaps
     assert "Evidence Gap" in comparison.extra_findings
+    assert comparison.absent_findings_kept_out == ()
+    assert comparison.unexpected_absent_findings == ()
 
 
 def test_clean_benchmark_case_fails_when_extra_findings_appear():
@@ -51,10 +55,33 @@ def test_clean_benchmark_case_fails_when_extra_findings_appear():
     assert not comparison.passed
 
 
+def test_absent_guardrails_fail_when_unwanted_findings_appear():
+    sample = BenchmarkSample(
+        id="absent-guardrail-smoke",
+        title="Absent Guardrail Smoke",
+        category="Test",
+        paper_text="The paper resolves the paradox and eliminates the contradiction.",
+        expected_verdict="FAILS",
+        expected_findings=("Unsupported Resolution Claim",),
+        expected_claim_gaps=("mechanism missing",),
+        expected_absent_findings=("Evidence Gap",),
+        expected_absent_claim_gaps=("details not specific",),
+        why_it_matters="Synthetic comparison fixture for checking false-positive guardrail reporting in benchmark comparisons.",
+    )
+    report = analyze_paper_text(sample.paper_text)
+
+    comparison = compare_report_to_sample(sample, report)
+
+    assert "Evidence Gap" in comparison.unexpected_absent_findings
+    assert "details not specific" in comparison.unexpected_absent_claim_gaps
+    assert not comparison.passed
+
+
 def test_benchmark_export_distinguishes_match_from_paper_pass():
     comparison = run_benchmark_sample("weak-evidence")
     markdown = comparison.to_markdown()
 
     assert comparison.report.verdict == "PARTIAL"
     assert "Benchmark result: **EXPECTED MATCH**" in markdown
+    assert "False-Positive Guardrails" in markdown
     assert "Result: **PASS**" not in markdown

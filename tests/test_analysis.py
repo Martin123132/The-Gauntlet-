@@ -107,6 +107,71 @@ def test_unsupported_resolution_claim_emits_barrier_findings():
     assert "Unsupported Resolution Claim" in finding_types
 
 
+def test_tentative_hypothesis_is_not_full_resolution_or_unsupported_claim():
+    text = """
+    We hypothesize that the framework may explain the anomaly if a boundary condition changes the sampling process.
+    This is a tentative proposal rather than a completed resolution, and it still requires a direct test.
+    """
+
+    report = analyze_paper_text(text)
+    finding_types = {finding.type for finding in report.findings}
+
+    assert report.verdict != "RESOLVES"
+    assert "Unsupported Resolution Claim" not in finding_types
+    assert "Theory-As-Fact Language" not in finding_types
+
+
+def test_scoped_limitation_is_not_scope_conflict():
+    text = """
+    The framework explains the anomaly through a sampling process under low-energy boundary conditions.
+    The claim is limited to the calibrated sample and does not apply outside that scope.
+    """
+
+    report = analyze_paper_text(text)
+
+    assert "Scope Conflict" not in {finding.type for finding in report.findings}
+
+
+def test_prior_work_comparison_is_not_internal_contradiction():
+    text = """
+    Prior work claimed the signal was always constant in every measurement.
+    Unlike the conventional model, this framework explains the anomaly through a boundary process where the signal changes after calibration.
+    """
+
+    report = analyze_paper_text(text)
+    finding_types = {finding.type for finding in report.findings}
+
+    assert "Temporal Conflict" not in finding_types
+    assert "Potential Direct Negation" not in finding_types
+    assert "Property Mismatch" not in finding_types
+
+
+def test_unlinked_citations_and_equations_do_not_resolve():
+    text = """
+    References
+    Smith et al. (2021), Journal of Tests, 14, 22-31; Jones (2023), Methods Review, 9, 100-118.
+    Methods
+    Equation x = y + 2. RMSE = 0.04. R2 = 0.91.
+    No interpretation or resolution claim is provided.
+    """
+
+    report = analyze_paper_text(text)
+
+    assert report.verdict == "FAILS"
+    assert report.resolved_claims == 0
+
+
+def test_assertive_model_authority_still_flags_theory_as_fact():
+    text = """
+    The model proves that the paradox is impossible because the theory dictates that all violations are forbidden.
+    The framework explains the anomaly through a formal mechanism, but it gives no measurement or test.
+    """
+
+    report = analyze_paper_text(text)
+
+    assert "Theory-As-Fact Language" in {finding.type for finding in report.findings}
+
+
 def test_source_spans_attach_to_claims_findings_and_exports():
     text = (
         "The paper resolves the paradox because the mechanism is measured by 12 tests. "

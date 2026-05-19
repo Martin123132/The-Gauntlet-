@@ -212,6 +212,10 @@ def benchmark_metadata_from_result(benchmark_result: Any | None) -> dict[str, An
         "matched_claim_gaps": list(getattr(benchmark_result, "matched_claim_gaps", ())),
         "missed_claim_gaps": list(getattr(benchmark_result, "missed_claim_gaps", ())),
         "extra_claim_gaps": list(getattr(benchmark_result, "extra_claim_gaps", ())),
+        "absent_findings_kept_out": list(getattr(benchmark_result, "absent_findings_kept_out", ())),
+        "unexpected_absent_findings": list(getattr(benchmark_result, "unexpected_absent_findings", ())),
+        "absent_claim_gaps_kept_out": list(getattr(benchmark_result, "absent_claim_gaps_kept_out", ())),
+        "unexpected_absent_claim_gaps": list(getattr(benchmark_result, "unexpected_absent_claim_gaps", ())),
     }
 
 
