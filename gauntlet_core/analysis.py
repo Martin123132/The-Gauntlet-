@@ -177,6 +177,54 @@ COMPARISON_MARKERS = {
     "rather than",
 }
 
+BACKGROUND_MARKERS = {
+    "prior work",
+    "previous work",
+    "previous theory",
+    "earlier model",
+    "existing literature",
+    "literature",
+    "historically",
+    "reference",
+    "references",
+    "cited",
+    "reported by",
+}
+
+TENTATIVE_MARKERS = {
+    "may",
+    "might",
+    "could",
+    "hypothesis",
+    "hypothesize",
+    "tentative",
+    "possible",
+    "possibly",
+    "preliminary",
+    "suggest",
+    "suggests",
+    "proposal",
+    "propose",
+    "proposes",
+}
+
+LIMITATION_MARKERS = {
+    "limited to",
+    "only under",
+    "only within",
+    "within the",
+    "outside that scope",
+    "outside this scope",
+    "outside the scope",
+    "not apply",
+    "does not apply",
+    "not tested",
+    "boundary condition",
+    "scope is",
+    "scoped to",
+    "calibrated sample",
+}
+
 SECTION_HEADINGS = {
     "abstract",
     "summary",
@@ -396,11 +444,16 @@ def extract_claim_candidates(sentences: list[DocumentSentence], limit: int = 28)
     candidates: list[ClaimCandidate] = []
     for sentence in sentences:
         lower = sentence.text.lower()
+        if is_reference_like_sentence(sentence.text):
+            continue
         triggers = sorted(indicator for indicator in CLAIM_INDICATORS if indicator in lower)
         problem_reference = any(problem in lower for problem in PROBLEM_INDICATORS)
         theory_reference = any(word in lower for word in ["model", "framework", "theory", "paper", "approach", "method"])
-        modal_resolution = bool(re.search(r"\b(can|will|must|should|would)\b.*\b(resolve|solve|explain|reconcile|predict)\b", lower))
+        modal_resolution = bool(re.search(r"\b(can|will|must|should|would|may|might|could)\b.*\b(resolve|solve|explain|reconcile|predict)\b", lower))
+        background_only = is_background_context(lower) and not any(indicator in lower for indicator in RESOLUTION_INDICATORS)
         if triggers or (problem_reference and theory_reference) or modal_resolution:
+            if background_only:
+                continue
             candidates.append(ClaimCandidate(sentence, triggers or ["problem reference"]))
     return dedupe_claim_candidates(candidates)[:limit]
 
@@ -417,6 +470,8 @@ def analyze_claims(candidates: list[ClaimCandidate], evidence_links: list[Eviden
         claim = candidate.sentence.text
         lower = claim.lower()
         linked_evidence = link_evidence_to_claim(candidate.sentence, evidence_links)
+        strong_linked_evidence = [link for link in linked_evidence if link.confidence >= 0.42]
+        tentative_claim = is_tentative_language(lower)
         has_mechanism = any(indicator in lower for indicator in MECHANISM_INDICATORS)
         has_detail = any(indicator in lower for indicator in DETAIL_INDICATORS)
         evidence_hits = count_terms(lower, EVIDENCE_TERMS)
@@ -435,18 +490,20 @@ def analyze_claims(candidates: list[ClaimCandidate], evidence_links: list[Eviden
         linked_evidence_score = min(0.22, linked_strength * 0.26)
         math_score = min(0.12, equation_hits * 0.055)
         quality = clamp(0.10 + mechanism_score + detail_score + local_evidence_score + linked_evidence_score + math_score, 0.05, 0.98)
+        if tentative_claim:
+            quality = clamp(quality - 0.16, 0.05, 0.82)
 
         gaps: list[str] = []
         if not has_mechanism:
             gaps.append("mechanism missing")
-        if not linked_evidence and evidence_hits + methodology_hits + number_hits + citation_hits == 0:
+        if not strong_linked_evidence and evidence_hits + methodology_hits + number_hits + citation_hits == 0:
             gaps.append("evidence not linked")
         if not has_detail:
             gaps.append("details not specific")
         if any(indicator in lower for indicator in RESOLUTION_INDICATORS) and not any(problem in lower for problem in PROBLEM_INDICATORS):
             gaps.append("problem scope unclear")
 
-        if quality >= 0.70 and has_mechanism and "evidence not linked" not in gaps:
+        if quality >= 0.72 and has_mechanism and strong_linked_evidence and not tentative_claim and "evidence not linked" not in gaps:
             status = "resolved"
         elif quality >= 0.40 or has_mechanism or linked_evidence:
             status = "partial"
@@ -464,6 +521,7 @@ def analyze_claims(candidates: list[ClaimCandidate], evidence_links: list[Eviden
             AuditEvent("claim extraction", "matched", f"Triggered by: {', '.join(candidate.trigger_terms)}"),
             AuditEvent("mechanism check", "pass" if has_mechanism else "fail", "Mechanism language present" if has_mechanism else "Needs a named process, equation, proof, or causal bridge", mechanism_score),
             AuditEvent("evidence link", "pass" if linked_evidence else "warn", f"{len(linked_evidence)} evidence snippets linked", linked_evidence_score),
+            AuditEvent("guardrail scan", "warn" if tentative_claim else "pass", "Tentative or hypothesis language kept below RESOLVES" if tentative_claim else "No tentative-resolution guardrail triggered"),
             AuditEvent("claim verdict", status, f"Quality score {quality:.2f}", quality),
         ]
         results.append(
@@ -509,6 +567,8 @@ def extract_evidence_links(sentences: list[DocumentSentence]) -> list[EvidenceLi
         elif methodology_count:
             evidence_type = "method"
         confidence = clamp(0.24 + citations * 0.16 + numbers * 0.07 + math_content * 0.07 + evidence_count * 0.04 + methodology_count * 0.04, 0.2, 0.95)
+        if is_reference_like_sentence(sentence.text):
+            confidence = min(confidence, 0.35)
         links.append(
             EvidenceLink(
                 id=f"E{len(links) + 1}",
@@ -529,6 +589,8 @@ def link_evidence_to_claim(claim: DocumentSentence, evidence_links: list[Evidenc
     for link in evidence_links:
         evidence_words = content_words(link.snippet)
         overlap = jaccard(claim_words, evidence_words)
+        if is_reference_like_sentence(link.snippet) and overlap < 0.18:
+            continue
         proximity = max(0.0, 1.0 - abs(claim.index - link.sentence_index) / 8)
         same_section = 0.22 if claim.section == link.section else 0.0
         score = overlap * 0.55 + proximity * 0.30 + same_section
@@ -581,7 +643,7 @@ def find_internal_contradictions(sentences: list[DocumentSentence] | list[str]) 
             if checked >= max_pairs:
                 break
             checked += 1
-            if is_comparison_context(first.text, second.text):
+            if is_comparison_context(first.text, second.text) or is_scoped_exception_pair(first.text, second.text):
                 continue
             first_words = content_words(first.text)
             second_words = content_words(second.text)
@@ -673,8 +735,16 @@ def find_scope_conflicts(sentences: list[DocumentSentence]) -> list[Finding]:
     for index, sentence in enumerate(sentences):
         if not absolute.search(sentence.text):
             continue
+        if is_scoped_universal(sentence.text) or is_background_context(sentence.text):
+            continue
         window = sentences[max(0, index - 2) : min(len(sentences), index + 3)]
-        caveats = [candidate for candidate in window if candidate.index != sentence.index and caveat.search(candidate.text)]
+        caveats = [
+            candidate
+            for candidate in window
+            if candidate.index != sentence.index
+            and caveat.search(candidate.text)
+            and not is_scope_limitation_context(candidate.text)
+        ]
         if caveats:
             findings.append(
                 Finding(
@@ -698,6 +768,8 @@ def find_theory_as_fact_language(sentences: list[DocumentSentence]) -> list[Find
     findings: list[Finding] = []
     for sentence in sentences:
         lower = sentence.text.lower()
+        if is_tentative_language(lower):
+            continue
         if any(re.search(pattern, lower) for pattern in THEORY_AS_FACT_PATTERNS):
             findings.append(
                 Finding(
@@ -752,7 +824,13 @@ def find_barrier_findings(claims: list[ClaimResult], sentences: list[DocumentSen
                     source_span=claim.source_span,
                 )
             )
-        if claim.status == "failed" and any(indicator in claim.claim.lower() for indicator in RESOLUTION_INDICATORS):
+        lower_claim = claim.claim.lower()
+        if (
+            claim.status == "failed"
+            and any(indicator in lower_claim for indicator in RESOLUTION_INDICATORS)
+            and not is_tentative_language(lower_claim)
+            and not is_background_context(lower_claim)
+        ):
             findings.append(
                 Finding(
                     type="Unsupported Resolution Claim",
@@ -805,7 +883,9 @@ def determine_verdict(claims: list[ClaimResult], findings: list[Finding], eviden
     resolution_ratio = resolution_ratio_for_claims(claims)
     medium_penalty = min(0.18, sum(1 for finding in findings if finding.severity == "medium") * 0.045)
     adjusted_evidence = max(0.0, evidence.score - medium_penalty)
-    if resolution_ratio >= 0.72 and adjusted_evidence >= 0.58:
+    blocking_medium_types = {"Evidence Gap", "Missing Mechanism Barrier", "Unsupported Resolution Claim", "Scope Conflict"}
+    has_blocking_medium = any(finding.severity == "medium" and finding.type in blocking_medium_types for finding in findings)
+    if resolution_ratio >= 0.72 and adjusted_evidence >= 0.58 and evidence.linked_evidence > 0 and not has_blocking_medium:
         return "RESOLVES"
     if resolution_ratio >= 0.42 or adjusted_evidence >= 0.42:
         return "PARTIAL"
@@ -823,7 +903,7 @@ def build_verdict_rubric(claims: list[ClaimResult], findings: list[Finding], evi
     )
     return [
         RubricScore("Claim resolution", round(claim_ratio, 3), 0.36, "Resolved claims count fully; partial claims count halfway"),
-        RubricScore("Evidence strength", round(evidence_score, 3), 0.28, "Document-level evidence markers plus linked evidence snippets"),
+        RubricScore("Evidence strength", round(evidence_score, 3), 0.28, "Document-level evidence markers plus linked, proximate evidence snippets"),
         RubricScore("Internal consistency", round(contradiction_score, 3), 0.24, "Penalizes high and medium contradiction/risk findings"),
         RubricScore("Mechanism coverage", round(mechanism_score, 3), 0.12, "Share of claims with explicit mechanism language"),
     ]
@@ -893,6 +973,7 @@ def build_report_audit_events(
         AuditEvent("sentence parse", "complete", f"{len(sentences)} analyzable sentences detected"),
         AuditEvent("claim extraction", "complete", f"{len(claims)} resolution or theory claims detected"),
         AuditEvent("evidence linking", "complete", f"{evidence.linked_evidence} evidence snippets indexed", evidence.score),
+        AuditEvent("false-positive guardrails", "complete", "Tentative, prior-work, scoped-limit, and reference-like guardrails applied"),
         AuditEvent("barrier scan", "complete", f"{len(findings)} contradiction or repair findings emitted"),
         AuditEvent("verdict", verdict, "Deterministic verdict selected from claim, evidence, and finding scores"),
     ]
@@ -939,9 +1020,64 @@ def count_math_content(text: str) -> int:
     return math_symbols + equation_words
 
 
+def is_tentative_language(text: str) -> bool:
+    lower = text.lower()
+    if re.search(r"\b(may|might|could|possibly)\b.*\b(resolve|solve|explain|account for|reconcile|predict)\b", lower):
+        return True
+    return any(re.search(rf"\b{re.escape(marker)}\b", lower) for marker in TENTATIVE_MARKERS)
+
+
+def is_background_context(text: str) -> bool:
+    lower = text.lower()
+    return any(marker in lower for marker in BACKGROUND_MARKERS)
+
+
+def is_scope_limitation_context(text: str) -> bool:
+    lower = text.lower()
+    return any(marker in lower for marker in LIMITATION_MARKERS)
+
+
+def is_scoped_universal(text: str) -> bool:
+    lower = text.lower()
+    if not re.search(r"\b(all|always|every|never|none|universal|in every case|without exception)\b", lower):
+        return False
+    return bool(
+        re.search(r"\b(within|inside|under|only under|only within|limited to|scoped to)\b", lower)
+        or "calibrated sample" in lower
+    )
+
+
+def is_scoped_exception_pair(first: str, second: str) -> bool:
+    context = f"{first} {second}".lower()
+    if not is_scope_limitation_context(context):
+        return False
+    return bool(re.search(r"\b(scope|boundary|outside|within|limited|only under|not apply|not tested)\b", context))
+
+
+def is_reference_like_sentence(text: str) -> bool:
+    lower = text.lower().strip()
+    if not lower:
+        return False
+    if lower.startswith(("references", "bibliography", "works cited")):
+        return True
+    if any(indicator in lower for indicator in CLAIM_INDICATORS | RESOLUTION_INDICATORS | PROBLEM_INDICATORS):
+        return False
+    citation_count = count_citations(text)
+    years = len(re.findall(r"\b(?:18|19|20)\d{2}\b", text))
+    words = content_words(text)
+    bibliographic_punctuation = lower.count(";") + lower.count(",") >= 3
+    return (citation_count >= 2 and len(words) <= 18) or (years >= 2 and bibliographic_punctuation and len(words) <= 22)
+
+
 def is_comparison_context(first: str, second: str) -> bool:
     context = f"{first} {second}".lower()
-    return any(marker in context for marker in COMPARISON_MARKERS)
+    if any(marker in context for marker in COMPARISON_MARKERS | BACKGROUND_MARKERS):
+        return True
+    return bool(
+        re.search(r"\b(prior|previous|earlier|standard|conventional)\b", context)
+        and re.search(r"\b(our|proposed|this paper|this framework|new model)\b", context)
+    )
+
 
 
 def severity_for_score(score: float) -> str:

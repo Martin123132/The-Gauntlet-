@@ -1948,6 +1948,10 @@ def render_benchmark_result(result) -> None:
         ("Matched Claim Gaps", result.matched_claim_gaps),
         ("Missed Claim Gaps", result.missed_claim_gaps),
         ("Extra Claim Gaps", result.extra_claim_gaps),
+        ("Guarded Findings Kept Out", result.absent_findings_kept_out),
+        ("Unexpected Guarded Findings", result.unexpected_absent_findings),
+        ("Guarded Claim Gaps Kept Out", result.absent_claim_gaps_kept_out),
+        ("Unexpected Guarded Claim Gaps", result.unexpected_absent_claim_gaps),
     ]
     for first, second in zip(comparison_cards[::2], comparison_cards[1::2]):
         left, right = st.columns(2)

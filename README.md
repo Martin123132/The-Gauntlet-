@@ -98,6 +98,9 @@ The verdict is a review aid, not a replacement for expert peer review.
 
 - document sections and claim locations
 - explicit resolution claims
+- false-positive guardrails for tentative hypotheses, prior-work comparisons,
+  scoped limitations, reference-like text, and unsupported equation/citation
+  dumps
 - mechanism language such as `because`, `through`, `via`, `framework`, or
   `equation`
 - evidence markers and evidence links such as data, observations, citations,
@@ -131,11 +134,17 @@ Current benchmark cases cover:
 - scope conflict
 - circular support
 - theory-as-fact language
+- tentative hypotheses that should not be treated as finished resolutions
+- scoped limitations and prior-work comparisons that should not become
+  internal contradictions
+- reference-like text, weak equation dumps, and caveated universal claims that
+  should not create false-positive findings
 
 Each benchmark shows the expected verdict, actual verdict, matched findings,
-missed findings, extra findings, matched claim gaps, and export buttons. The
-same benchmark corpus is used by the test suite so future rule changes cannot
-quietly break known behavior.
+missed findings, extra findings, matched claim gaps, and false-positive
+guardrail checks for findings and claim gaps that should stay absent. The same
+benchmark corpus is used by the test suite so future rule changes cannot
+quietly break known behavior or reintroduce known false positives.
 
 ## Local Saved Workspace
 
