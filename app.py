@@ -37,6 +37,7 @@ from gauntlet_core.share import (
     build_share_card_svg,
     build_x_post,
 )
+from gauntlet_core.source_review import build_source_review_items, source_review_to_markdown
 from gauntlet_core.workspace import (
     REVIEW_STATUSES,
     delete_saved_run,
@@ -70,7 +71,7 @@ PAGE_LABELS = {
     "batch": "Batch",
     "share": "Share Demo",
     "action": "Action Plan",
-    "source": "Source",
+    "source": "Source Review",
     "breakdown": "Breakdown",
     "benchmarks": "Benchmarks",
     "claims": "Claims",
@@ -682,6 +683,33 @@ div[data-baseweb="tab-highlight"] {
   max-height: 520px;
   overflow: auto;
   padding-right: .25rem;
+}
+.source-issue-list {
+  max-height: 440px;
+  overflow: auto;
+  padding-right: .25rem;
+  margin-bottom: .8rem;
+}
+.source-issue-card {
+  border: 1px solid var(--gauntlet-border);
+  border-radius: 8px;
+  background: white;
+  padding: .78rem;
+  margin-bottom: .58rem;
+  box-shadow: var(--gauntlet-shadow);
+}
+.source-issue-card.active {
+  border-color: var(--gauntlet-teal);
+  background: #effaf8;
+}
+.source-issue-card.high {
+  border-left: 4px solid var(--gauntlet-danger);
+}
+.source-issue-card.medium {
+  border-left: 4px solid var(--gauntlet-gold);
+}
+.source-issue-card.low {
+  border-left: 4px solid var(--gauntlet-teal);
 }
 .rubric-row {
   display: grid;
@@ -1971,13 +1999,17 @@ def render_benchmark_comparison_card(title: str, items) -> None:
     )
 
 
+SOURCE_REVIEW_FILTERS = ("All", "Findings", "Claims", "Evidence", "High Risk", "Needs Repair")
+
+
 def render_source_viewer_page(report) -> None:
     source_spans = list(getattr(report, "source_spans", []) or [])
+    review_items = build_source_review_items(report)
     st.markdown(
         f"""
         <div class="wide-detail-card">
-          <div class="detail-title">Source Viewer</div>
-          <div class="detail-subtitle">Source: {html.escape(report.source_name)}. Jump from any claim, finding, evidence snippet, or trace anchor to the exact sentence used by the audit.</div>
+          <div class="detail-title">Source Review</div>
+          <div class="detail-subtitle">Source: {html.escape(report.source_name)}. Start from a claim, finding, evidence link, or repair item, then inspect the exact source sentence used by the audit.</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1999,6 +2031,22 @@ def render_source_viewer_page(report) -> None:
 
     left, right = st.columns([0.32, 0.68], gap="medium")
     with left:
+        st.markdown('<div class="panel-title">Issue Queue</div>', unsafe_allow_html=True)
+        selected_filter = st.radio(
+            "Issue filter",
+            SOURCE_REVIEW_FILTERS,
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+        visible_items = filter_source_review_items(review_items, selected_filter)
+        render_source_review_issue_queue(visible_items, selected_anchor)
+        st.download_button(
+            "Export Source Review Markdown",
+            data=source_review_to_markdown(report, visible_items),
+            file_name=f"{safe_stem(report.source_name)}-source-review.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
         st.markdown('<div class="panel-title">Source Navigator</div>', unsafe_allow_html=True)
         selector_key = f"source_anchor_selector_{selected_anchor}"
         selected_label = st.selectbox("Source anchor", labels, index=selected_index, key=selector_key)
@@ -2007,7 +2055,46 @@ def render_source_viewer_page(report) -> None:
         selected_span = anchors[label_to_anchor[selected_label]]
         render_source_anchor_list(source_spans, selected_span.anchor_id)
     with right:
-        render_source_lens(report, selected_span)
+        render_source_lens(report, selected_span, review_items)
+
+
+def filter_source_review_items(items, selected_filter: str):
+    if selected_filter == "Findings":
+        return [item for item in items if item.kind == "Finding"]
+    if selected_filter == "Claims":
+        return [item for item in items if item.kind == "Claim"]
+    if selected_filter == "Evidence":
+        return [item for item in items if item.kind == "Evidence"]
+    if selected_filter == "High Risk":
+        return [item for item in items if item.severity == "high" or item.priority <= 20]
+    if selected_filter == "Needs Repair":
+        return [item for item in items if item.kind == "Repair" or item.status in {"failed", "partial", "weak", "needs repair"}]
+    return list(items)
+
+
+def render_source_review_issue_queue(items, selected_anchor: str) -> None:
+    if not items:
+        st.markdown('<div class="empty-detail">No source review items match this filter.</div>', unsafe_allow_html=True)
+        return
+    cards = []
+    for item in items[:80]:
+        source_anchor = item.source_span.anchor_id if item.source_span else ""
+        related_anchor = item.related_source_span.anchor_id if item.related_source_span else ""
+        active_class = " active" if selected_anchor in {source_anchor, related_anchor} else ""
+        severity_class = item.severity if item.severity in {"high", "medium", "low"} else "low"
+        link = source_view_link(item.source_span, label="Open Source") if item.source_span else ""
+        cards.append(
+            f'<div class="source-issue-card {html.escape(severity_class)}{active_class}">'
+            f'<div class="small-label">{html.escape(item.kind)} | {html.escape(item.id)}</div>'
+            f'<strong>{html.escape(item.title)}</strong>'
+            f'<div class="muted-note">Priority {item.priority} | {html.escape(item.severity)} | {html.escape(item.status)}</div>'
+            f'{link}'
+            f'<div class="claim-text">{html.escape(truncate_text(item.body, 170))}</div>'
+            "</div>"
+        )
+    remaining = len(items) - min(len(items), 80)
+    remaining_note = f'<div class="muted-note">{remaining} more source review items are included in export.</div>' if remaining else ""
+    st.markdown(f'<div class="source-issue-list">{"".join(cards)}</div>{remaining_note}', unsafe_allow_html=True)
 
 
 def render_source_anchor_list(source_spans, selected_anchor: str, limit: int = 80) -> None:
@@ -2033,7 +2120,7 @@ def render_source_anchor_list(source_spans, selected_anchor: str, limit: int = 8
     )
 
 
-def render_source_lens(report, selected_span) -> None:
+def render_source_lens(report, selected_span, review_items=None) -> None:
     st.markdown(
         f"""
         <div class="source-lens">
@@ -2050,6 +2137,7 @@ def render_source_lens(report, selected_span) -> None:
         unsafe_allow_html=True,
     )
     render_source_context(report, selected_span)
+    render_source_review_issue_details(selected_span, review_items or [])
     render_related_audit_items(report, selected_span)
 
 
@@ -2078,6 +2166,40 @@ def render_source_context(report, selected_span) -> None:
           <div class="detail-subtitle">The selected sentence is shown with nearby extracted sentences for context.</div>
         </div>
         {''.join(lines)}
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_source_review_issue_details(selected_span, review_items) -> None:
+    anchor_id = selected_span.anchor_id
+    related_items = [
+        item
+        for item in review_items
+        if same_anchor(item.source_span, anchor_id) or same_anchor(item.related_source_span, anchor_id)
+    ]
+    cards = []
+    for item in related_items:
+        related_note = ""
+        if item.related_source_span and item.related_source_span.anchor_id != anchor_id:
+            related_note = f'<div class="source-ref">Related: {html.escape(source_reference(item.related_source_span))}</div>'
+        cards.append(
+            '<div class="audit-card">'
+            f'<strong>{html.escape(item.kind)}: {html.escape(item.title)}</strong>'
+            f'<div class="muted-note">Priority {item.priority} | {html.escape(item.severity)} | {html.escape(item.status)}</div>'
+            f'{related_note}'
+            f'<div class="claim-text">{html.escape(truncate_text(item.body, 260))}</div>'
+            f'<p><strong>Rule explanation:</strong> {html.escape(item.explanation)}</p>'
+            f'<p><strong>Repair:</strong> {html.escape(item.repair_suggestion)}</p>'
+            "</div>"
+        )
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="detail-title">Rule Explanation & Repair</div>
+          <div class="detail-subtitle">Issue-led review items attached to this source sentence.</div>
+        </div>
+        <div class="audit-grid">{''.join(cards) or '<div class="empty-detail">No source review item points directly to this anchor.</div>'}</div>
         """,
         unsafe_allow_html=True,
     )

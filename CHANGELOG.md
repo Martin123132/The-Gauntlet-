@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+No unreleased changes yet.
+
+## v0.10.0 - Issue-Led Source Review
+
+This release upgrades source anchors into an issue-led review workflow.
+
+### Added
+
+- Added Issue-Led Source Review with prioritized source issues, filters, and a
+  Markdown export.
+
+## v0.9.0 - Share Demo Kit
+
+This release adds a public demo pack workflow for posting project updates.
+
 ### Added
 
 - Added a Share Demo Kit for X-ready post drafts, social cards, demo summaries,

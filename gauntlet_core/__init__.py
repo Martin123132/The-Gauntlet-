@@ -25,6 +25,11 @@ from .share import (
     build_share_card_svg,
     build_x_post,
 )
+from .source_review import (
+    SourceReviewItem,
+    build_source_review_items,
+    source_review_to_markdown,
+)
 from .workspace import (
     SavedRun,
     SavedRunSummary,
@@ -48,6 +53,7 @@ __all__ = [
     "SavedRun",
     "SavedRunSummary",
     "SourceSpan",
+    "SourceReviewItem",
     "analyze_loaded_document",
     "analyze_paper_text",
     "action_plan_to_markdown",
@@ -63,6 +69,7 @@ __all__ = [
     "build_share_card_html",
     "build_share_card_svg",
     "build_x_post",
+    "build_source_review_items",
     "delete_saved_run",
     "filter_batch_items",
     "list_benchmark_samples",
@@ -75,5 +82,6 @@ __all__ = [
     "run_refinement",
     "save_analysis_run",
     "sort_batch_items",
+    "source_review_to_markdown",
     "update_saved_run_notes",
 ]

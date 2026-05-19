@@ -116,10 +116,13 @@ def test_streamlit_source_viewer_highlights_selected_anchor():
     app.run(timeout=20)
 
     assert not app.exception
-    assert any("Source Viewer" in item.value for item in app.markdown)
+    assert any("Source Review" in item.value for item in app.markdown)
+    assert any("Issue Queue" in item.value for item in app.markdown)
     assert any("Highlighted Source" in item.value for item in app.markdown)
+    assert any("Rule Explanation & Repair" in item.value for item in app.markdown)
     assert any("Linked Audit Items" in item.value for item in app.markdown)
     assert any("Source anchor" == selectbox.label for selectbox in app.selectbox)
+    assert any("Issue filter" == radio.label for radio in app.radio)
 
     if len(app.session_state["report"].source_spans) > 1:
         second_anchor_id = app.session_state["report"].source_spans[1].anchor_id
@@ -206,6 +209,16 @@ def test_streamlit_workspace_page_lists_opens_compares_and_deletes(tmp_path, mon
     app.run(timeout=20)
 
     assert "report" in app.session_state
+
+    app.query_params["page"] = "source"
+    app.run(timeout=20)
+
+    assert not app.exception
+    assert any("Source Review" in item.value for item in app.markdown)
+    assert any("Issue Queue" in item.value for item in app.markdown)
+
+    app.query_params["page"] = "workspace"
+    app.run(timeout=20)
 
     before_delete = len(list_saved_runs())
     delete_button = next(button for button in app.button if button.label == "Delete Saved Run")

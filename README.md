@@ -37,7 +37,7 @@ through that service.
 
 ![The Gauntlet saved workspace](docs/images/gauntlet-workspace.png)
 
-![The Gauntlet source viewer](docs/images/gauntlet-source-viewer.png)
+![The Gauntlet source review](docs/images/gauntlet-source-viewer.png)
 
 ![The Gauntlet benchmark gallery](docs/images/gauntlet-benchmarks.png)
 
@@ -108,8 +108,8 @@ The verdict is a review aid, not a replacement for expert peer review.
   evidence gaps, scope conflicts, circular support, and theory-as-fact wording
 - source trace anchors for claims, findings, contradictions, and evidence
   snippets, including PDF page numbers when available
-- a Source Viewer page that highlights the exact extracted sentence behind a
-  claim, finding, evidence snippet, or source-trace anchor
+- a Source Review page that highlights the exact extracted sentence behind a
+  claim, finding, evidence snippet, repair item, or source-trace anchor
 - exportable JSON, Markdown, self-contained HTML, and report bundle ZIP exports
 - a Reviewer Action Plan that turns claim gaps and findings into prioritized
   repair steps
@@ -176,12 +176,15 @@ It prioritizes high-severity findings, unsupported claims, missing mechanisms,
 weak evidence links, scope gaps, and low evidence coverage. The action plan can
 be exported as Markdown and is included in HTML reports and report bundles.
 
-## Source Viewer
+## Source Review
 
-The `Source` page turns source anchors into a readable audit view. Open it from
-the nav or from any `View Source` link on a claim, finding, evidence card, or
-source-trace card. The selected sentence is highlighted with nearby extracted
-sentences for context, plus any linked claims, findings, or evidence snippets.
+The `Source Review` page turns source anchors into an issue-led audit view.
+Open it from the nav or from any `View Source` link on a claim, finding,
+evidence card, action item, or source-trace card. Start from the issue queue,
+filter by findings, claims, evidence, high risk, or repair needs, then inspect
+the highlighted sentence with nearby extracted context, linked audit items, rule
+explanations, and repair suggestions. Source Review exports include references
+and snippets only, not full uploaded paper files.
 
 ## Optional Refinement Chamber
 
