@@ -4,6 +4,25 @@
 
 No unreleased changes yet.
 
+## v0.13.0 - Revision Re-Check
+
+This release closes the repair loop by letting users test revised snippets
+against deterministic rules.
+
+### Added
+
+- Added revision re-checks inside Repair Workshop cards for pasted revised
+  sentences or paragraphs.
+- Added deterministic re-check results: `Improved`, `Still Weak`, and
+  `Introduces New Issue`.
+- Added local workspace storage for revision re-check results and a Markdown
+  Revision Re-Check Log export.
+
+### Changed
+
+- Workspace cards now summarize saved revision re-check outcomes alongside
+  repair progress.
+
 ## v0.12.0 - Local Repair Workshop
 
 This release turns findings into a persistent local repair workflow.

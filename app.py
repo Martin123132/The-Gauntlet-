@@ -36,6 +36,11 @@ from gauntlet_core.repair_workshop import (
     repair_status_label,
     repair_workshop_to_markdown,
 )
+from gauntlet_core.revision_recheck import (
+    recheck_repair_revision,
+    revision_recheck_log_to_markdown,
+    revision_status_label,
+)
 from gauntlet_core.sample_text import SAMPLE_PAPER
 from gauntlet_core.share import (
     build_demo_share_pack,
@@ -51,6 +56,7 @@ from gauntlet_core.workspace import (
     list_saved_runs,
     load_saved_run,
     save_analysis_run,
+    update_saved_run_revision_recheck,
     update_saved_run_repair_progress,
     update_saved_run_notes,
     workspace_runs_dir,
@@ -345,7 +351,7 @@ div[data-baseweb="tab-highlight"] {
 }
 .stat-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   border: 1px solid var(--gauntlet-border);
   border-radius: 8px;
   background: white;
@@ -1512,7 +1518,9 @@ def render_exports(report) -> None:
 
 def render_action_plan_page(report, compact: bool = False) -> None:
     run_id = st.session_state.get("workspace_run_id") or report_store().get("workspace_run_id")
-    saved_progress = load_repair_progress(run_id) if run_id else {}
+    saved_run = load_workspace_run_safely(run_id)
+    saved_progress = saved_run.repair_progress if saved_run else {}
+    saved_rechecks = saved_run.revision_rechecks if saved_run else {}
     steps = build_repair_steps(report, saved_progress)
     if compact:
         steps = steps[:6]
@@ -1548,6 +1556,7 @@ def render_action_plan_page(report, compact: bool = False) -> None:
           <div class="stat-tile"><div class="stat-title">To Do</div><div class="stat-number">{remaining}</div><div class="stat-note">Still open</div></div>
           <div class="stat-tile"><div class="stat-title">In Progress</div><div class="stat-number">{in_progress}</div><div class="stat-note">Being repaired</div></div>
           <div class="stat-tile"><div class="stat-title">Fixed</div><div class="stat-number">{fixed}</div><div class="stat-note">Marked done</div></div>
+          <div class="stat-tile"><div class="stat-title">Re-Checks</div><div class="stat-number">{len(saved_rechecks)}</div><div class="stat-note">Revision tests</div></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1582,6 +1591,7 @@ def render_action_plan_page(report, compact: bool = False) -> None:
             st.markdown(repair_step_card_html(step), unsafe_allow_html=True)
             status_key = f"repair_status_{step.id}"
             note_key = f"repair_note_{step.id}"
+            revision_key = f"repair_revision_{step.id}"
             left, right = st.columns([0.28, 0.72])
             left.selectbox(
                 "Repair status",
@@ -1596,6 +1606,27 @@ def render_action_plan_page(report, compact: bool = False) -> None:
                 height=86,
                 key=note_key,
             )
+            st.text_area(
+                "Revision to test",
+                value=(saved_rechecks.get(step.id, {}) or {}).get("revised_text", ""),
+                height=110,
+                key=revision_key,
+                help="Paste the revised sentence or paragraph for this repair step. The checker re-runs deterministic rules on this snippet only.",
+            )
+            test_col, result_col = st.columns([0.28, 0.72])
+            if test_col.button("Test Revision", use_container_width=True, key=f"test_revision_{step.id}"):
+                revision_text = st.session_state.get(revision_key, "")
+                result = recheck_repair_revision(report, step, revision_text)
+                if run_id:
+                    update_saved_run_revision_recheck(run_id, result)
+                    st.success("Revision re-check saved locally.")
+                    st.rerun()
+                else:
+                    st.session_state[f"revision_result_{step.id}"] = result.to_dict()
+            result = (saved_rechecks or {}).get(step.id)
+            result = result or st.session_state.get(f"revision_result_{step.id}")
+            if result:
+                result_col.markdown(revision_result_card_html(result), unsafe_allow_html=True)
 
     save_col, export_col = st.columns(2)
     if save_col.button("Save Repair Progress", type="primary", use_container_width=True, disabled=not bool(run_id)):
@@ -1615,15 +1646,32 @@ def render_action_plan_page(report, compact: bool = False) -> None:
         mime="text/markdown",
         use_container_width=True,
     )
+    st.download_button(
+        "Export Revision Re-Check Log",
+        data=revision_recheck_log_to_markdown(report, load_revision_rechecks(run_id)),
+        file_name=f"{safe_stem(report.source_name)}-revision-recheck-log.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
+
+
+def load_workspace_run_safely(run_id: str | None):
+    if not run_id:
+        return None
+    try:
+        return load_saved_run(run_id)
+    except (OSError, ValueError, KeyError):
+        return None
 
 
 def load_repair_progress(run_id: str | None) -> dict:
-    if not run_id:
-        return {}
-    try:
-        return load_saved_run(run_id).repair_progress or {}
-    except (OSError, ValueError, KeyError):
-        return {}
+    saved_run = load_workspace_run_safely(run_id)
+    return saved_run.repair_progress if saved_run else {}
+
+
+def load_revision_rechecks(run_id: str | None) -> dict:
+    saved_run = load_workspace_run_safely(run_id)
+    return saved_run.revision_rechecks if saved_run else {}
 
 
 def filter_repair_steps(steps, filter_choice: str):
@@ -1672,6 +1720,18 @@ def repair_step_card_html(step, include_progress: bool = True) -> str:
       <div class="source-ref">{html.escape(source_reference(step.source_span))}</div>
       {progress}
       {source_view_link(step.source_span)}
+    </div>
+    """
+
+
+def revision_result_card_html(result: dict) -> str:
+    status = str(result.get("status", "still-weak"))
+    return f"""
+    <div class="audit-card">
+      <strong>Revision Re-Check: {html.escape(revision_status_label(status))}</strong>
+      <div class="muted-note">Claim {html.escape(str(result.get("original_claim_status", "none")))} -> {html.escape(str(result.get("revised_claim_status", "none")))} | Gaps {int(result.get("original_gap_count", 0))} -> {int(result.get("revised_gap_count", 0))}</div>
+      <div class="claim-text">{html.escape(truncate_text(str(result.get("summary", "")), 260))}</div>
+      <div class="source-ref">Checked: {html.escape(str(result.get("checked_at", "")))}</div>
     </div>
     """
 
@@ -2395,6 +2455,7 @@ def render_saved_run_list(summaries, active_run_id: str | None) -> None:
         active_class = " active" if summary.run_id == active_run_id else ""
         notes_label = "Notes saved" if summary.notes.strip() else "No notes"
         repair_label = repair_progress_summary(summary.repair_progress_counts or {})
+        revision_label = revision_recheck_summary(summary.revision_recheck_counts or {})
         st.markdown(
             f"""
             <div class="workspace-card{active_class}">
@@ -2408,6 +2469,7 @@ def render_saved_run_list(summaries, active_run_id: str | None) -> None:
                 <div><strong>{html.escape(summary.saved_at[:10])}</strong>{html.escape(notes_label)}</div>
               </div>
               <div class="source-ref">Repair progress: {html.escape(repair_label)}</div>
+              <div class="source-ref">Revision re-checks: {html.escape(revision_label)}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -2436,6 +2498,7 @@ def render_saved_run_controls(summaries):
             <div>Findings:<span>{summary.finding_count}</span></div>
           </div>
           <div class="source-ref">Repair progress: {html.escape(repair_progress_summary(summary.repair_progress_counts or {}))}</div>
+          <div class="source-ref">Revision re-checks: {html.escape(revision_recheck_summary(summary.revision_recheck_counts or {}))}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -2943,6 +3006,15 @@ def repair_progress_summary(counts: dict[str, int]) -> str:
     false_positive = counts.get("false-positive", 0)
     wont_fix = counts.get("wont-fix", 0)
     return f"{fixed} fixed, {in_progress} in progress, {todo} to do, {false_positive} false positive, {wont_fix} won't fix"
+
+
+def revision_recheck_summary(counts: dict[str, int]) -> str:
+    if not counts:
+        return "No revision tests"
+    improved = counts.get("improved", 0)
+    still_weak = counts.get("still-weak", 0)
+    new_issue = counts.get("introduces-new-issue", 0)
+    return f"{improved} improved, {still_weak} still weak, {new_issue} new issue"
 
 
 def provider_index(provider: str) -> int:

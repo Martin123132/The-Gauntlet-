@@ -116,6 +116,20 @@ def test_streamlit_repair_workshop_page_saves_progress():
     assert any(item["status"] == "in-progress" for item in saved_run.repair_progress.values())
     assert any("mechanism paragraph" in item["reviewer_note"] for item in saved_run.repair_progress.values())
 
+    app.query_params["page"] = "action"
+    app.run(timeout=20)
+    revision_box = next(area for area in app.text_area if area.label == "Revision to test")
+    revision_box.set_value(
+        "The paper resolves the paradox because a specific mechanism links the contradiction to 12 measured observations."
+    )
+    test_button = next(button for button in app.button if button.label == "Test Revision")
+    test_button.click()
+    app.run(timeout=20)
+
+    saved_run = load_saved_run(app.session_state["workspace_run_id"])
+    assert saved_run.revision_rechecks
+    assert any("Revision Re-Check" in item.value for item in app.markdown)
+
 
 def test_streamlit_source_viewer_highlights_selected_anchor():
     app = AppTest.from_file("app.py")
@@ -219,6 +233,7 @@ def test_streamlit_workspace_page_lists_opens_compares_and_deletes(tmp_path, mon
     assert any("Saved Workspace" in item.value for item in app.markdown)
     assert any("Compare Saved Runs" in item.value for item in app.markdown)
     assert any("Repair progress" in item.value for item in app.markdown)
+    assert any("Revision re-checks" in item.value for item in app.markdown)
 
     open_button = next(button for button in app.button if button.label == "Open Saved Run")
     open_button.click()

@@ -2,11 +2,14 @@ import json
 
 from gauntlet_core import AnalysisReport, analyze_paper_text
 from gauntlet_core.benchmarks import run_benchmark_sample
+from gauntlet_core.repair_workshop import build_repair_steps
+from gauntlet_core.revision_recheck import recheck_repair_revision
 from gauntlet_core.workspace import (
     delete_saved_run,
     list_saved_runs,
     load_saved_run,
     save_analysis_run,
+    update_saved_run_revision_recheck,
     update_saved_run_repair_progress,
     update_saved_run_notes,
 )
@@ -29,6 +32,7 @@ def test_workspace_save_list_load_update_and_delete(tmp_path, monkeypatch):
     assert loaded.report.source_name == "paper.txt"
     assert loaded.report.claims[0].source_span is not None
     assert loaded.repair_progress == {}
+    assert loaded.revision_rechecks == {}
     assert updated.review_status == "confirmed"
     assert updated.notes == "Reviewer confirmed the mechanism gap."
 
@@ -84,13 +88,39 @@ def test_workspace_loads_older_saved_runs_without_repair_progress(tmp_path, monk
     path = tmp_path / "runs" / f"{saved.run_id}.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
     payload.pop("repair_progress", None)
+    payload.pop("revision_rechecks", None)
     payload["schema_version"] = 1
     path.write_text(json.dumps(payload), encoding="utf-8")
 
     loaded = load_saved_run(saved.run_id)
 
     assert loaded.repair_progress == {}
+    assert loaded.revision_rechecks == {}
     assert list_saved_runs()[0].repair_progress_counts == {}
+    assert list_saved_runs()[0].revision_recheck_counts == {}
+
+
+def test_workspace_saves_revision_recheck_without_raw_paper_or_keys(tmp_path, monkeypatch):
+    monkeypatch.setenv("GAUNTLET_WORKSPACE_DIR", str(tmp_path / "runs"))
+    report = analyze_paper_text("The paper resolves the paradox and eliminates the contradiction.", source_name="revision-run.txt")
+    saved = save_analysis_run(report, "analysis")
+    step = build_repair_steps(report)[0]
+    result = recheck_repair_revision(
+        report,
+        step,
+        "The paper resolves the paradox because a specific mechanism links the contradiction to 12 measured observations.",
+    )
+
+    updated = update_saved_run_revision_recheck(saved.run_id, result)
+    loaded = load_saved_run(saved.run_id)
+    payload = json.loads((tmp_path / "runs" / f"{saved.run_id}.json").read_text(encoding="utf-8"))
+
+    assert updated.revision_rechecks[step.id]["status"] == result.status
+    assert loaded.revision_rechecks[step.id]["revised_text"] == result.revised_text
+    assert list_saved_runs()[0].revision_recheck_counts[result.status] == 1
+    assert payload["revision_rechecks"][step.id]["step_id"] == step.id
+    assert "api_key" not in json.dumps(payload).lower()
+    assert "paper_text" not in payload
 
 
 def test_analysis_report_round_trips_from_dict():
