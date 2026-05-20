@@ -10,9 +10,10 @@ import os
 
 from .models import AnalysisReport, analysis_report_from_dict
 from .repair_workshop import normalize_repair_status
+from .revision_recheck import RevisionRecheckResult, normalize_revision_rechecks, revision_recheck_counts
 
 
-WORKSPACE_SCHEMA_VERSION = 2
+WORKSPACE_SCHEMA_VERSION = 3
 WORKSPACE_ENV_VAR = "GAUNTLET_WORKSPACE_DIR"
 DEFAULT_REVIEW_STATUS = "unreviewed"
 REVIEW_STATUSES = ("unreviewed", "confirmed", "false-positive", "needs-follow-up")
@@ -33,6 +34,7 @@ class SavedRunSummary:
     review_status: str = DEFAULT_REVIEW_STATUS
     notes: str = ""
     repair_progress_counts: dict[str, int] | None = None
+    revision_recheck_counts: dict[str, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,7 @@ class SavedRun:
     review_status: str = DEFAULT_REVIEW_STATUS
     notes: str = ""
     repair_progress: dict[str, dict[str, str]] | None = None
+    revision_rechecks: dict[str, dict[str, Any]] | None = None
 
     @property
     def summary(self) -> SavedRunSummary:
@@ -59,6 +62,7 @@ class SavedRun:
             "review_status": self.review_status,
             "notes": self.notes,
             "repair_progress": self.repair_progress or {},
+            "revision_rechecks": self.revision_rechecks or {},
             "benchmark": self.benchmark_metadata,
             "report": self.report.to_dict(),
         }
@@ -108,6 +112,7 @@ def load_saved_run(run_id: str) -> SavedRun:
         review_status=payload.get("review_status", DEFAULT_REVIEW_STATUS),
         notes=payload.get("notes", ""),
         repair_progress=normalize_repair_progress(payload.get("repair_progress", {})),
+        revision_rechecks=normalize_revision_rechecks(payload.get("revision_rechecks", {})),
     )
 
 
@@ -127,6 +132,7 @@ def update_saved_run_notes(run_id: str, notes: str, review_status: str) -> Saved
         review_status=normalized_status,
         notes=notes,
         repair_progress=saved_run.repair_progress,
+        revision_rechecks=saved_run.revision_rechecks,
     )
     write_saved_run(updated)
     return updated
@@ -149,6 +155,30 @@ def update_saved_run_repair_progress(run_id: str, step_id: str, status: str, rev
         review_status=saved_run.review_status,
         notes=saved_run.notes,
         repair_progress=repair_progress,
+        revision_rechecks=saved_run.revision_rechecks,
+    )
+    write_saved_run(updated)
+    return updated
+
+
+def update_saved_run_revision_recheck(run_id: str, result: RevisionRecheckResult | dict[str, Any]) -> SavedRun:
+    saved_run = load_saved_run(run_id)
+    revision_rechecks = dict(saved_run.revision_rechecks or {})
+    payload = result.to_dict() if isinstance(result, RevisionRecheckResult) else dict(result)
+    step_id = str(payload.get("step_id", ""))
+    if not step_id:
+        raise ValueError("Revision re-check result must include a step_id.")
+    revision_rechecks[step_id] = normalize_revision_rechecks({step_id: payload})[step_id]
+    updated = SavedRun(
+        run_id=saved_run.run_id,
+        run_kind=saved_run.run_kind,
+        saved_at=saved_run.saved_at,
+        report=saved_run.report,
+        benchmark_metadata=saved_run.benchmark_metadata,
+        review_status=saved_run.review_status,
+        notes=saved_run.notes,
+        repair_progress=saved_run.repair_progress,
+        revision_rechecks=revision_rechecks,
     )
     write_saved_run(updated)
     return updated
@@ -170,6 +200,7 @@ def summarize_saved_run(saved_run: SavedRun) -> SavedRunSummary:
         review_status=saved_run.review_status,
         notes=saved_run.notes,
         repair_progress_counts=repair_progress_counts(saved_run.repair_progress or {}),
+        revision_recheck_counts=revision_recheck_counts(saved_run.revision_rechecks or {}),
     )
 
 
@@ -190,6 +221,7 @@ def summary_from_payload(payload: dict[str, Any]) -> SavedRunSummary:
         review_status=payload.get("review_status", DEFAULT_REVIEW_STATUS),
         notes=payload.get("notes", ""),
         repair_progress_counts=repair_progress_counts(normalize_repair_progress(payload.get("repair_progress", {}))),
+        revision_recheck_counts=revision_recheck_counts(normalize_revision_rechecks(payload.get("revision_rechecks", {}))),
     )
 
 

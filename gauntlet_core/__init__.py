@@ -18,6 +18,7 @@ from .models import AnalysisReport, SourceSpan
 from .report_bundle import build_report_bundle
 from .refinement import ProviderSelection, RefinementReport, run_provider_refinement, run_refinement
 from .repair_workshop import RepairStep, build_repair_steps, repair_workshop_to_markdown
+from .revision_recheck import RevisionRecheckResult, recheck_repair_revision, revision_recheck_log_to_markdown
 from .share import (
     DemoShareSummary,
     build_demo_share_pack,
@@ -38,6 +39,7 @@ from .workspace import (
     list_saved_runs,
     load_saved_run,
     save_analysis_run,
+    update_saved_run_revision_recheck,
     update_saved_run_repair_progress,
     update_saved_run_notes,
 )
@@ -52,6 +54,7 @@ __all__ = [
     "ProviderSelection",
     "RefinementReport",
     "RepairStep",
+    "RevisionRecheckResult",
     "ReviewerAction",
     "SavedRun",
     "SavedRunSummary",
@@ -88,6 +91,9 @@ __all__ = [
     "sort_batch_items",
     "source_review_to_markdown",
     "repair_workshop_to_markdown",
+    "recheck_repair_revision",
+    "revision_recheck_log_to_markdown",
+    "update_saved_run_revision_recheck",
     "update_saved_run_repair_progress",
     "update_saved_run_notes",
 ]

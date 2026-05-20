@@ -115,7 +115,7 @@ The verdict is a review aid, not a replacement for expert peer review.
   claim, finding, evidence snippet, repair item, or source-trace anchor
 - exportable JSON, Markdown, self-contained HTML, and report bundle ZIP exports
 - a Repair Workshop that turns claim gaps and findings into prioritized repair
-  steps with local saved progress
+  steps with local saved progress and revision re-checks
 
 ## Benchmark Demo Gallery
 
@@ -155,8 +155,8 @@ delete a saved run, or compare two saved reports side by side.
 
 Saved workspace files live under `.gauntlet/workspace/runs/` and are ignored by
 Git. The app saves the deterministic report, source snippets, reviewer notes,
-and repair progress needed for auditability, but it does not save the original
-uploaded document.
+repair progress, and pasted revision snippets needed for auditability, but it
+does not save the original uploaded document.
 
 ## Batch Scan
 
@@ -187,6 +187,12 @@ mechanisms, weak evidence links, scope gaps, and low evidence coverage. You can
 mark each step as `To Do`, `In Progress`, `Fixed`, `Won't Fix`, or
 `False Positive`, add reviewer notes, save progress to the local workspace, and
 export a Markdown repair checklist.
+
+Each repair step also includes a revision re-check box. Paste a revised
+sentence or paragraph, run the deterministic re-check, and The Gauntlet will
+show whether the snippet `Improved`, is `Still Weak`, or `Introduces New Issue`.
+Saved re-checks are stored locally as snippets and audit results, then exported
+through the Revision Re-Check Log.
 
 The older `?page=action` link still opens this page, and static reports still
 include the original reviewer action plan for offline reading.
