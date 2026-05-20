@@ -4,6 +4,27 @@
 
 No unreleased changes yet.
 
+## v0.14.0 - Source Reader Workspace
+
+This release upgrades source traceability into a reader workspace for real-paper
+audit follow-up.
+
+### Added
+
+- Added a Source Reader workspace with source search, section/page filters,
+  selected-snippet context, and linked audit panels.
+- Added Source Reader Markdown export for selected source references, nearby
+  snippets, issue summaries, repair suggestions, and revision re-check notes.
+- Added source-reader core helpers for reusable reader views without changing
+  saved report JSON.
+
+### Changed
+
+- Retitled the old Source Review nav item to Source Reader while preserving the
+  existing `?page=source` route and anchor deep links.
+- Repair Workshop and Revision Re-Check cards now link back into Source Reader
+  when a source anchor is available.
+
 ## v0.13.0 - Revision Re-Check
 
 This release closes the repair loop by letting users test revised snippets

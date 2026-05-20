@@ -49,6 +49,7 @@ from gauntlet_core.share import (
     build_share_card_svg,
     build_x_post,
 )
+from gauntlet_core.source_reader import build_source_reader_view, source_reader_to_markdown
 from gauntlet_core.source_review import build_source_review_items, source_review_to_markdown
 from gauntlet_core.workspace import (
     REVIEW_STATUSES,
@@ -85,7 +86,7 @@ PAGE_LABELS = {
     "batch": "Batch",
     "share": "Share Demo",
     "action": "Repair Workshop",
-    "source": "Source Review",
+    "source": "Source Reader",
     "breakdown": "Breakdown",
     "benchmarks": "Benchmarks",
     "claims": "Claims",
@@ -723,6 +724,43 @@ div[data-baseweb="tab-highlight"] {
   border-left: 4px solid var(--gauntlet-gold);
 }
 .source-issue-card.low {
+  border-left: 4px solid var(--gauntlet-teal);
+}
+.source-reader-toolbar {
+  border: 1px solid var(--gauntlet-border);
+  border-radius: 8px;
+  background: white;
+  padding: .85rem;
+  margin-bottom: .85rem;
+  box-shadow: 0 10px 24px rgba(22, 34, 44, .05);
+}
+.source-reader-result {
+  border: 1px solid var(--gauntlet-border);
+  border-radius: 8px;
+  background: white;
+  padding: .72rem .78rem;
+  margin-bottom: .55rem;
+}
+.source-reader-result.active {
+  border-color: var(--gauntlet-teal);
+  background: #effaf8;
+}
+.source-reader-selected {
+  border: 1px solid #9fd3cf;
+  border-radius: 8px;
+  background: #f7fffd;
+  color: #183d39;
+  padding: 1rem;
+  margin-bottom: .75rem;
+  box-shadow: var(--gauntlet-shadow);
+  line-height: 1.65;
+}
+.source-reader-selected strong {
+  display: block;
+  color: var(--gauntlet-teal);
+  margin-bottom: .35rem;
+}
+.source-reader-related {
   border-left: 4px solid var(--gauntlet-teal);
 }
 .rubric-row {
@@ -1626,7 +1664,7 @@ def render_action_plan_page(report, compact: bool = False) -> None:
             result = (saved_rechecks or {}).get(step.id)
             result = result or st.session_state.get(f"revision_result_{step.id}")
             if result:
-                result_col.markdown(revision_result_card_html(result), unsafe_allow_html=True)
+                result_col.markdown(revision_result_card_html(result, step.source_span), unsafe_allow_html=True)
 
     save_col, export_col = st.columns(2)
     if save_col.button("Save Repair Progress", type="primary", use_container_width=True, disabled=not bool(run_id)):
@@ -1719,19 +1757,21 @@ def repair_step_card_html(step, include_progress: bool = True) -> str:
       <div class="repair-button-look">{html.escape(step.suggested_fix)}</div>
       <div class="source-ref">{html.escape(source_reference(step.source_span))}</div>
       {progress}
-      {source_view_link(step.source_span)}
+      {source_view_link(step.source_span, label="Open in Source Reader")}
     </div>
     """
 
 
-def revision_result_card_html(result: dict) -> str:
+def revision_result_card_html(result: dict, source_span=None) -> str:
     status = str(result.get("status", "still-weak"))
+    source_link = source_view_link(source_span, label="Open in Source Reader")
     return f"""
     <div class="audit-card">
       <strong>Revision Re-Check: {html.escape(revision_status_label(status))}</strong>
       <div class="muted-note">Claim {html.escape(str(result.get("original_claim_status", "none")))} -> {html.escape(str(result.get("revised_claim_status", "none")))} | Gaps {int(result.get("original_gap_count", 0))} -> {int(result.get("revised_gap_count", 0))}</div>
       <div class="claim-text">{html.escape(truncate_text(str(result.get("summary", "")), 260))}</div>
       <div class="source-ref">Checked: {html.escape(str(result.get("checked_at", "")))}</div>
+      {source_link}
     </div>
     """
 
@@ -2172,11 +2212,15 @@ SOURCE_REVIEW_FILTERS = ("All", "Findings", "Claims", "Evidence", "High Risk", "
 def render_source_viewer_page(report) -> None:
     source_spans = list(getattr(report, "source_spans", []) or [])
     review_items = build_source_review_items(report)
+    run_id = st.session_state.get("workspace_run_id") or report_store().get("workspace_run_id")
+    saved_run = load_workspace_run_safely(run_id)
+    saved_progress = saved_run.repair_progress if saved_run else {}
+    saved_rechecks = saved_run.revision_rechecks if saved_run else {}
     st.markdown(
         f"""
         <div class="wide-detail-card">
-          <div class="detail-title">Source Review</div>
-          <div class="detail-subtitle">Source: {html.escape(report.source_name)}. Start from a claim, finding, evidence link, or repair item, then inspect the exact source sentence used by the audit.</div>
+          <div class="detail-title">Source Reader</div>
+          <div class="detail-subtitle">Source: {html.escape(report.source_name)}. Search extracted source anchors, jump from problems to the exact sentence, and inspect linked audit items without saving the full paper.</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -2188,16 +2232,32 @@ def render_source_viewer_page(report) -> None:
         )
         return
 
-    anchors = {span.anchor_id: span for span in source_spans}
-    requested_anchor = current_source_anchor()
-    selected_anchor = requested_anchor if requested_anchor in anchors else source_spans[0].anchor_id
-    labels = [source_anchor_label(span) for span in source_spans]
-    label_to_anchor = {source_anchor_label(span): span.anchor_id for span in source_spans}
-    selected_label = source_anchor_label(anchors[selected_anchor])
-    selected_index = labels.index(selected_label) if selected_label in labels else 0
-
-    left, right = st.columns([0.32, 0.68], gap="medium")
+    section_options = ["All"] + sorted({span.section or "Document" for span in source_spans})
+    page_numbers = sorted({span.page_number for span in source_spans if span.page_number is not None})
+    page_options = ["All"] + [str(page) for page in page_numbers]
+    left, center, right = st.columns([0.27, 0.43, 0.30], gap="medium")
     with left:
+        st.markdown('<div class="panel-title">Reader Controls</div>', unsafe_allow_html=True)
+        query = st.text_input(
+            "Search source",
+            value="",
+            placeholder="Search anchors, snippets, pages, or sections",
+        )
+        selected_section = st.selectbox("Section", section_options)
+        selected_page = st.selectbox("Page", page_options)
+        view = build_source_reader_view(
+            report,
+            selected_anchor=current_source_anchor(),
+            query=query,
+            filters={
+                "section": selected_section,
+                "page": selected_page,
+                "repair_progress": saved_progress,
+                "revision_rechecks": saved_rechecks,
+            },
+        )
+        render_source_reader_results(view)
+
         st.markdown('<div class="panel-title">Issue Queue</div>', unsafe_allow_html=True)
         selected_filter = st.radio(
             "Issue filter",
@@ -2206,7 +2266,7 @@ def render_source_viewer_page(report) -> None:
             label_visibility="collapsed",
         )
         visible_items = filter_source_review_items(review_items, selected_filter)
-        render_source_review_issue_queue(visible_items, selected_anchor)
+        render_source_review_issue_queue(visible_items, view.selected_anchor)
         st.download_button(
             "Export Source Review Markdown",
             data=source_review_to_markdown(report, visible_items),
@@ -2214,15 +2274,17 @@ def render_source_viewer_page(report) -> None:
             mime="text/markdown",
             use_container_width=True,
         )
-        st.markdown('<div class="panel-title">Source Navigator</div>', unsafe_allow_html=True)
-        selector_key = f"source_anchor_selector_{selected_anchor}"
-        selected_label = st.selectbox("Source anchor", labels, index=selected_index, key=selector_key)
-        if selected_label not in label_to_anchor:
-            selected_label = labels[0]
-        selected_span = anchors[label_to_anchor[selected_label]]
-        render_source_anchor_list(source_spans, selected_span.anchor_id)
+    with center:
+        render_source_reader_context(view)
     with right:
-        render_source_lens(report, selected_span, review_items)
+        render_source_reader_linked_panel(view)
+        st.download_button(
+            "Export Source Reader Markdown",
+            data=source_reader_to_markdown(report, view),
+            file_name=f"{safe_stem(report.source_name)}-source-reader.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
 
 
 def filter_source_review_items(items, selected_filter: str):
@@ -2264,6 +2326,33 @@ def render_source_review_issue_queue(items, selected_anchor: str) -> None:
     st.markdown(f'<div class="source-issue-list">{"".join(cards)}</div>{remaining_note}', unsafe_allow_html=True)
 
 
+def render_source_reader_results(view) -> None:
+    title = "Source Results"
+    if view.query:
+        title = f"Source Results ({len(view.matching_anchors)})"
+    st.markdown(f'<div class="panel-title">{html.escape(title)}</div>', unsafe_allow_html=True)
+    if not view.matching_anchors:
+        st.markdown('<div class="empty-detail">No source anchors match that search or filter.</div>', unsafe_allow_html=True)
+        return
+    cards = []
+    for anchor in view.matching_anchors[:80]:
+        active_class = " active" if anchor.anchor_id == view.selected_anchor else ""
+        match_note = "match" if anchor.is_match else "available"
+        linked_note = f"{anchor.related_count} linked audit items" if anchor.related_count else "no direct audit links"
+        cards.append(
+            f'<div class="source-reader-result{active_class}">'
+            f'<div class="small-label">{html.escape(anchor.anchor_id)} | {html.escape(match_note)}</div>'
+            f'<div class="muted-note">{html.escape(anchor.reference)}</div>'
+            f'{source_reader_link(anchor.anchor_id, label="Open")}'
+            f'<div class="source-ref">{html.escape(linked_note)}</div>'
+            f'<div class="claim-text">{html.escape(truncate_text(anchor.text, 170))}</div>'
+            "</div>"
+        )
+    remaining = len(view.matching_anchors) - min(len(view.matching_anchors), 80)
+    remaining_note = f'<div class="muted-note">{remaining} more source matches are available through export/search.</div>' if remaining else ""
+    st.markdown(f'<div class="source-anchor-list">{"".join(cards)}</div>{remaining_note}', unsafe_allow_html=True)
+
+
 def render_source_anchor_list(source_spans, selected_anchor: str, limit: int = 80) -> None:
     visible_spans = source_spans[:limit]
     cards = []
@@ -2285,6 +2374,84 @@ def render_source_anchor_list(source_spans, selected_anchor: str, limit: int = 8
         f'<div class="source-anchor-list">{"".join(cards)}</div>{remaining_note}',
         unsafe_allow_html=True,
     )
+
+
+def render_source_reader_context(view) -> None:
+    if not view.selected_span:
+        st.markdown('<div class="empty-detail">No selected source anchor is available.</div>', unsafe_allow_html=True)
+        return
+    selected_span = view.selected_span
+    st.markdown(
+        f"""
+        <div class="source-lens">
+          <div class="small-label">Selected Anchor</div>
+          <div class="detail-title">{html.escape(selected_span.anchor_id)}</div>
+          <div class="verdict-meta">
+            <div>Page:<span>{html.escape(str(selected_span.page_number) if selected_span.page_number is not None else "n/a")}</span></div>
+            <div>Section:<span>{html.escape(selected_span.section or "Document")}</span></div>
+            <div>Sentence:<span>{selected_span.sentence_index}</span></div>
+            <div>Chars:<span>{selected_span.char_start}-{selected_span.char_end}</span></div>
+          </div>
+        </div>
+        <div class="wide-detail-card">
+          <div class="detail-title">Reader Context</div>
+          <div class="detail-subtitle">The highlighted sentence is shown with nearby extracted sentences. This is extracted text, not a stored copy of the full uploaded paper.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    lines = []
+    for span in view.context_spans:
+        active_class = " active" if span.anchor_id == selected_span.anchor_id else ""
+        if active_class:
+            lines.append(
+                f'<div class="source-reader-selected">'
+                f'<strong>Highlighted source sentence | {html.escape(span.anchor_id)}</strong>'
+                f'<div class="muted-note">{html.escape(source_reference(span))}</div>'
+                f"<div>{html.escape(span.text)}</div>"
+                "</div>"
+            )
+            continue
+        lines.append(
+            f'<div class="source-context-line">'
+            f"<strong>Nearby source sentence | {html.escape(span.anchor_id)}</strong>"
+            f'<div class="muted-note">{html.escape(source_reference(span))}</div>'
+            f"{source_reader_link(span.anchor_id, label='Open')}"
+            f"<div>{html.escape(span.text)}</div>"
+            "</div>"
+        )
+    st.markdown("".join(lines), unsafe_allow_html=True)
+
+
+def render_source_reader_linked_panel(view) -> None:
+    st.markdown(
+        """
+        <div class="wide-detail-card">
+          <div class="detail-title">Linked Audit</div>
+          <div class="detail-subtitle">Claims, findings, evidence, repair steps, and saved revision checks attached to the selected source.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if not view.related_items:
+        st.markdown('<div class="empty-detail">No audit items point directly to this anchor.</div>', unsafe_allow_html=True)
+        return
+    cards = []
+    for item in view.related_items:
+        related_note = ""
+        if item.related_source_span and item.related_source_span.anchor_id != view.selected_anchor:
+            related_note = f'<div class="source-ref">Related: {html.escape(source_reference(item.related_source_span))}</div>'
+        cards.append(
+            '<div class="audit-card source-reader-related">'
+            f'<strong>{html.escape(item.kind)}: {html.escape(item.title)}</strong>'
+            f'<div class="muted-note">{html.escape(item.id)} | {html.escape(item.status)}</div>'
+            f'{related_note}'
+            f'<div class="claim-text">{html.escape(truncate_text(item.body, 260))}</div>'
+            f'<p><strong>Rule explanation:</strong> {html.escape(item.explanation)}</p>'
+            f'<p><strong>Repair:</strong> {html.escape(item.repair_suggestion)}</p>'
+            "</div>"
+        )
+    st.markdown(f'<div class="audit-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
 
 
 def render_source_lens(report, selected_span, review_items=None) -> None:
@@ -2964,6 +3131,13 @@ def source_view_link(span, label: str = "View Source") -> str:
     if not span:
         return ""
     anchor = quote(span.anchor_id, safe="")
+    return f'<a class="source-jump" href="?page=source&anchor={anchor}" target="_self">{html.escape(label)}</a>'
+
+
+def source_reader_link(anchor_id: str, label: str = "Open in Source Reader") -> str:
+    if not anchor_id:
+        return ""
+    anchor = quote(anchor_id, safe="")
     return f'<a class="source-jump" href="?page=source&anchor={anchor}" target="_self">{html.escape(label)}</a>'
 
 

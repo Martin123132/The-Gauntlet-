@@ -144,12 +144,11 @@ def test_streamlit_source_viewer_highlights_selected_anchor():
     app.run(timeout=20)
 
     assert not app.exception
-    assert any("Source Review" in item.value for item in app.markdown)
+    assert any("Source Reader" in item.value for item in app.markdown)
     assert any("Issue Queue" in item.value for item in app.markdown)
-    assert any("Highlighted Source" in item.value for item in app.markdown)
-    assert any("Rule Explanation & Repair" in item.value for item in app.markdown)
-    assert any("Linked Audit Items" in item.value for item in app.markdown)
-    assert any("Source anchor" == selectbox.label for selectbox in app.selectbox)
+    assert any("Reader Context" in item.value for item in app.markdown)
+    assert any("Linked Audit" in item.value for item in app.markdown)
+    assert any("Search source" == text_input.label for text_input in app.text_input)
     assert any("Issue filter" == radio.label for radio in app.radio)
 
     if len(app.session_state["report"].source_spans) > 1:
@@ -245,7 +244,8 @@ def test_streamlit_workspace_page_lists_opens_compares_and_deletes(tmp_path, mon
     app.run(timeout=20)
 
     assert not app.exception
-    assert any("Source Review" in item.value for item in app.markdown)
+    assert any("Source Reader" in item.value for item in app.markdown)
+    assert any("Reader Context" in item.value for item in app.markdown)
     assert any("Issue Queue" in item.value for item in app.markdown)
 
     app.query_params["page"] = "workspace"
