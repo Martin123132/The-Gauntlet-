@@ -32,6 +32,13 @@ from .source_review import (
     build_source_review_items,
     source_review_to_markdown,
 )
+from .source_reader import (
+    SourceReaderAnchor,
+    SourceReaderRelatedItem,
+    SourceReaderView,
+    build_source_reader_view,
+    source_reader_to_markdown,
+)
 from .workspace import (
     SavedRun,
     SavedRunSummary,
@@ -60,6 +67,9 @@ __all__ = [
     "SavedRunSummary",
     "SourceSpan",
     "SourceReviewItem",
+    "SourceReaderAnchor",
+    "SourceReaderRelatedItem",
+    "SourceReaderView",
     "analyze_loaded_document",
     "analyze_paper_text",
     "action_plan_to_markdown",
@@ -77,6 +87,7 @@ __all__ = [
     "build_share_card_svg",
     "build_x_post",
     "build_source_review_items",
+    "build_source_reader_view",
     "delete_saved_run",
     "filter_batch_items",
     "list_benchmark_samples",
@@ -90,6 +101,7 @@ __all__ = [
     "save_analysis_run",
     "sort_batch_items",
     "source_review_to_markdown",
+    "source_reader_to_markdown",
     "repair_workshop_to_markdown",
     "recheck_repair_revision",
     "revision_recheck_log_to_markdown",

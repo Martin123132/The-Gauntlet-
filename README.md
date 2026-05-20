@@ -111,8 +111,9 @@ The verdict is a review aid, not a replacement for expert peer review.
   evidence gaps, scope conflicts, circular support, and theory-as-fact wording
 - source trace anchors for claims, findings, contradictions, and evidence
   snippets, including PDF page numbers when available
-- a Source Review page that highlights the exact extracted sentence behind a
-  claim, finding, evidence snippet, repair item, or source-trace anchor
+- a Source Reader page that searches extracted anchors and highlights the exact
+  sentence behind a claim, finding, evidence snippet, repair item, revision
+  re-check, or source-trace anchor
 - exportable JSON, Markdown, self-contained HTML, and report bundle ZIP exports
 - a Repair Workshop that turns claim gaps and findings into prioritized repair
   steps with local saved progress and revision re-checks
@@ -197,15 +198,16 @@ through the Revision Re-Check Log.
 The older `?page=action` link still opens this page, and static reports still
 include the original reviewer action plan for offline reading.
 
-## Source Review
+## Source Reader
 
-The `Source Review` page turns source anchors into an issue-led audit view.
+The `Source Reader` page turns source anchors into an issue-led reading view.
 Open it from the nav or from any `View Source` link on a claim, finding,
-evidence card, action item, or source-trace card. Start from the issue queue,
-filter by findings, claims, evidence, high risk, or repair needs, then inspect
+evidence card, repair step, revision re-check, or source-trace card. Search the
+saved source snippets, filter by section or PDF page when available, then inspect
 the highlighted sentence with nearby extracted context, linked audit items, rule
-explanations, and repair suggestions. Source Review exports include references
-and snippets only, not full uploaded paper files.
+explanations, repair suggestions, and saved revision re-check references.
+Source Reader exports include selected references, nearby snippets, linked
+issues, and repair notes only, not full uploaded paper files.
 
 ## Optional Refinement Chamber
 
