@@ -9,9 +9,10 @@ import json
 import os
 
 from .models import AnalysisReport, analysis_report_from_dict
+from .repair_workshop import normalize_repair_status
 
 
-WORKSPACE_SCHEMA_VERSION = 1
+WORKSPACE_SCHEMA_VERSION = 2
 WORKSPACE_ENV_VAR = "GAUNTLET_WORKSPACE_DIR"
 DEFAULT_REVIEW_STATUS = "unreviewed"
 REVIEW_STATUSES = ("unreviewed", "confirmed", "false-positive", "needs-follow-up")
@@ -31,6 +32,7 @@ class SavedRunSummary:
     evidence_score: float
     review_status: str = DEFAULT_REVIEW_STATUS
     notes: str = ""
+    repair_progress_counts: dict[str, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -42,6 +44,7 @@ class SavedRun:
     benchmark_metadata: dict[str, Any] | None = None
     review_status: str = DEFAULT_REVIEW_STATUS
     notes: str = ""
+    repair_progress: dict[str, dict[str, str]] | None = None
 
     @property
     def summary(self) -> SavedRunSummary:
@@ -55,6 +58,7 @@ class SavedRun:
             "saved_at": self.saved_at,
             "review_status": self.review_status,
             "notes": self.notes,
+            "repair_progress": self.repair_progress or {},
             "benchmark": self.benchmark_metadata,
             "report": self.report.to_dict(),
         }
@@ -103,6 +107,7 @@ def load_saved_run(run_id: str) -> SavedRun:
         benchmark_metadata=payload.get("benchmark"),
         review_status=payload.get("review_status", DEFAULT_REVIEW_STATUS),
         notes=payload.get("notes", ""),
+        repair_progress=normalize_repair_progress(payload.get("repair_progress", {})),
     )
 
 
@@ -121,6 +126,29 @@ def update_saved_run_notes(run_id: str, notes: str, review_status: str) -> Saved
         benchmark_metadata=saved_run.benchmark_metadata,
         review_status=normalized_status,
         notes=notes,
+        repair_progress=saved_run.repair_progress,
+    )
+    write_saved_run(updated)
+    return updated
+
+
+def update_saved_run_repair_progress(run_id: str, step_id: str, status: str, reviewer_note: str) -> SavedRun:
+    saved_run = load_saved_run(run_id)
+    repair_progress = dict(saved_run.repair_progress or {})
+    repair_progress[step_id] = {
+        "status": normalize_repair_status(status),
+        "reviewer_note": reviewer_note,
+        "updated_at": utc_now_iso(),
+    }
+    updated = SavedRun(
+        run_id=saved_run.run_id,
+        run_kind=saved_run.run_kind,
+        saved_at=saved_run.saved_at,
+        report=saved_run.report,
+        benchmark_metadata=saved_run.benchmark_metadata,
+        review_status=saved_run.review_status,
+        notes=saved_run.notes,
+        repair_progress=repair_progress,
     )
     write_saved_run(updated)
     return updated
@@ -141,6 +169,7 @@ def summarize_saved_run(saved_run: SavedRun) -> SavedRunSummary:
         evidence_score=report.evidence.score,
         review_status=saved_run.review_status,
         notes=saved_run.notes,
+        repair_progress_counts=repair_progress_counts(saved_run.repair_progress or {}),
     )
 
 
@@ -160,6 +189,7 @@ def summary_from_payload(payload: dict[str, Any]) -> SavedRunSummary:
         evidence_score=float(evidence.get("score", 0.0)),
         review_status=payload.get("review_status", DEFAULT_REVIEW_STATUS),
         notes=payload.get("notes", ""),
+        repair_progress_counts=repair_progress_counts(normalize_repair_progress(payload.get("repair_progress", {}))),
     )
 
 
@@ -181,6 +211,29 @@ def run_path(run_id: str) -> Path:
 
 def read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def normalize_repair_progress(raw_progress: Any) -> dict[str, dict[str, str]]:
+    if not isinstance(raw_progress, dict):
+        return {}
+    normalized: dict[str, dict[str, str]] = {}
+    for raw_step_id, raw_value in raw_progress.items():
+        if not isinstance(raw_step_id, str) or not isinstance(raw_value, dict):
+            continue
+        normalized[raw_step_id] = {
+            "status": normalize_repair_status(raw_value.get("status")),
+            "reviewer_note": str(raw_value.get("reviewer_note", "")),
+            "updated_at": str(raw_value.get("updated_at", "")),
+        }
+    return normalized
+
+
+def repair_progress_counts(progress: dict[str, dict[str, str]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in progress.values():
+        status = normalize_repair_status(item.get("status"))
+        counts[status] = counts.get(status, 0) + 1
+    return counts
 
 
 def build_run_id(report: AnalysisReport, saved_at: str) -> str:

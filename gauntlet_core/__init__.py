@@ -17,6 +17,7 @@ from .document_loader import LoadedDocument, load_document_from_bytes, load_docu
 from .models import AnalysisReport, SourceSpan
 from .report_bundle import build_report_bundle
 from .refinement import ProviderSelection, RefinementReport, run_provider_refinement, run_refinement
+from .repair_workshop import RepairStep, build_repair_steps, repair_workshop_to_markdown
 from .share import (
     DemoShareSummary,
     build_demo_share_pack,
@@ -37,6 +38,7 @@ from .workspace import (
     list_saved_runs,
     load_saved_run,
     save_analysis_run,
+    update_saved_run_repair_progress,
     update_saved_run_notes,
 )
 
@@ -49,6 +51,7 @@ __all__ = [
     "LoadedDocument",
     "ProviderSelection",
     "RefinementReport",
+    "RepairStep",
     "ReviewerAction",
     "SavedRun",
     "SavedRunSummary",
@@ -62,6 +65,7 @@ __all__ = [
     "batch_items_to_json",
     "build_demo_batch_items",
     "build_reviewer_action_plan",
+    "build_repair_steps",
     "build_batch_report_bundle",
     "build_report_bundle",
     "build_demo_share_pack",
@@ -83,5 +87,7 @@ __all__ = [
     "save_analysis_run",
     "sort_batch_items",
     "source_review_to_markdown",
+    "repair_workshop_to_markdown",
+    "update_saved_run_repair_progress",
     "update_saved_run_notes",
 ]

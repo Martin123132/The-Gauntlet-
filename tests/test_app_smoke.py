@@ -4,7 +4,7 @@ import pytest
 import app as gauntlet_app
 from gauntlet_core import analyze_paper_text
 from gauntlet_core.batch import BatchScanItem
-from gauntlet_core.workspace import list_saved_runs, save_analysis_run
+from gauntlet_core.workspace import list_saved_runs, load_saved_run, save_analysis_run
 
 
 @pytest.fixture(autouse=True)
@@ -89,7 +89,7 @@ def test_streamlit_claims_and_evidence_pages_show_source_references():
     assert any("Source Trace" in item.value for item in app.markdown)
 
 
-def test_streamlit_action_plan_page_exports_markdown():
+def test_streamlit_repair_workshop_page_saves_progress():
     app = AppTest.from_file("app.py")
     app.run(timeout=20)
     app.toggle[0].set_value(True)
@@ -100,7 +100,21 @@ def test_streamlit_action_plan_page_exports_markdown():
     app.run(timeout=20)
 
     assert not app.exception
-    assert any("Reviewer Action Plan" in item.value for item in app.markdown)
+    assert any("Repair Workshop" in item.value for item in app.markdown)
+    assert any("Repair filter" == radio.label for radio in app.radio)
+    assert any("Save Repair Progress" == button.label for button in app.button)
+
+    status_box = next(selectbox for selectbox in app.selectbox if selectbox.label == "Repair status")
+    status_box.set_value("in-progress")
+    note_box = next(area for area in app.text_area if area.label == "Reviewer note")
+    note_box.set_value("Working on the mechanism paragraph.")
+    save_button = next(button for button in app.button if button.label == "Save Repair Progress")
+    save_button.click()
+    app.run(timeout=20)
+
+    saved_run = load_saved_run(app.session_state["workspace_run_id"])
+    assert any(item["status"] == "in-progress" for item in saved_run.repair_progress.values())
+    assert any("mechanism paragraph" in item["reviewer_note"] for item in saved_run.repair_progress.values())
 
 
 def test_streamlit_source_viewer_highlights_selected_anchor():
@@ -204,6 +218,7 @@ def test_streamlit_workspace_page_lists_opens_compares_and_deletes(tmp_path, mon
     assert len(list_saved_runs()) == 2
     assert any("Saved Workspace" in item.value for item in app.markdown)
     assert any("Compare Saved Runs" in item.value for item in app.markdown)
+    assert any("Repair progress" in item.value for item in app.markdown)
 
     open_button = next(button for button in app.button if button.label == "Open Saved Run")
     open_button.click()

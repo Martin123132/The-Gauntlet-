@@ -7,6 +7,7 @@ from gauntlet_core.workspace import (
     list_saved_runs,
     load_saved_run,
     save_analysis_run,
+    update_saved_run_repair_progress,
     update_saved_run_notes,
 )
 
@@ -27,6 +28,7 @@ def test_workspace_save_list_load_update_and_delete(tmp_path, monkeypatch):
     assert summaries[0].source_name == "paper.txt"
     assert loaded.report.source_name == "paper.txt"
     assert loaded.report.claims[0].source_span is not None
+    assert loaded.repair_progress == {}
     assert updated.review_status == "confirmed"
     assert updated.notes == "Reviewer confirmed the mechanism gap."
 
@@ -53,6 +55,42 @@ def test_saved_run_does_not_store_raw_paper_text_or_keys(tmp_path, monkeypatch):
     assert payload["report"]["source_spans"]
     assert "api_key" not in serialized
     assert "sk-" not in serialized
+
+
+def test_workspace_saves_repair_progress_without_raw_paper_or_keys(tmp_path, monkeypatch):
+    monkeypatch.setenv("GAUNTLET_WORKSPACE_DIR", str(tmp_path / "runs"))
+    report = analyze_paper_text(
+        "The paper resolves the paradox and eliminates the contradiction.",
+        source_name="repair-progress.txt",
+    )
+
+    saved = save_analysis_run(report, "analysis")
+    updated = update_saved_run_repair_progress(saved.run_id, "RTEST123", "fixed", "Mechanism paragraph added.")
+    loaded = load_saved_run(saved.run_id)
+    payload = json.loads((tmp_path / "runs" / f"{saved.run_id}.json").read_text(encoding="utf-8"))
+
+    assert updated.repair_progress["RTEST123"]["status"] == "fixed"
+    assert loaded.repair_progress["RTEST123"]["reviewer_note"] == "Mechanism paragraph added."
+    assert list_saved_runs()[0].repair_progress_counts["fixed"] == 1
+    assert payload["repair_progress"]["RTEST123"]["status"] == "fixed"
+    assert "api_key" not in json.dumps(payload).lower()
+    assert "paper_text" not in payload
+
+
+def test_workspace_loads_older_saved_runs_without_repair_progress(tmp_path, monkeypatch):
+    monkeypatch.setenv("GAUNTLET_WORKSPACE_DIR", str(tmp_path / "runs"))
+    report = analyze_paper_text("The framework explains the issue because the mechanism is measured.", source_name="old.txt")
+    saved = save_analysis_run(report, "analysis")
+    path = tmp_path / "runs" / f"{saved.run_id}.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("repair_progress", None)
+    payload["schema_version"] = 1
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = load_saved_run(saved.run_id)
+
+    assert loaded.repair_progress == {}
+    assert list_saved_runs()[0].repair_progress_counts == {}
 
 
 def test_analysis_report_round_trips_from_dict():

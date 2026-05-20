@@ -4,6 +4,24 @@
 
 No unreleased changes yet.
 
+## v0.12.0 - Local Repair Workshop
+
+This release turns findings into a persistent local repair workflow.
+
+### Added
+
+- Added a Repair Workshop page that replaces the old Action Plan label while
+  preserving the `?page=action` route.
+- Added stable repair steps with statuses, reviewer notes, source references,
+  and Markdown export.
+- Added local workspace repair progress so saved runs can be reopened and
+  resumed without storing the full uploaded paper.
+
+### Changed
+
+- Workspace cards now summarize saved repair progress alongside verdict,
+  findings, and reviewer status.
+
 ## v0.11.0 - Analyzer Quality Guardrails
 
 This release calibrates the deterministic analyzer to reduce false positives
