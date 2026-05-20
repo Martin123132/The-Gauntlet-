@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import html
+from dataclasses import replace
 from urllib.parse import quote
 
 import streamlit as st
 
 from gauntlet_core import analyze_loaded_document, analyze_paper_text
-from gauntlet_core.action_plan import action_plan_to_markdown, build_reviewer_action_plan
 from gauntlet_core.batch import (
     BatchScanItem,
     batch_items_to_csv,
@@ -29,6 +29,13 @@ from gauntlet_core.refinement import (
     RefinementError,
     run_provider_refinement,
 )
+from gauntlet_core.repair_workshop import (
+    REPAIR_STATUSES,
+    build_repair_steps,
+    repair_status_counts,
+    repair_status_label,
+    repair_workshop_to_markdown,
+)
 from gauntlet_core.sample_text import SAMPLE_PAPER
 from gauntlet_core.share import (
     build_demo_share_pack,
@@ -44,6 +51,7 @@ from gauntlet_core.workspace import (
     list_saved_runs,
     load_saved_run,
     save_analysis_run,
+    update_saved_run_repair_progress,
     update_saved_run_notes,
     workspace_runs_dir,
 )
@@ -70,7 +78,7 @@ PAGE_LABELS = {
     "workspace": "Workspace",
     "batch": "Batch",
     "share": "Share Demo",
-    "action": "Action Plan",
+    "action": "Repair Workshop",
     "source": "Source Review",
     "breakdown": "Breakdown",
     "benchmarks": "Benchmarks",
@@ -1503,10 +1511,14 @@ def render_exports(report) -> None:
 
 
 def render_action_plan_page(report, compact: bool = False) -> None:
-    actions = build_reviewer_action_plan(report, limit=6 if compact else 12)
-    title = "Reviewer Action Plan" if not compact else "Top Reviewer Actions"
+    run_id = st.session_state.get("workspace_run_id") or report_store().get("workspace_run_id")
+    saved_progress = load_repair_progress(run_id) if run_id else {}
+    steps = build_repair_steps(report, saved_progress)
+    if compact:
+        steps = steps[:6]
+    title = "Repair Workshop" if not compact else "Top Repair Steps"
     subtitle = (
-        "A prioritized fix checklist generated from deterministic findings, claim gaps, evidence score, and source anchors."
+        "Work through deterministic repair steps, save local progress, and export a reviewer-ready checklist."
         if not compact
         else "The highest-value repairs before exporting or refining the paper."
     )
@@ -1520,57 +1532,148 @@ def render_action_plan_page(report, compact: bool = False) -> None:
         unsafe_allow_html=True,
     )
 
-    if not actions:
-        st.markdown('<div class="empty-detail">No reviewer actions were generated.</div>', unsafe_allow_html=True)
+    if not steps:
+        st.markdown('<div class="empty-detail">No repair steps were generated.</div>', unsafe_allow_html=True)
         return
 
-    high = sum(1 for action in actions if action.priority == "high")
-    medium = sum(1 for action in actions if action.priority == "medium")
-    low = sum(1 for action in actions if action.priority == "low")
+    counts = repair_status_counts(steps)
+    high = sum(1 for step in steps if step.priority == "high")
+    in_progress = counts.get("in-progress", 0)
+    fixed = counts.get("fixed", 0)
+    remaining = counts.get("todo", 0)
     st.markdown(
         f"""
         <div class="stat-strip">
-          <div class="stat-tile"><div class="stat-title">Actions</div><div class="stat-number">{len(actions)}</div><div class="stat-note">Prioritized repairs</div></div>
-          <div class="stat-tile"><div class="stat-title">High</div><div class="stat-number">{high}</div><div class="stat-note">Do these first</div></div>
-          <div class="stat-tile"><div class="stat-title">Medium</div><div class="stat-number">{medium}</div><div class="stat-note">Strengthen the review</div></div>
-          <div class="stat-tile"><div class="stat-title">Low</div><div class="stat-number">{low}</div><div class="stat-note">Polish and traceability</div></div>
+          <div class="stat-tile"><div class="stat-title">Steps</div><div class="stat-number">{len(steps)}</div><div class="stat-note">Repair items</div></div>
+          <div class="stat-tile"><div class="stat-title">To Do</div><div class="stat-number">{remaining}</div><div class="stat-note">Still open</div></div>
+          <div class="stat-tile"><div class="stat-title">In Progress</div><div class="stat-number">{in_progress}</div><div class="stat-note">Being repaired</div></div>
+          <div class="stat-tile"><div class="stat-title">Fixed</div><div class="stat-number">{fixed}</div><div class="stat-note">Marked done</div></div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    action_cards = []
-    for action in actions:
-        action_cards.append(
-            f"""
-            <div class="finding-card {html.escape(action.priority)}">
-              <div class="finding-title">
-                <span>{html.escape(action.id)} - {html.escape(action.title)}</span>
-                <span class="severity-pill {html.escape(action.priority)}">{html.escape(action.priority.upper())}</span>
-              </div>
-              <div class="finding-meta">{html.escape(action.category)} | Target: {html.escape(action.target)}</div>
-              <div class="finding-body">{html.escape(action.detail)}</div>
-              <div class="repair-button-look">{html.escape(action.suggested_fix)}</div>
-              <div class="source-ref">{html.escape(source_reference(action.source_span))}</div>
-              {source_view_link(action.source_span)}
-            </div>
-            """
-        )
-    st.markdown(f'<div class="audit-grid">{"".join(action_cards)}</div>', unsafe_allow_html=True)
-
-    if not compact:
-        st.download_button(
-            "Export Action Plan Markdown",
-            data=action_plan_to_markdown(report),
-            file_name=f"{safe_stem(report.source_name)}-reviewer-action-plan.md",
-            mime="text/markdown",
-            use_container_width=True,
-        )
-    else:
+    if compact:
+        step_cards = "".join(repair_step_card_html(step, include_progress=False) for step in steps)
+        st.markdown(f'<div class="audit-grid">{step_cards}</div>', unsafe_allow_html=True)
         st.markdown(
-            '<a class="export-chip" href="?page=action" target="_self">Open full action plan</a>',
+            '<a class="export-chip" href="?page=action" target="_self">Open full Repair Workshop</a>',
             unsafe_allow_html=True,
         )
+        return
+
+    if not run_id:
+        st.markdown(
+            '<div class="workspace-privacy">Repair progress saves to the local workspace after an analysis run is saved. This report is currently open without a workspace run id, so progress controls can still export but cannot save yet.</div>',
+            unsafe_allow_html=True,
+        )
+
+    filter_choice = st.radio(
+        "Repair filter",
+        ("All", "High Priority", "Needs Repair", "In Progress", "Fixed", "False Positive"),
+        horizontal=True,
+    )
+    visible_steps = filter_repair_steps(steps, filter_choice)
+    if not visible_steps:
+        st.markdown('<div class="empty-detail">No repair steps match this filter.</div>', unsafe_allow_html=True)
+
+    for step in visible_steps:
+        with st.container(border=True):
+            st.markdown(repair_step_card_html(step), unsafe_allow_html=True)
+            status_key = f"repair_status_{step.id}"
+            note_key = f"repair_note_{step.id}"
+            left, right = st.columns([0.28, 0.72])
+            left.selectbox(
+                "Repair status",
+                list(REPAIR_STATUSES),
+                index=list(REPAIR_STATUSES).index(step.status),
+                format_func=repair_status_label,
+                key=status_key,
+            )
+            right.text_area(
+                "Reviewer note",
+                value=step.reviewer_note,
+                height=86,
+                key=note_key,
+            )
+
+    save_col, export_col = st.columns(2)
+    if save_col.button("Save Repair Progress", type="primary", use_container_width=True, disabled=not bool(run_id)):
+        for step in steps:
+            update_saved_run_repair_progress(
+                run_id,
+                step.id,
+                st.session_state.get(f"repair_status_{step.id}", step.status),
+                st.session_state.get(f"repair_note_{step.id}", step.reviewer_note),
+            )
+        st.success("Repair progress saved locally.")
+        st.rerun()
+    export_col.download_button(
+        "Export Repair Workshop Markdown",
+        data=repair_workshop_to_markdown(report, collect_repair_steps_from_state(steps)),
+        file_name=f"{safe_stem(report.source_name)}-repair-workshop.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
+
+
+def load_repair_progress(run_id: str | None) -> dict:
+    if not run_id:
+        return {}
+    try:
+        return load_saved_run(run_id).repair_progress or {}
+    except (OSError, ValueError, KeyError):
+        return {}
+
+
+def filter_repair_steps(steps, filter_choice: str):
+    if filter_choice == "High Priority":
+        return [step for step in steps if step.priority == "high"]
+    if filter_choice == "Needs Repair":
+        return [step for step in steps if step.status in {"todo", "in-progress"}]
+    if filter_choice == "In Progress":
+        return [step for step in steps if step.status == "in-progress"]
+    if filter_choice == "Fixed":
+        return [step for step in steps if step.status == "fixed"]
+    if filter_choice == "False Positive":
+        return [step for step in steps if step.status == "false-positive"]
+    return steps
+
+
+def collect_repair_steps_from_state(steps):
+    collected = []
+    for step in steps:
+        collected.append(
+            replace(
+                step,
+                status=st.session_state.get(f"repair_status_{step.id}", step.status),
+                reviewer_note=st.session_state.get(f"repair_note_{step.id}", step.reviewer_note),
+            )
+        )
+    return collected
+
+
+def repair_step_card_html(step, include_progress: bool = True) -> str:
+    progress = ""
+    if include_progress:
+        progress = f'<div class="source-ref">Status: {html.escape(repair_status_label(step.status))}</div>'
+        if step.reviewer_note.strip():
+            progress += f'<div class="muted-note">Note: {html.escape(truncate_text(step.reviewer_note, 180))}</div>'
+    return f"""
+    <div class="finding-card {html.escape(step.priority)}">
+      <div class="finding-title">
+        <span>{html.escape(step.id)} - {html.escape(step.title)}</span>
+        <span class="severity-pill {html.escape(step.priority)}">{html.escape(step.priority.upper())}</span>
+      </div>
+      <div class="finding-meta">{html.escape(step.category)} | Target: {html.escape(step.target)}</div>
+      <div class="finding-body">{html.escape(step.body)}</div>
+      <p><strong>Rule explanation:</strong> {html.escape(step.explanation)}</p>
+      <div class="repair-button-look">{html.escape(step.suggested_fix)}</div>
+      <div class="source-ref">{html.escape(source_reference(step.source_span))}</div>
+      {progress}
+      {source_view_link(step.source_span)}
+    </div>
+    """
 
 
 def render_batch_page() -> None:
@@ -2291,6 +2394,7 @@ def render_saved_run_list(summaries, active_run_id: str | None) -> None:
     for summary in summaries[:12]:
         active_class = " active" if summary.run_id == active_run_id else ""
         notes_label = "Notes saved" if summary.notes.strip() else "No notes"
+        repair_label = repair_progress_summary(summary.repair_progress_counts or {})
         st.markdown(
             f"""
             <div class="workspace-card{active_class}">
@@ -2303,6 +2407,7 @@ def render_saved_run_list(summaries, active_run_id: str | None) -> None:
                 <div><strong>{summary.evidence_score:.2f}</strong>evidence</div>
                 <div><strong>{html.escape(summary.saved_at[:10])}</strong>{html.escape(notes_label)}</div>
               </div>
+              <div class="source-ref">Repair progress: {html.escape(repair_label)}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -2330,6 +2435,7 @@ def render_saved_run_controls(summaries):
             <div>Claims:<span>{summary.claim_count}</span></div>
             <div>Findings:<span>{summary.finding_count}</span></div>
           </div>
+          <div class="source-ref">Repair progress: {html.escape(repair_progress_summary(summary.repair_progress_counts or {}))}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -2826,6 +2932,17 @@ def format_review_status(status: str) -> str:
         "needs-follow-up": "Needs Follow-Up",
     }
     return labels.get(status, status.replace("-", " ").title())
+
+
+def repair_progress_summary(counts: dict[str, int]) -> str:
+    if not counts:
+        return "No saved repair progress"
+    fixed = counts.get("fixed", 0)
+    in_progress = counts.get("in-progress", 0)
+    todo = counts.get("todo", 0)
+    false_positive = counts.get("false-positive", 0)
+    wont_fix = counts.get("wont-fix", 0)
+    return f"{fixed} fixed, {in_progress} in progress, {todo} to do, {false_positive} false positive, {wont_fix} won't fix"
 
 
 def provider_index(provider: str) -> int:

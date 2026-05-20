@@ -114,8 +114,8 @@ The verdict is a review aid, not a replacement for expert peer review.
 - a Source Review page that highlights the exact extracted sentence behind a
   claim, finding, evidence snippet, repair item, or source-trace anchor
 - exportable JSON, Markdown, self-contained HTML, and report bundle ZIP exports
-- a Reviewer Action Plan that turns claim gaps and findings into prioritized
-  repair steps
+- a Repair Workshop that turns claim gaps and findings into prioritized repair
+  steps with local saved progress
 
 ## Benchmark Demo Gallery
 
@@ -150,12 +150,13 @@ quietly break known behavior or reintroduce known false positives.
 
 The `Workspace` page keeps a private local history of completed analyses. Use it
 to reopen a previous report, export JSON, Markdown, HTML, or a report bundle
-ZIP again, add reviewer notes, mark review status, delete a saved run, or
-compare two saved reports side by side.
+ZIP again, add reviewer notes, mark review status, resume repair progress,
+delete a saved run, or compare two saved reports side by side.
 
 Saved workspace files live under `.gauntlet/workspace/runs/` and are ignored by
-Git. The app saves the deterministic report and source snippets needed for
-auditability, but it does not save the original uploaded document.
+Git. The app saves the deterministic report, source snippets, reviewer notes,
+and repair progress needed for auditability, but it does not save the original
+uploaded document.
 
 ## Batch Scan
 
@@ -178,12 +179,17 @@ It includes an X post draft, a longer thread draft, screenshot-ready HTML/SVG
 cards, demo batch summaries, and the full offline demo batch bundle. The kit is
 generated from synthetic benchmark papers only.
 
-## Reviewer Action Plan
+## Repair Workshop
 
-The `Action Plan` page turns the deterministic audit into a fix-first checklist.
-It prioritizes high-severity findings, unsupported claims, missing mechanisms,
-weak evidence links, scope gaps, and low evidence coverage. The action plan can
-be exported as Markdown and is included in HTML reports and report bundles.
+The `Repair Workshop` page turns the deterministic audit into a fix-first
+checklist. It prioritizes high-severity findings, unsupported claims, missing
+mechanisms, weak evidence links, scope gaps, and low evidence coverage. You can
+mark each step as `To Do`, `In Progress`, `Fixed`, `Won't Fix`, or
+`False Positive`, add reviewer notes, save progress to the local workspace, and
+export a Markdown repair checklist.
+
+The older `?page=action` link still opens this page, and static reports still
+include the original reviewer action plan for offline reading.
 
 ## Source Review
 
