@@ -215,6 +215,31 @@ class AnalysisReport:
         else:
             lines.extend(["No clear resolution claims were detected.", ""])
 
+        from .evidence_map import build_claim_evidence_map
+
+        evidence_map = build_claim_evidence_map(self)
+        lines.extend(["## Claim-Evidence Map", ""])
+        if evidence_map.rows:
+            for row in evidence_map.rows:
+                links = ", ".join(link.id for link in row.evidence_links) if row.evidence_links else "none"
+                lines.extend(
+                    [
+                        f"### {row.claim_id} - {row.coverage.title()}",
+                        "",
+                        row.claim,
+                        "",
+                        f"- Claim status: {row.claim_status}",
+                        f"- Source: {source_reference(row.source_span)}",
+                        f"- Evidence strength: {row.evidence_strength:.2f}",
+                        f"- Linked evidence: {links}",
+                        f"- Gaps: {', '.join(row.gaps) if row.gaps else 'none'}",
+                        f"- Repair: {row.repair_suggestion}",
+                        "",
+                    ]
+                )
+        else:
+            lines.extend(["No claim-evidence rows were generated.", ""])
+
         lines.extend(["## Findings", ""])
         if self.findings:
             for finding in self.findings:

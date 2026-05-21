@@ -21,12 +21,14 @@ def test_report_exports_include_core_fields(tmp_path):
     assert data["source_spans"]
     assert data["claims"][0]["source_span"]
     assert "The Gauntlet Report: paper.txt" in markdown
+    assert "Claim-Evidence Map" in markdown
     assert "Evidence Profile" in markdown
     assert "Source Trace" in markdown
     assert "Reviewer Action Plan" in markdown
     assert "<!doctype html>" in html
     assert "The Gauntlet Report: paper.txt" in html
     assert "Confidence" in html
+    assert "Claim-Evidence Map" in html
     assert "Evidence Profile" in html
     assert "Source Highlights" in html
     assert "Reviewer Action Plan" in html

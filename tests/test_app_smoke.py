@@ -86,6 +86,7 @@ def test_streamlit_claims_and_evidence_pages_show_source_references():
     app.run(timeout=20)
 
     assert not app.exception
+    assert any("Claim-Evidence Map" in item.value for item in app.markdown)
     assert any("Source Trace" in item.value for item in app.markdown)
 
 

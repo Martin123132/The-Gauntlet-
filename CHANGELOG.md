@@ -4,6 +4,21 @@
 
 No unreleased changes yet.
 
+## v0.15.0 - Claim-Evidence Map
+
+This release makes evidence traceability easier to audit claim by claim.
+
+### Added
+
+- Added a Claim-Evidence Map on the Evidence page that labels claim coverage as
+  `Strong`, `Linked`, `Weak`, or `Missing`.
+- Added orphan evidence detection for evidence-like snippets that are not tied
+  to a specific claim.
+- Added Claim-Evidence Map Markdown export and included the map in standard
+  Markdown and HTML reports.
+- Added reusable `gauntlet_core.evidence_map` helpers without changing the
+  saved report JSON schema.
+
 ## v0.14.0 - Source Reader Workspace
 
 This release upgrades source traceability into a reader workspace for real-paper
