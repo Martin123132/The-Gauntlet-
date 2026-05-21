@@ -3,6 +3,7 @@ from __future__ import annotations
 from html import escape
 
 from .action_plan import build_reviewer_action_plan
+from .evidence_map import build_claim_evidence_map
 from .models import AnalysisReport, SourceSpan, source_reference
 
 
@@ -24,6 +25,7 @@ def analysis_report_to_html(report: AnalysisReport) -> str:
             render_header(report),
             render_summary(report),
             render_claims(report),
+            render_claim_evidence_map(report),
             render_findings(report),
             render_evidence(report),
             render_source_highlights(source_spans),
@@ -176,6 +178,38 @@ def render_evidence(report: AnalysisReport) -> str:
   <p class="muted">Evidence quality: {profile.score:.2f}/1.00. Linked snippets: {profile.linked_evidence}.</p>
   <div class="card-grid">{links}</div>
 </section>
+"""
+
+
+def render_claim_evidence_map(report: AnalysisReport) -> str:
+    evidence_map = build_claim_evidence_map(report)
+    if not evidence_map.rows:
+        content = '<p class="empty">No clear claims were detected, so no claim-evidence rows were generated.</p>'
+    else:
+        content = "".join(render_claim_evidence_row(row) for row in evidence_map.rows)
+    return f"""
+<section class="panel">
+  <h2>Claim-Evidence Map</h2>
+  <p class="muted">Claims with evidence: {evidence_map.claims_with_evidence}. Usable evidence links: {evidence_map.claims_with_usable_evidence}. Orphan evidence snippets: {len(evidence_map.orphan_evidence_links)}.</p>
+  <div class="card-grid">{content}</div>
+</section>
+"""
+
+
+def render_claim_evidence_row(row) -> str:
+    links = ", ".join(link.id for link in row.evidence_links) if row.evidence_links else "none"
+    gaps = ", ".join(row.gaps) if row.gaps else "none"
+    return f"""
+<article class="card compact">
+  <div class="card-head">
+    <strong>{escape(row.claim_id)} - {escape(row.coverage.title())}</strong>
+    <span class="pill {escape(row.claim_status)}">{escape(row.priority.upper())}</span>
+  </div>
+  <p>{escape(row.claim)}</p>
+  <p class="muted">Status: {escape(row.claim_status)}. Evidence strength: {row.evidence_strength:.2f}. Links: {escape(links)}. Gaps: {escape(gaps)}.</p>
+  <p class="source-ref">{escape(source_reference(row.source_span))}</p>
+  <p class="repair"><strong>Repair:</strong> {escape(row.repair_suggestion)}</p>
+</article>
 """
 
 

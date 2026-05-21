@@ -14,6 +14,12 @@ from .batch import (
 )
 from .benchmarks import BenchmarkComparison, BenchmarkSample, list_benchmark_samples, run_benchmark_sample
 from .document_loader import LoadedDocument, load_document_from_bytes, load_document_from_path
+from .evidence_map import (
+    ClaimEvidenceMap,
+    ClaimEvidenceRow,
+    build_claim_evidence_map,
+    claim_evidence_map_to_markdown,
+)
 from .models import AnalysisReport, SourceSpan
 from .report_bundle import build_report_bundle
 from .refinement import ProviderSelection, RefinementReport, run_provider_refinement, run_refinement
@@ -56,6 +62,8 @@ __all__ = [
     "BatchScanItem",
     "BenchmarkComparison",
     "BenchmarkSample",
+    "ClaimEvidenceMap",
+    "ClaimEvidenceRow",
     "DemoShareSummary",
     "LoadedDocument",
     "ProviderSelection",
@@ -80,6 +88,7 @@ __all__ = [
     "build_reviewer_action_plan",
     "build_repair_steps",
     "build_batch_report_bundle",
+    "build_claim_evidence_map",
     "build_report_bundle",
     "build_demo_share_pack",
     "build_demo_share_summary",
@@ -88,6 +97,7 @@ __all__ = [
     "build_x_post",
     "build_source_review_items",
     "build_source_reader_view",
+    "claim_evidence_map_to_markdown",
     "delete_saved_run",
     "filter_batch_items",
     "list_benchmark_samples",

@@ -19,6 +19,7 @@ from gauntlet_core.batch import (
 )
 from gauntlet_core.benchmarks import list_benchmark_samples, run_benchmark_sample
 from gauntlet_core.document_loader import SUPPORTED_EXTENSIONS, load_document_from_bytes
+from gauntlet_core.evidence_map import build_claim_evidence_map, claim_evidence_map_to_markdown
 from gauntlet_core.models import source_reference
 from gauntlet_core.refinement import (
     DEFAULT_CHALLENGER_PROVIDER,
@@ -633,6 +634,41 @@ div[data-baseweb="tab-highlight"] {
 .evidence-link-card strong,
 .turn-card strong {
   color: var(--gauntlet-ink);
+}
+.evidence-map-card {
+  border: 1px solid var(--gauntlet-border);
+  border-radius: 8px;
+  background: white;
+  padding: .9rem;
+  margin-bottom: .75rem;
+  box-shadow: 0 10px 24px rgba(22, 34, 44, .05);
+}
+.evidence-map-card.high {
+  border-left: 4px solid var(--gauntlet-red);
+}
+.evidence-map-card.medium {
+  border-left: 4px solid var(--gauntlet-amber);
+}
+.evidence-map-card.low {
+  border-left: 4px solid var(--gauntlet-teal);
+}
+.coverage-pill {
+  display: inline-block;
+  border-radius: 6px;
+  padding: .18rem .5rem;
+  font-size: .75rem;
+  font-weight: 850;
+  background: #e6f6f3;
+  color: var(--gauntlet-teal);
+}
+.coverage-pill.missing,
+.coverage-pill.weak {
+  background: var(--gauntlet-red-bg);
+  color: var(--gauntlet-red);
+}
+.coverage-pill.linked {
+  background: var(--gauntlet-amber-bg);
+  color: var(--gauntlet-amber);
 }
 .audit-card span {
   color: var(--gauntlet-teal);
@@ -1410,6 +1446,7 @@ def render_contradictions_page(report, compact: bool = False) -> None:
 
 def render_evidence_page(report, compact: bool = False) -> None:
     title = "Evidence Profile" if compact else "Evidence"
+    evidence_map = build_claim_evidence_map(report)
     st.markdown(
         f"""
         <div class="wide-detail-card">
@@ -1436,6 +1473,7 @@ def render_evidence_page(report, compact: bool = False) -> None:
         """,
         unsafe_allow_html=True,
     )
+    render_claim_evidence_map(report, evidence_map, compact=compact)
     if report.evidence.evidence_links:
         for link in report.evidence.evidence_links:
             st.markdown(
@@ -1453,6 +1491,90 @@ def render_evidence_page(report, compact: bool = False) -> None:
             render_source_expander(f"Source for {link.id}", link.source_span)
     if not compact:
         render_source_trace(report, limit=18)
+
+
+def render_claim_evidence_map(report, evidence_map, compact: bool = False) -> None:
+    rows = evidence_map.rows[:4] if compact else evidence_map.rows
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="detail-title">Claim-Evidence Map</div>
+          <div class="detail-subtitle">Every detected claim is matched against the evidence snippets The Gauntlet linked to it. Missing and weak links are repair targets.</div>
+        </div>
+        <div class="stat-strip">
+          <div class="stat-tile"><div class="stat-title">Claims</div><div class="stat-number">{len(evidence_map.rows)}</div><div class="stat-note">Detected claims</div></div>
+          <div class="stat-tile"><div class="stat-title">With Evidence</div><div class="stat-number">{evidence_map.claims_with_evidence}</div><div class="stat-note">Any linked snippet</div></div>
+          <div class="stat-tile"><div class="stat-title">Usable Links</div><div class="stat-number">{evidence_map.claims_with_usable_evidence}</div><div class="stat-note">Confidence 42%+</div></div>
+          <div class="stat-tile"><div class="stat-title">Orphan Evidence</div><div class="stat-number">{len(evidence_map.orphan_evidence_links)}</div><div class="stat-note">Evidence not tied to a claim</div></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if not evidence_map.rows:
+        st.markdown(
+            '<div class="empty-detail">No clear claims were detected, so no claim-evidence map was generated.</div>',
+            unsafe_allow_html=True,
+        )
+        return
+    cards = []
+    for row in rows:
+        links = ", ".join(link.id for link in row.evidence_links) if row.evidence_links else "none"
+        gaps = ", ".join(row.gaps) if row.gaps else "none"
+        cards.append(
+            f"""
+            <div class="evidence-map-card {html.escape(row.priority)}">
+              <div class="finding-title">
+                <span>{html.escape(row.claim_id)} - {html.escape(row.claim_status.title())}</span>
+                <span class="coverage-pill {html.escape(row.coverage)}">{html.escape(row.coverage.upper())}</span>
+              </div>
+              <div class="finding-meta">Evidence strength {row.evidence_strength:.2f} | Links: {html.escape(links)} | Gaps: {html.escape(gaps)}</div>
+              <div class="finding-body">{html.escape(row.claim)}</div>
+              <div class="source-ref">{html.escape(source_reference(row.source_span))}</div>
+              {source_view_link(row.source_span, label="Open Claim Source")}
+              <p><strong>Repair:</strong> {html.escape(row.repair_suggestion)}</p>
+            </div>
+            """
+        )
+    remaining = len(evidence_map.rows) - len(rows)
+    remaining_note = f'<div class="muted-note">{remaining} more claim-evidence rows are included in the export.</div>' if remaining > 0 else ""
+    st.markdown(f'<div class="audit-grid">{"".join(cards)}</div>{remaining_note}', unsafe_allow_html=True)
+    if not compact:
+        st.download_button(
+            "Export Claim-Evidence Map",
+            data=claim_evidence_map_to_markdown(report, evidence_map),
+            file_name=f"{safe_stem(report.source_name)}-claim-evidence-map.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+        render_orphan_evidence(evidence_map)
+
+
+def render_orphan_evidence(evidence_map) -> None:
+    if not evidence_map.orphan_evidence_links:
+        return
+    cards = []
+    for link in evidence_map.orphan_evidence_links[:8]:
+        cards.append(
+            f"""
+            <div class="evidence-link-card">
+              <strong>{html.escape(link.id)} - Orphan {html.escape(link.type.title())}</strong>
+              <div class="muted-note">Confidence {link.confidence:.0%}. This snippet was detected as evidence but was not linked to a specific claim.</div>
+              <div class="source-ref">{html.escape(source_reference(link.source_span))}</div>
+              {source_view_link(link.source_span)}
+              <div class="claim-text">{html.escape(link.snippet)}</div>
+            </div>
+            """
+        )
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="detail-title">Orphan Evidence</div>
+          <div class="detail-subtitle">Evidence-like snippets that may need to be moved closer to the claim they support.</div>
+        </div>
+        <div class="audit-grid">{''.join(cards)}</div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_stat_strip(report) -> None:

@@ -105,6 +105,8 @@ The verdict is a review aid, not a replacement for expert peer review.
   `equation`
 - evidence markers and evidence links such as data, observations, citations,
   numbers, equations, methodology terms, and statistical language
+- a Claim-Evidence Map that shows which claims have strong, weak, missing, or
+  orphaned evidence support
 - internal contradictions, direct negations, property mismatches, universal
   counterexamples, and temporal conflicts
 - repair barriers such as unsupported resolution claims, missing mechanisms,
@@ -208,6 +210,16 @@ the highlighted sentence with nearby extracted context, linked audit items, rule
 explanations, repair suggestions, and saved revision re-check references.
 Source Reader exports include selected references, nearby snippets, linked
 issues, and repair notes only, not full uploaded paper files.
+
+## Claim-Evidence Map
+
+The `Evidence` page includes a Claim-Evidence Map. It lists every detected claim,
+labels the evidence coverage as `Strong`, `Linked`, `Weak`, or `Missing`, and
+shows orphan evidence snippets that look useful but are not tied to a specific
+claim. Use it to decide whether a paper needs stronger citations, measurements,
+derivations, methods, or falsifiable tests placed closer to the claims they
+support. The map can be exported as Markdown and is included in normal Markdown
+and HTML reports.
 
 ## Optional Refinement Chamber
 
