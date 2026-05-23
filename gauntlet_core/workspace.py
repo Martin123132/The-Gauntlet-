@@ -13,10 +13,11 @@ from .repair_workshop import normalize_repair_status
 from .revision_recheck import RevisionRecheckResult, normalize_revision_rechecks, revision_recheck_counts
 
 
-WORKSPACE_SCHEMA_VERSION = 3
+WORKSPACE_SCHEMA_VERSION = 4
 WORKSPACE_ENV_VAR = "GAUNTLET_WORKSPACE_DIR"
 DEFAULT_REVIEW_STATUS = "unreviewed"
 REVIEW_STATUSES = ("unreviewed", "confirmed", "false-positive", "needs-follow-up")
+ISSUE_REVIEW_STATUSES = ("unreviewed", "confirmed", "false-positive", "needs-repair", "resolved")
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,7 @@ class SavedRunSummary:
     notes: str = ""
     repair_progress_counts: dict[str, int] | None = None
     revision_recheck_counts: dict[str, int] | None = None
+    issue_review_counts: dict[str, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -48,6 +50,7 @@ class SavedRun:
     notes: str = ""
     repair_progress: dict[str, dict[str, str]] | None = None
     revision_rechecks: dict[str, dict[str, Any]] | None = None
+    issue_reviews: dict[str, dict[str, str]] | None = None
 
     @property
     def summary(self) -> SavedRunSummary:
@@ -63,6 +66,7 @@ class SavedRun:
             "notes": self.notes,
             "repair_progress": self.repair_progress or {},
             "revision_rechecks": self.revision_rechecks or {},
+            "issue_reviews": self.issue_reviews or {},
             "benchmark": self.benchmark_metadata,
             "report": self.report.to_dict(),
         }
@@ -113,6 +117,7 @@ def load_saved_run(run_id: str) -> SavedRun:
         notes=payload.get("notes", ""),
         repair_progress=normalize_repair_progress(payload.get("repair_progress", {})),
         revision_rechecks=normalize_revision_rechecks(payload.get("revision_rechecks", {})),
+        issue_reviews=normalize_issue_reviews(payload.get("issue_reviews", {})),
     )
 
 
@@ -133,6 +138,7 @@ def update_saved_run_notes(run_id: str, notes: str, review_status: str) -> Saved
         notes=notes,
         repair_progress=saved_run.repair_progress,
         revision_rechecks=saved_run.revision_rechecks,
+        issue_reviews=saved_run.issue_reviews,
     )
     write_saved_run(updated)
     return updated
@@ -156,6 +162,7 @@ def update_saved_run_repair_progress(run_id: str, step_id: str, status: str, rev
         notes=saved_run.notes,
         repair_progress=repair_progress,
         revision_rechecks=saved_run.revision_rechecks,
+        issue_reviews=saved_run.issue_reviews,
     )
     write_saved_run(updated)
     return updated
@@ -179,6 +186,34 @@ def update_saved_run_revision_recheck(run_id: str, result: RevisionRecheckResult
         notes=saved_run.notes,
         repair_progress=saved_run.repair_progress,
         revision_rechecks=revision_rechecks,
+        issue_reviews=saved_run.issue_reviews,
+    )
+    write_saved_run(updated)
+    return updated
+
+
+def update_saved_run_issue_review(run_id: str, issue_id: str, status: str, reviewer_note: str) -> SavedRun:
+    saved_run = load_saved_run(run_id)
+    clean_issue_id = "".join(character for character in issue_id if character.isalnum() or character in "-_")
+    if not clean_issue_id:
+        raise ValueError("Issue review id cannot be empty.")
+    issue_reviews = dict(saved_run.issue_reviews or {})
+    issue_reviews[clean_issue_id] = {
+        "status": normalize_issue_review_status(status),
+        "reviewer_note": reviewer_note,
+        "updated_at": utc_now_iso(),
+    }
+    updated = SavedRun(
+        run_id=saved_run.run_id,
+        run_kind=saved_run.run_kind,
+        saved_at=saved_run.saved_at,
+        report=saved_run.report,
+        benchmark_metadata=saved_run.benchmark_metadata,
+        review_status=saved_run.review_status,
+        notes=saved_run.notes,
+        repair_progress=saved_run.repair_progress,
+        revision_rechecks=saved_run.revision_rechecks,
+        issue_reviews=issue_reviews,
     )
     write_saved_run(updated)
     return updated
@@ -201,6 +236,7 @@ def summarize_saved_run(saved_run: SavedRun) -> SavedRunSummary:
         notes=saved_run.notes,
         repair_progress_counts=repair_progress_counts(saved_run.repair_progress or {}),
         revision_recheck_counts=revision_recheck_counts(saved_run.revision_rechecks or {}),
+        issue_review_counts=issue_review_counts(saved_run.issue_reviews or {}),
     )
 
 
@@ -222,6 +258,7 @@ def summary_from_payload(payload: dict[str, Any]) -> SavedRunSummary:
         notes=payload.get("notes", ""),
         repair_progress_counts=repair_progress_counts(normalize_repair_progress(payload.get("repair_progress", {}))),
         revision_recheck_counts=revision_recheck_counts(normalize_revision_rechecks(payload.get("revision_rechecks", {}))),
+        issue_review_counts=issue_review_counts(normalize_issue_reviews(payload.get("issue_reviews", {}))),
     )
 
 
@@ -260,10 +297,42 @@ def normalize_repair_progress(raw_progress: Any) -> dict[str, dict[str, str]]:
     return normalized
 
 
+def normalize_issue_reviews(raw_reviews: Any) -> dict[str, dict[str, str]]:
+    if not isinstance(raw_reviews, dict):
+        return {}
+    normalized: dict[str, dict[str, str]] = {}
+    for raw_issue_id, raw_value in raw_reviews.items():
+        if not isinstance(raw_issue_id, str) or not isinstance(raw_value, dict):
+            continue
+        issue_id = "".join(character for character in raw_issue_id if character.isalnum() or character in "-_")
+        if not issue_id:
+            continue
+        normalized[issue_id] = {
+            "status": normalize_issue_review_status(raw_value.get("status")),
+            "reviewer_note": str(raw_value.get("reviewer_note", "")),
+            "updated_at": str(raw_value.get("updated_at", "")),
+        }
+    return normalized
+
+
+def normalize_issue_review_status(status: object) -> str:
+    if isinstance(status, str) and status in ISSUE_REVIEW_STATUSES:
+        return status
+    return DEFAULT_REVIEW_STATUS
+
+
 def repair_progress_counts(progress: dict[str, dict[str, str]]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for item in progress.values():
         status = normalize_repair_status(item.get("status"))
+        counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
+def issue_review_counts(reviews: dict[str, dict[str, str]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in reviews.values():
+        status = normalize_issue_review_status(item.get("status"))
         counts[status] = counts.get(status, 0) + 1
     return counts
 

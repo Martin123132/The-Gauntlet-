@@ -11,6 +11,7 @@ from gauntlet_core.workspace import (
     save_analysis_run,
     update_saved_run_revision_recheck,
     update_saved_run_repair_progress,
+    update_saved_run_issue_review,
     update_saved_run_notes,
 )
 
@@ -33,6 +34,7 @@ def test_workspace_save_list_load_update_and_delete(tmp_path, monkeypatch):
     assert loaded.report.claims[0].source_span is not None
     assert loaded.repair_progress == {}
     assert loaded.revision_rechecks == {}
+    assert loaded.issue_reviews == {}
     assert updated.review_status == "confirmed"
     assert updated.notes == "Reviewer confirmed the mechanism gap."
 
@@ -81,6 +83,26 @@ def test_workspace_saves_repair_progress_without_raw_paper_or_keys(tmp_path, mon
     assert "paper_text" not in payload
 
 
+def test_workspace_saves_issue_reviews_without_raw_paper_or_keys(tmp_path, monkeypatch):
+    monkeypatch.setenv("GAUNTLET_WORKSPACE_DIR", str(tmp_path / "runs"))
+    report = analyze_paper_text(
+        "The paper resolves the paradox and eliminates the contradiction.",
+        source_name="issue-review.txt",
+    )
+
+    saved = save_analysis_run(report, "analysis")
+    updated = update_saved_run_issue_review(saved.run_id, "F1", "false-positive", "Prior-work comparison, not this paper's claim.")
+    loaded = load_saved_run(saved.run_id)
+    payload = json.loads((tmp_path / "runs" / f"{saved.run_id}.json").read_text(encoding="utf-8"))
+
+    assert updated.issue_reviews["F1"]["status"] == "false-positive"
+    assert loaded.issue_reviews["F1"]["reviewer_note"] == "Prior-work comparison, not this paper's claim."
+    assert list_saved_runs()[0].issue_review_counts["false-positive"] == 1
+    assert payload["issue_reviews"]["F1"]["status"] == "false-positive"
+    assert "api_key" not in json.dumps(payload).lower()
+    assert "paper_text" not in payload
+
+
 def test_workspace_loads_older_saved_runs_without_repair_progress(tmp_path, monkeypatch):
     monkeypatch.setenv("GAUNTLET_WORKSPACE_DIR", str(tmp_path / "runs"))
     report = analyze_paper_text("The framework explains the issue because the mechanism is measured.", source_name="old.txt")
@@ -89,6 +111,7 @@ def test_workspace_loads_older_saved_runs_without_repair_progress(tmp_path, monk
     payload = json.loads(path.read_text(encoding="utf-8"))
     payload.pop("repair_progress", None)
     payload.pop("revision_rechecks", None)
+    payload.pop("issue_reviews", None)
     payload["schema_version"] = 1
     path.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -96,8 +119,10 @@ def test_workspace_loads_older_saved_runs_without_repair_progress(tmp_path, monk
 
     assert loaded.repair_progress == {}
     assert loaded.revision_rechecks == {}
+    assert loaded.issue_reviews == {}
     assert list_saved_runs()[0].repair_progress_counts == {}
     assert list_saved_runs()[0].revision_recheck_counts == {}
+    assert list_saved_runs()[0].issue_review_counts == {}
 
 
 def test_workspace_saves_revision_recheck_without_raw_paper_or_keys(tmp_path, monkeypatch):

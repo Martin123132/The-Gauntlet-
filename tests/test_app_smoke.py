@@ -149,8 +149,22 @@ def test_streamlit_source_viewer_highlights_selected_anchor():
     assert any("Issue Queue" in item.value for item in app.markdown)
     assert any("Reader Context" in item.value for item in app.markdown)
     assert any("Linked Audit" in item.value for item in app.markdown)
+    assert any("Issue Review Register" in item.value for item in app.markdown)
     assert any("Search source" == text_input.label for text_input in app.text_input)
     assert any("Issue filter" == radio.label for radio in app.radio)
+    assert any("Save Issue Reviews" == button.label for button in app.button)
+
+    review_status = next(selectbox for selectbox in app.selectbox if selectbox.label == "Issue review status")
+    review_status.set_value("confirmed")
+    review_note = next(area for area in app.text_area if area.label == "Issue review note")
+    review_note.set_value("Reviewer confirmed this issue.")
+    save_reviews = next(button for button in app.button if button.label == "Save Issue Reviews")
+    save_reviews.click()
+    app.run(timeout=20)
+
+    saved_run = load_saved_run(app.session_state["workspace_run_id"])
+    assert any(item["status"] == "confirmed" for item in saved_run.issue_reviews.values())
+    assert any("confirmed this issue" in item["reviewer_note"] for item in saved_run.issue_reviews.values())
 
     if len(app.session_state["report"].source_spans) > 1:
         second_anchor_id = app.session_state["report"].source_spans[1].anchor_id
@@ -234,6 +248,7 @@ def test_streamlit_workspace_page_lists_opens_compares_and_deletes(tmp_path, mon
     assert any("Compare Saved Runs" in item.value for item in app.markdown)
     assert any("Repair progress" in item.value for item in app.markdown)
     assert any("Revision re-checks" in item.value for item in app.markdown)
+    assert any("Issue reviews" in item.value for item in app.markdown)
 
     open_button = next(button for button in app.button if button.label == "Open Saved Run")
     open_button.click()
