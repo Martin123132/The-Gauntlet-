@@ -4,6 +4,23 @@
 
 No unreleased changes yet.
 
+## v0.16.0 - Issue Review Register
+
+This release adds local issue-level review notes to the Source Reader workflow.
+
+### Added
+
+- Added an Issue Review Register in Source Reader for linked findings, claims,
+  evidence items, repair steps, and revision re-checks.
+- Added local workspace storage for per-issue review status and reviewer notes.
+- Added issue-review summaries on Workspace saved-run cards.
+
+### Changed
+
+- Source Reader issue cards now show saved issue review status when available.
+- Workspace storage remains privacy-first and still does not save full uploaded
+  paper files or API keys.
+
 ## v0.15.0 - Claim-Evidence Map
 
 This release makes evidence traceability easier to audit claim by claim.

@@ -154,12 +154,13 @@ quietly break known behavior or reintroduce known false positives.
 The `Workspace` page keeps a private local history of completed analyses. Use it
 to reopen a previous report, export JSON, Markdown, HTML, or a report bundle
 ZIP again, add reviewer notes, mark review status, resume repair progress,
-delete a saved run, or compare two saved reports side by side.
+resume issue reviews, delete a saved run, or compare two saved reports side by
+side.
 
 Saved workspace files live under `.gauntlet/workspace/runs/` and are ignored by
 Git. The app saves the deterministic report, source snippets, reviewer notes,
-repair progress, and pasted revision snippets needed for auditability, but it
-does not save the original uploaded document.
+issue review statuses, repair progress, and pasted revision snippets needed for
+auditability, but it does not save the original uploaded document.
 
 ## Batch Scan
 
@@ -210,6 +211,11 @@ the highlighted sentence with nearby extracted context, linked audit items, rule
 explanations, repair suggestions, and saved revision re-check references.
 Source Reader exports include selected references, nearby snippets, linked
 issues, and repair notes only, not full uploaded paper files.
+
+When a report has a saved workspace run, Source Reader also includes an Issue
+Review Register. Each linked issue can be marked as `Confirmed`, `False
+Positive`, `Needs Repair`, or `Resolved`, with a short reviewer note saved
+locally alongside the run.
 
 ## Claim-Evidence Map
 

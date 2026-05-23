@@ -53,6 +53,7 @@ from gauntlet_core.share import (
 from gauntlet_core.source_reader import build_source_reader_view, source_reader_to_markdown
 from gauntlet_core.source_review import build_source_review_items, source_review_to_markdown
 from gauntlet_core.workspace import (
+    ISSUE_REVIEW_STATUSES,
     REVIEW_STATUSES,
     delete_saved_run,
     list_saved_runs,
@@ -60,6 +61,7 @@ from gauntlet_core.workspace import (
     save_analysis_run,
     update_saved_run_revision_recheck,
     update_saved_run_repair_progress,
+    update_saved_run_issue_review,
     update_saved_run_notes,
     workspace_runs_dir,
 )
@@ -2338,6 +2340,7 @@ def render_source_viewer_page(report) -> None:
     saved_run = load_workspace_run_safely(run_id)
     saved_progress = saved_run.repair_progress if saved_run else {}
     saved_rechecks = saved_run.revision_rechecks if saved_run else {}
+    saved_issue_reviews = saved_run.issue_reviews if saved_run else {}
     st.markdown(
         f"""
         <div class="wide-detail-card">
@@ -2388,7 +2391,7 @@ def render_source_viewer_page(report) -> None:
             label_visibility="collapsed",
         )
         visible_items = filter_source_review_items(review_items, selected_filter)
-        render_source_review_issue_queue(visible_items, view.selected_anchor)
+        render_source_review_issue_queue(visible_items, view.selected_anchor, saved_issue_reviews)
         st.download_button(
             "Export Source Review Markdown",
             data=source_review_to_markdown(report, visible_items),
@@ -2399,7 +2402,7 @@ def render_source_viewer_page(report) -> None:
     with center:
         render_source_reader_context(view)
     with right:
-        render_source_reader_linked_panel(view)
+        render_source_reader_linked_panel(view, run_id=run_id, issue_reviews=saved_issue_reviews)
         st.download_button(
             "Export Source Reader Markdown",
             data=source_reader_to_markdown(report, view),
@@ -2423,7 +2426,8 @@ def filter_source_review_items(items, selected_filter: str):
     return list(items)
 
 
-def render_source_review_issue_queue(items, selected_anchor: str) -> None:
+def render_source_review_issue_queue(items, selected_anchor: str, issue_reviews=None) -> None:
+    issue_reviews = issue_reviews or {}
     if not items:
         st.markdown('<div class="empty-detail">No source review items match this filter.</div>', unsafe_allow_html=True)
         return
@@ -2434,11 +2438,14 @@ def render_source_review_issue_queue(items, selected_anchor: str) -> None:
         active_class = " active" if selected_anchor in {source_anchor, related_anchor} else ""
         severity_class = item.severity if item.severity in {"high", "medium", "low"} else "low"
         link = source_view_link(item.source_span, label="Open Source") if item.source_span else ""
+        review = issue_reviews.get(item.id, {})
+        review_status = issue_review_label(str(review.get("status", "unreviewed")))
         cards.append(
             f'<div class="source-issue-card {html.escape(severity_class)}{active_class}">'
             f'<div class="small-label">{html.escape(item.kind)} | {html.escape(item.id)}</div>'
             f'<strong>{html.escape(item.title)}</strong>'
             f'<div class="muted-note">Priority {item.priority} | {html.escape(item.severity)} | {html.escape(item.status)}</div>'
+            f'<div class="source-ref">Review: {html.escape(review_status)}</div>'
             f'{link}'
             f'<div class="claim-text">{html.escape(truncate_text(item.body, 170))}</div>'
             "</div>"
@@ -2545,12 +2552,13 @@ def render_source_reader_context(view) -> None:
     st.markdown("".join(lines), unsafe_allow_html=True)
 
 
-def render_source_reader_linked_panel(view) -> None:
+def render_source_reader_linked_panel(view, run_id: str | None = None, issue_reviews=None) -> None:
+    issue_reviews = issue_reviews or {}
     st.markdown(
         """
         <div class="wide-detail-card">
           <div class="detail-title">Linked Audit</div>
-          <div class="detail-subtitle">Claims, findings, evidence, repair steps, and saved revision checks attached to the selected source.</div>
+          <div class="detail-subtitle">Claims, findings, evidence, repair steps, saved revision checks, and issue review notes attached to the selected source.</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -2563,17 +2571,88 @@ def render_source_reader_linked_panel(view) -> None:
         related_note = ""
         if item.related_source_span and item.related_source_span.anchor_id != view.selected_anchor:
             related_note = f'<div class="source-ref">Related: {html.escape(source_reference(item.related_source_span))}</div>'
+        review = issue_reviews.get(item.id, {})
+        review_status = issue_review_label(str(review.get("status", "unreviewed")))
+        reviewer_note = str(review.get("reviewer_note", "")).strip()
+        note_html = f'<div class="muted-note">Reviewer note: {html.escape(truncate_text(reviewer_note, 180))}</div>' if reviewer_note else ""
         cards.append(
             '<div class="audit-card source-reader-related">'
             f'<strong>{html.escape(item.kind)}: {html.escape(item.title)}</strong>'
             f'<div class="muted-note">{html.escape(item.id)} | {html.escape(item.status)}</div>'
+            f'<div class="source-ref">Issue review: {html.escape(review_status)}</div>'
             f'{related_note}'
+            f'{note_html}'
             f'<div class="claim-text">{html.escape(truncate_text(item.body, 260))}</div>'
             f'<p><strong>Rule explanation:</strong> {html.escape(item.explanation)}</p>'
             f'<p><strong>Repair:</strong> {html.escape(item.repair_suggestion)}</p>'
             "</div>"
         )
     st.markdown(f'<div class="audit-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+    render_issue_review_controls(view.related_items, run_id, issue_reviews)
+
+
+def render_issue_review_controls(items, run_id: str | None, issue_reviews) -> None:
+    st.markdown(
+        """
+        <div class="wide-detail-card">
+          <div class="detail-title">Issue Review Register</div>
+          <div class="detail-subtitle">Mark linked issues as confirmed, false positive, needs repair, or resolved. Notes save locally with this workspace run.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if not run_id:
+        st.markdown(
+            '<div class="workspace-privacy">Issue review notes save after a report is opened from or saved to the local workspace.</div>',
+            unsafe_allow_html=True,
+        )
+        return
+    visible_items = list(items[:8])
+    status_options = list(ISSUE_REVIEW_STATUSES)
+    for item in visible_items:
+        current = issue_reviews.get(item.id, {})
+        current_status = str(current.get("status", "unreviewed"))
+        if current_status not in status_options:
+            current_status = "unreviewed"
+        st.markdown(
+            f"""
+            <div class="workspace-card">
+              <div class="small-label">{html.escape(item.kind)} | {html.escape(item.id)}</div>
+              <strong>{html.escape(item.title)}</strong>
+              <div class="claim-text">{html.escape(truncate_text(item.body, 170))}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        status_col, note_col = st.columns([0.36, 0.64])
+        status_col.selectbox(
+            "Issue review status",
+            status_options,
+            index=status_options.index(current_status),
+            format_func=issue_review_label,
+            key=f"issue_review_status_{item.id}",
+        )
+        note_col.text_area(
+            "Issue review note",
+            value=str(current.get("reviewer_note", "")),
+            height=72,
+            key=f"issue_review_note_{item.id}",
+        )
+    if len(items) > len(visible_items):
+        st.markdown(
+            f'<div class="muted-note">{len(items) - len(visible_items)} more linked items are visible by changing the selected source anchor.</div>',
+            unsafe_allow_html=True,
+        )
+    if st.button("Save Issue Reviews", use_container_width=True):
+        for item in visible_items:
+            update_saved_run_issue_review(
+                run_id,
+                item.id,
+                st.session_state.get(f"issue_review_status_{item.id}", "unreviewed"),
+                st.session_state.get(f"issue_review_note_{item.id}", ""),
+            )
+        st.success("Issue reviews saved locally.")
+        st.rerun()
 
 
 def render_source_lens(report, selected_span, review_items=None) -> None:
@@ -2745,6 +2824,7 @@ def render_saved_run_list(summaries, active_run_id: str | None) -> None:
         notes_label = "Notes saved" if summary.notes.strip() else "No notes"
         repair_label = repair_progress_summary(summary.repair_progress_counts or {})
         revision_label = revision_recheck_summary(summary.revision_recheck_counts or {})
+        issue_label = issue_review_summary(summary.issue_review_counts or {})
         st.markdown(
             f"""
             <div class="workspace-card{active_class}">
@@ -2759,6 +2839,7 @@ def render_saved_run_list(summaries, active_run_id: str | None) -> None:
               </div>
               <div class="source-ref">Repair progress: {html.escape(repair_label)}</div>
               <div class="source-ref">Revision re-checks: {html.escape(revision_label)}</div>
+              <div class="source-ref">Issue reviews: {html.escape(issue_label)}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -2788,6 +2869,7 @@ def render_saved_run_controls(summaries):
           </div>
           <div class="source-ref">Repair progress: {html.escape(repair_progress_summary(summary.repair_progress_counts or {}))}</div>
           <div class="source-ref">Revision re-checks: {html.escape(revision_recheck_summary(summary.revision_recheck_counts or {}))}</div>
+          <div class="source-ref">Issue reviews: {html.escape(issue_review_summary(summary.issue_review_counts or {}))}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -3293,6 +3375,17 @@ def format_review_status(status: str) -> str:
     return labels.get(status, status.replace("-", " ").title())
 
 
+def issue_review_label(status: str) -> str:
+    labels = {
+        "unreviewed": "Unreviewed",
+        "confirmed": "Confirmed",
+        "false-positive": "False Positive",
+        "needs-repair": "Needs Repair",
+        "resolved": "Resolved",
+    }
+    return labels.get(status, status.replace("-", " ").title())
+
+
 def repair_progress_summary(counts: dict[str, int]) -> str:
     if not counts:
         return "No saved repair progress"
@@ -3302,6 +3395,16 @@ def repair_progress_summary(counts: dict[str, int]) -> str:
     false_positive = counts.get("false-positive", 0)
     wont_fix = counts.get("wont-fix", 0)
     return f"{fixed} fixed, {in_progress} in progress, {todo} to do, {false_positive} false positive, {wont_fix} won't fix"
+
+
+def issue_review_summary(counts: dict[str, int]) -> str:
+    if not counts:
+        return "No issue reviews"
+    confirmed = counts.get("confirmed", 0)
+    false_positive = counts.get("false-positive", 0)
+    needs_repair = counts.get("needs-repair", 0)
+    resolved = counts.get("resolved", 0)
+    return f"{confirmed} confirmed, {needs_repair} needs repair, {resolved} resolved, {false_positive} false positive"
 
 
 def revision_recheck_summary(counts: dict[str, int]) -> str:
