@@ -116,7 +116,8 @@ The verdict is a review aid, not a replacement for expert peer review.
 - a Source Reader page that searches extracted anchors and highlights the exact
   sentence behind a claim, finding, evidence snippet, repair item, revision
   re-check, or source-trace anchor
-- exportable JSON, Markdown, self-contained HTML, and report bundle ZIP exports
+- exportable JSON, Markdown, self-contained HTML, report bundle ZIP, and
+  reviewer packet exports
 - a Repair Workshop that turns claim gaps and findings into prioritized repair
   steps with local saved progress and revision re-checks
 
@@ -154,13 +155,25 @@ quietly break known behavior or reintroduce known false positives.
 The `Workspace` page keeps a private local history of completed analyses. Use it
 to reopen a previous report, export JSON, Markdown, HTML, or a report bundle
 ZIP again, add reviewer notes, mark review status, resume repair progress,
-resume issue reviews, delete a saved run, or compare two saved reports side by
-side.
+resume issue reviews, export a reviewer packet, delete a saved run, or compare
+two saved reports side by side.
 
 Saved workspace files live under `.gauntlet/workspace/runs/` and are ignored by
 Git. The app saves the deterministic report, source snippets, reviewer notes,
 issue review statuses, repair progress, and pasted revision snippets needed for
 auditability, but it does not save the original uploaded document.
+
+## Reviewer Packet Export
+
+Saved Workspace runs can export a `Reviewer Packet` as Markdown, self-contained
+HTML, or a ZIP containing both plus review-state metadata. The packet is meant
+for collaborator review: it includes the verdict, claim-evidence map, issue
+review register, repair checklist, selected source snippets, reviewer notes,
+and revision re-check summaries in one shareable package.
+
+Reviewer packets follow the same privacy model as the Workspace. They contain
+saved report data, anchors, snippets, notes, repair statuses, and pasted
+revision snippets, but not full uploaded paper files or API keys.
 
 ## Batch Scan
 

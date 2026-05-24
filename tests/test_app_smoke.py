@@ -249,6 +249,7 @@ def test_streamlit_workspace_page_lists_opens_compares_and_deletes(tmp_path, mon
     assert any("Repair progress" in item.value for item in app.markdown)
     assert any("Revision re-checks" in item.value for item in app.markdown)
     assert any("Issue reviews" in item.value for item in app.markdown)
+    assert any("Reviewer Packet" in item.value for item in app.markdown)
 
     open_button = next(button for button in app.button if button.label == "Open Saved Run")
     open_button.click()

@@ -37,6 +37,11 @@ from gauntlet_core.repair_workshop import (
     repair_status_label,
     repair_workshop_to_markdown,
 )
+from gauntlet_core.reviewer_packet import (
+    build_reviewer_packet_bundle,
+    reviewer_packet_to_html,
+    reviewer_packet_to_markdown,
+)
 from gauntlet_core.revision_recheck import (
     recheck_repair_revision,
     revision_recheck_log_to_markdown,
@@ -1678,6 +1683,61 @@ def render_exports(report) -> None:
     )
 
 
+def render_reviewer_packet_exports(saved_run) -> None:
+    report = saved_run.report
+    stem = safe_stem(report.source_name)
+    st.markdown(
+        """
+        <div class="wide-detail-card">
+          <div class="detail-title">Reviewer Packet</div>
+          <div class="detail-subtitle">Export a shareable packet with verdict, claim-evidence map, issue reviews, repair progress, source snippets, and revision re-check summaries.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    markdown_col, html_col, bundle_col = st.columns(3)
+    markdown_col.download_button(
+        "Export Reviewer Packet Markdown",
+        data=reviewer_packet_to_markdown(
+            report,
+            issue_reviews=saved_run.issue_reviews,
+            repair_progress=saved_run.repair_progress,
+            revision_rechecks=saved_run.revision_rechecks,
+        ),
+        file_name=f"{stem}-reviewer-packet.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
+    html_col.download_button(
+        "Export Reviewer Packet HTML",
+        data=reviewer_packet_to_html(
+            report,
+            issue_reviews=saved_run.issue_reviews,
+            repair_progress=saved_run.repair_progress,
+            revision_rechecks=saved_run.revision_rechecks,
+        ),
+        file_name=f"{stem}-reviewer-packet.html",
+        mime="text/html",
+        use_container_width=True,
+    )
+    bundle_col.download_button(
+        "Export Reviewer Packet ZIP",
+        data=build_reviewer_packet_bundle(
+            report,
+            issue_reviews=saved_run.issue_reviews,
+            repair_progress=saved_run.repair_progress,
+            revision_rechecks=saved_run.revision_rechecks,
+        ),
+        file_name=f"{stem}-reviewer-packet.zip",
+        mime="application/zip",
+        use_container_width=True,
+    )
+    st.markdown(
+        '<div class="muted-note">Reviewer packets use saved report data, source anchors, snippets, reviewer notes, repair progress, and revision snippets only. They do not include the full uploaded paper or API keys.</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def render_action_plan_page(report, compact: bool = False) -> None:
     run_id = st.session_state.get("workspace_run_id") or report_store().get("workspace_run_id")
     saved_run = load_workspace_run_safely(run_id)
@@ -2919,6 +2979,7 @@ def render_saved_run_controls(summaries):
         st.rerun()
 
     render_exports(selected_run.report)
+    render_reviewer_packet_exports(selected_run)
     return summary
 
 
