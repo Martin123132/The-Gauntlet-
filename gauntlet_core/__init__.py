@@ -24,6 +24,7 @@ from .models import AnalysisReport, SourceSpan
 from .report_bundle import build_report_bundle
 from .refinement import ProviderSelection, RefinementReport, run_provider_refinement, run_refinement
 from .repair_workshop import RepairStep, build_repair_steps, repair_workshop_to_markdown
+from .reviewer_packet import build_reviewer_packet_bundle, reviewer_packet_to_html, reviewer_packet_to_markdown
 from .revision_recheck import RevisionRecheckResult, recheck_repair_revision, revision_recheck_log_to_markdown
 from .share import (
     DemoShareSummary,
@@ -93,6 +94,7 @@ __all__ = [
     "build_batch_report_bundle",
     "build_claim_evidence_map",
     "build_report_bundle",
+    "build_reviewer_packet_bundle",
     "build_demo_share_pack",
     "build_demo_share_summary",
     "build_share_card_html",
@@ -116,6 +118,8 @@ __all__ = [
     "source_review_to_markdown",
     "source_reader_to_markdown",
     "repair_workshop_to_markdown",
+    "reviewer_packet_to_html",
+    "reviewer_packet_to_markdown",
     "recheck_repair_revision",
     "revision_recheck_log_to_markdown",
     "update_saved_run_revision_recheck",

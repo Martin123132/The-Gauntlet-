@@ -4,6 +4,28 @@
 
 No unreleased changes yet.
 
+## v0.17.0 - Reviewer Packet Export
+
+This release adds reviewer-ready exports for sharing The Gauntlet's audit trail
+after a local workspace run.
+
+### Added
+
+- Added Reviewer Packet Markdown, HTML, and ZIP exports from saved Workspace
+  runs.
+- Reviewer packets include the verdict, claim-evidence map, issue review
+  register, repair checklist, source snippets, and revision re-check summaries.
+- Added reusable `gauntlet_core.reviewer_packet` helpers for packet generation
+  without changing the saved report JSON schema.
+
+### Changed
+
+- Workspace saved-run controls now include a dedicated Reviewer Packet export
+  section.
+- Reviewer Packet exports keep the existing privacy model: snippets, anchors,
+  notes, and pasted revision snippets only, not full uploaded paper files or API
+  keys.
+
 ## v0.16.0 - Issue Review Register
 
 This release adds local issue-level review notes to the Source Reader workflow.
