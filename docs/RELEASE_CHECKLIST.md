@@ -7,6 +7,7 @@ Use this checklist before merging `non-ai-app-v1` into `main` or publishing a re
 - [ ] Run `.venv\Scripts\python.exe -m pytest` locally.
 - [ ] Confirm GitHub Actions passes on the branch or pull request.
 - [ ] Confirm `Start-Gauntlet.bat` installs `requirements.txt`, not optional AI packages.
+- [ ] Confirm `Start-Gauntlet.bat` prints the launcher log path under `.gauntlet/logs/`.
 
 ## Windows Download ZIP Check
 
@@ -16,14 +17,18 @@ Use this checklist before merging `non-ai-app-v1` into `main` or publishing a re
 - [ ] Confirm the launcher accepts Python 3.10 or newer.
 - [ ] Confirm the launcher creates `.venv` and installs local requirements.
 - [ ] Confirm the browser opens at `http://localhost:8501`.
+- [ ] Confirm `.gauntlet/logs/Start-Gauntlet.log` exists after launch.
 
 ## App Smoke Check
 
+- [ ] Confirm a fresh Summary page shows the `Start Here` panel.
+- [ ] Press `Try Sample Paper` and confirm a verdict appears.
 - [ ] Run the built-in sample paper.
 - [ ] Confirm the Summary page shows a verdict.
 - [ ] Confirm the Breakdown page shows claim audit and rule events.
 - [ ] Run one Benchmark sample and confirm expected-vs-actual results.
 - [ ] Open Refinement and confirm Gemini, OpenAI, and Anthropic provider choices are visible without installing AI dependencies.
+- [ ] Open Workspace and confirm Reviewer Packet exports are visible.
 - [ ] Export JSON and Markdown reports.
 
 ## Public Page Check

@@ -11,7 +11,8 @@ rule-based verdict: `RESOLVES`, `PARTIAL`, `FAILS`, or
 2. Choose `Download ZIP`.
 3. Unzip the folder.
 4. Double-click `Start-Gauntlet.bat`.
-5. Upload a `.pdf`, `.docx`, `.txt`, or `.md` paper and press `Analyze Paper`.
+5. When the app opens, press `Try Sample Paper` first or upload a `.pdf`,
+   `.docx`, `.txt`, or `.md` paper and press `Analyze Paper`.
 
 The default flow does not call any AI provider. There is no API key setup for
 the normal checker. The app runs on your machine and uses deterministic rules
@@ -28,6 +29,10 @@ workspace stores report JSON, source anchors, snippets, and notes, but not the
 uploaded paper file or API keys. If your repo folder lives inside OneDrive,
 Dropbox, or another synced folder, those local report files may still sync
 through that service.
+
+First run tip: the Summary page shows a `Start Here` panel until a report is
+loaded. Use `Try Sample Paper` to confirm the launcher, local rules, and
+workspace are working before uploading a private paper.
 
 ## Screenshots
 
@@ -48,11 +53,13 @@ through that service.
 1. Download this repo from GitHub.
 2. Unzip it.
 3. Double-click `Start-Gauntlet.bat`.
-4. Upload a `.pdf`, `.docx`, `.txt`, or `.md` paper.
-5. Press `Analyze Paper`.
+4. Press `Try Sample Paper` for a quick local smoke test.
+5. Upload a `.pdf`, `.docx`, `.txt`, or `.md` paper and press `Analyze Paper`.
 
 The launcher creates a local `.venv`, installs the requirements, and opens the
-Streamlit app in your browser.
+Streamlit app in your browser. It also prints the repo path, Python version,
+virtual environment path, browser URL, and a troubleshooting log path under
+`.gauntlet/logs/`.
 
 You can also drag a paper or folder onto `Analyze-Paper.bat` to write reports
 without opening the app.

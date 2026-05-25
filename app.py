@@ -692,6 +692,30 @@ div[data-baseweb="tab-highlight"] {
   padding: .2rem .48rem;
   margin-top: .4rem;
 }
+.start-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: .7rem;
+  margin-top: .85rem;
+}
+.start-step {
+  min-height: 112px;
+  border: 1px solid var(--gauntlet-border);
+  border-radius: 8px;
+  padding: .8rem;
+  background: #f9fbfa;
+}
+.start-step strong {
+  display: block;
+  color: var(--gauntlet-ink);
+  font-size: .9rem;
+  margin-bottom: .35rem;
+}
+.start-step span {
+  color: var(--gauntlet-muted);
+  font-size: .82rem;
+  line-height: 1.35;
+}
 .source-snippet {
   border-left: 3px solid var(--gauntlet-teal);
   background: #fbfcfd;
@@ -968,6 +992,7 @@ div[data-baseweb="tab-highlight"] {
   .batch-grid,
   .source-viewer-grid,
   .detail-grid,
+  .start-grid,
   .stat-strip,
   .footer-status {
     grid-template-columns: 1fr;
@@ -1064,6 +1089,11 @@ def save_report(report, paper_text: str, run_kind: str = "analysis", benchmark_r
     report_store()["workspace_run_id"] = saved_run.run_id
 
 
+def run_sample_analysis() -> None:
+    report = analyze_paper_text(SAMPLE_PAPER, source_name="sample-paper.txt")
+    save_report(report, SAMPLE_PAPER, run_kind="sample")
+
+
 def open_saved_run(saved_run) -> None:
     st.session_state["report"] = saved_run.report
     st.session_state["paper_text"] = ""
@@ -1153,9 +1183,9 @@ def render_upload_panel() -> None:
             try:
                 run_kind = "analysis"
                 if use_sample:
-                    paper_text = SAMPLE_PAPER
-                    report = analyze_paper_text(paper_text, source_name="sample-paper.txt")
-                    run_kind = "sample"
+                    run_sample_analysis()
+                    st.rerun()
+                    return
                 elif upload is not None:
                     loaded_document = load_document_from_bytes(upload.name, upload.getvalue())
                     paper_text = loaded_document.text
@@ -1204,6 +1234,12 @@ def render_empty_state() -> None:
             <div class="verdict-copy">Upload a paper or use the built-in sample to generate a local verdict. The report will appear here with claim counts, evidence quality, contradictions, and export options.</div>
           </div>
         </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    render_start_here_panel()
+    st.markdown(
+        """
         <div class="stat-strip">
           <div class="stat-tile"><div class="stat-title">Claims Made</div><div class="stat-number">-</div><div class="stat-note">Waiting for analysis</div></div>
           <div class="stat-tile"><div class="stat-title">Supported Claims</div><div class="stat-number">-</div><div class="stat-note">Local rules only</div></div>
@@ -1213,6 +1249,31 @@ def render_empty_state() -> None:
         """,
         unsafe_allow_html=True,
     )
+
+
+def render_start_here_panel() -> None:
+    with st.container(border=True):
+        st.markdown(
+            """
+            <div class="panel-title">Start Here</div>
+            <div class="muted-note">The fastest first run is the built-in sample. After that, upload a real paper and follow the audit trail from verdict to source snippets and exports.</div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button("Try Sample Paper", type="primary", use_container_width=True):
+            run_sample_analysis()
+            st.rerun()
+        st.markdown(
+            """
+            <div class="start-grid">
+              <div class="start-step"><strong>1. Try sample</strong><span>Run the demo paper to confirm the local checker and workspace are working.</span></div>
+              <div class="start-step"><strong>2. Upload paper</strong><span>Use PDF, DOCX, TXT, or MD. The normal checker does not need an API key.</span></div>
+              <div class="start-step"><strong>3. Inspect issues</strong><span>Open Breakdown, Source Reader, Repair Workshop, and Evidence to trace every finding.</span></div>
+              <div class="start-step"><strong>4. Export packet</strong><span>Use Workspace to export JSON, Markdown, HTML, report bundles, or reviewer packets.</span></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 def render_report_center(report) -> None:
