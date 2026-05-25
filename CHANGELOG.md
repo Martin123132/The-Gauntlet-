@@ -4,6 +4,25 @@
 
 No unreleased changes yet.
 
+## v0.18.0 - First-Run Onboarding + Download QA
+
+This release improves the GitHub ZIP first-run path for new local users.
+
+### Added
+
+- Added a `Start Here` panel on the Summary page when no report is loaded.
+- Added a `Try Sample Paper` button that runs the built-in sample and saves the
+  result to the local workspace.
+- Added launcher diagnostics and a local troubleshooting log under
+  `.gauntlet/logs/`.
+
+### Changed
+
+- `Start-Gauntlet.bat` now prints the repo path, virtual environment path,
+  Python version, Streamlit URL, and clearer setup failure guidance.
+- Updated public docs, release checklist, and screenshots for the first-run
+  flow and Reviewer Packet workspace exports.
+
 ## v0.17.0 - Reviewer Packet Export
 
 This release adds reviewer-ready exports for sharing The Gauntlet's audit trail

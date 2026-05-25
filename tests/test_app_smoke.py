@@ -19,7 +19,24 @@ def test_streamlit_app_renders_primary_controls():
     assert not app.exception
     assert app.file_uploader
     assert any(button.label == "Analyze Paper" for button in app.button)
+    assert any(button.label == "Try Sample Paper" for button in app.button)
     assert any("The Gauntlet" in item.value for item in app.markdown)
+    assert any("Start Here" in item.value for item in app.markdown)
+
+
+def test_streamlit_start_here_sample_button_produces_report():
+    app = AppTest.from_file("app.py")
+    app.run(timeout=20)
+
+    sample_button = next(button for button in app.button if button.label == "Try Sample Paper")
+    sample_button.click()
+    app.run(timeout=20)
+
+    assert not app.exception
+    report = app.session_state["report"]
+    assert report.source_name == "sample-paper.txt"
+    assert report.verdict in {"RESOLVES", "PARTIAL", "FAILS", "CREATES_NEW_PARADOXES"}
+    assert list_saved_runs()
 
 
 def test_streamlit_sample_workflow_produces_report():

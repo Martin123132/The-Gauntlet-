@@ -44,6 +44,11 @@ def test_windows_launcher_keeps_default_install_non_ai():
     assert not any("pip install -r requirements-ai.txt" in line for line in command_lines)
     assert "requirements-ai.txt" in launcher
     assert "http://localhost:8501" in launcher
+    assert ".gauntlet\\logs" in launcher
+    assert "Launcher log:" in launcher
+    assert "Repo folder:" in launcher
+    assert "Venv folder:" in launcher
+    assert "Streamlit stopped before The Gauntlet could open." in launcher
 
 
 def test_drag_drop_analyzer_keeps_default_install_non_ai():
@@ -90,3 +95,11 @@ def test_local_workspace_data_is_gitignored():
 
     assert ".gauntlet/" in gitignore
     assert "gauntlet-reports/" in gitignore
+
+
+def test_release_checklist_includes_first_run_and_launcher_log_checks():
+    checklist = (ROOT / "docs" / "RELEASE_CHECKLIST.md").read_text(encoding="utf-8")
+
+    assert "launcher log" in checklist.lower()
+    assert "Try Sample Paper" in checklist
+    assert "Reviewer Packet" in checklist
