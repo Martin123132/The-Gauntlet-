@@ -178,6 +178,9 @@ COMPARISON_MARKERS = {
 }
 
 BACKGROUND_MARKERS = {
+    "background",
+    "review",
+    "literature review",
     "prior work",
     "previous work",
     "previous theory",
@@ -445,6 +448,8 @@ def extract_claim_candidates(sentences: list[DocumentSentence], limit: int = 28)
     for sentence in sentences:
         lower = sentence.text.lower()
         if is_reference_like_sentence(sentence.text):
+            continue
+        if is_non_resolution_disclaimer(lower) or is_attributed_background_claim(sentence.text, sentence.section):
             continue
         triggers = sorted(indicator for indicator in CLAIM_INDICATORS if indicator in lower)
         problem_reference = any(problem in lower for problem in PROBLEM_INDICATORS)
@@ -1030,6 +1035,49 @@ def is_tentative_language(text: str) -> bool:
 def is_background_context(text: str) -> bool:
     lower = text.lower()
     return any(marker in lower for marker in BACKGROUND_MARKERS)
+
+
+def is_non_resolution_disclaimer(text: str) -> bool:
+    lower = text.lower()
+    disclaimer_patterns = (
+        r"\bdoes\s+not\s+(claim|state|present|provide|offer|resolve|solve|explain|interpret|adopt)\b",
+        r"\bdo\s+not\s+(claim|state|present|provide|offer|resolve|solve|explain|interpret|adopt)\b",
+        r"\bwithout\s+(adopting|claiming|presenting|offering)\b",
+        r"\bbefore\s+it\s+can\s+(resolve|solve|explain|reconcile)\b",
+        r"\bleaves?\s+[^.]{0,60}\b(unresolved|open)\b",
+        r"\bno\s+(interpretation|resolution|claim)\s+is\s+(provided|claimed|offered|presented)\b",
+        r"\bnot\s+(a|the)\s+(completed\s+)?(resolution|claim)\b",
+    )
+    return any(re.search(pattern, lower) for pattern in disclaimer_patterns)
+
+
+def is_attributed_background_claim(text: str, section: str = "") -> bool:
+    lower = text.lower()
+    attribution_shape = bool(
+        re.match(r"^\(?\d{4}\)?\s+\b(argue|argues|claim|claims|propose|proposes|suggest|suggests|report|reports)\b", lower)
+        or re.search(r"\b(several|many|some)\s+authors\s+(argue|claim|propose|suggest|report)\b", lower)
+    )
+    backgroundish = is_background_context(lower) or is_background_context(section) or count_citations(text) >= 1 or attribution_shape
+    if not backgroundish:
+        return False
+    if re.search(r"\b(this|our|we|the paper|the framework)\s+(resolves|solves|explains|reconciles|predicts)\b", lower):
+        return False
+    attribution = (
+        attribution_shape
+        or re.search(
+            r"\b(prior work|previous work|existing literature|literature|authors|studies|papers|smith|jones|rivera|lee|patel)\b.*\b(argue|argues|claim|claims|propose|proposes|suggest|suggests|resolve|resolved|explain|explains|report|reports)\b",
+            lower,
+        )
+        or re.search(
+            r"\b(argue|argues|claim|claims|propose|proposes|suggest|suggests|report|reports)\s+that\b.*\b(resolve|resolved|explain|explains|accounts for|reconcile|reconciles)\b",
+            lower,
+        )
+        or re.search(
+            r"\b(report|reports|validate|validates|support|supports)\b.*\b(replication|measurement|measurements|pattern|prediction)\b",
+            lower,
+        )
+    )
+    return bool(attribution)
 
 
 def is_scope_limitation_context(text: str) -> bool:

@@ -12,7 +12,15 @@ from .batch import (
     filter_batch_items,
     sort_batch_items,
 )
-from .benchmarks import BenchmarkComparison, BenchmarkSample, list_benchmark_samples, run_benchmark_sample
+from .benchmarks import (
+    BenchmarkComparison,
+    BenchmarkSample,
+    CalibrationCategorySummary,
+    CalibrationSuiteResult,
+    list_benchmark_samples,
+    run_benchmark_sample,
+    run_calibration_suite,
+)
 from .document_loader import LoadedDocument, load_document_from_bytes, load_document_from_path
 from .evidence_map import (
     ClaimEvidenceMap,
@@ -65,6 +73,8 @@ __all__ = [
     "BatchScanItem",
     "BenchmarkComparison",
     "BenchmarkSample",
+    "CalibrationCategorySummary",
+    "CalibrationSuiteResult",
     "ClaimEvidenceMap",
     "ClaimEvidenceRow",
     "DemoShareSummary",
@@ -111,6 +121,7 @@ __all__ = [
     "load_document_from_path",
     "load_saved_run",
     "run_benchmark_sample",
+    "run_calibration_suite",
     "run_provider_refinement",
     "run_refinement",
     "save_analysis_run",

@@ -4,6 +4,34 @@
 
 No unreleased changes yet.
 
+## v0.19.0 - Calibration Suite + Analyzer Trust Dashboard
+
+This release adds a public calibration layer on top of the synthetic benchmark
+gallery so users can see how the deterministic checker behaves across known
+theory/paradox-paper patterns.
+
+### Added
+
+- Expanded the synthetic benchmark corpus from 16 to 28 samples, including
+  literature-review, definition, future-work, null-result, method-only,
+  limitation-only, competing-hypothesis, theorem/proof, and citation-heavy
+  guard cases.
+- Added positive controls for scoped strong evidence, empirical mechanism
+  claims, and clean limitation-aware resolution claims.
+- Added `run_calibration_suite()` and `CalibrationSuiteResult` with overall
+  pass rate, verdict-match rate, guardrail pass rate, category summaries,
+  failing sample IDs, and JSON/Markdown exports.
+- Added a Calibration Dashboard to the existing `Benchmarks` page with full
+  suite metrics and export buttons.
+
+### Changed
+
+- Tightened non-AI analyzer guardrails so attributed literature/background
+  claims, source disclaimers, and citation support are less likely to become
+  false-positive resolution claims.
+- Updated README benchmark docs to frame calibration as synthetic trust work,
+  not proof of real-world accuracy.
+
 ## v0.18.0 - First-Run Onboarding + Download QA
 
 This release improves the GitHub ZIP first-run path for new local users.

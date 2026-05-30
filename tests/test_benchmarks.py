@@ -1,11 +1,17 @@
 from gauntlet_core import analyze_paper_text
-from gauntlet_core.benchmarks import BenchmarkSample, compare_report_to_sample, list_benchmark_samples, run_benchmark_sample
+from gauntlet_core.benchmarks import (
+    BenchmarkSample,
+    compare_report_to_sample,
+    list_benchmark_samples,
+    run_benchmark_sample,
+    run_calibration_suite,
+)
 
 
 def test_all_benchmark_samples_pass_expected_behavior():
     results = [run_benchmark_sample(sample.id) for sample in list_benchmark_samples()]
 
-    assert len(results) >= 16
+    assert len(results) >= 28
     assert all(result.passed for result in results)
     assert all(result.score == 1.0 for result in results)
 
@@ -85,3 +91,31 @@ def test_benchmark_export_distinguishes_match_from_paper_pass():
     assert "Benchmark result: **EXPECTED MATCH**" in markdown
     assert "False-Positive Guardrails" in markdown
     assert "Result: **PASS**" not in markdown
+
+
+def test_calibration_suite_summarizes_full_benchmark_corpus():
+    result = run_calibration_suite()
+
+    assert result.sample_count >= 28
+    assert result.pass_rate == 1.0
+    assert result.verdict_match_rate == 1.0
+    assert result.guardrail_pass_rate == 1.0
+    assert result.failing_sample_ids == ()
+    assert {summary.category for summary in result.category_summaries} >= {
+        "False-positive guard",
+        "Positive control",
+    }
+
+
+def test_calibration_exports_include_metrics_and_category_detail():
+    result = run_calibration_suite()
+    data = result.to_json()
+    markdown = result.to_markdown()
+
+    assert '"sample_count":' in data
+    assert '"guardrail_pass_rate": 1.0' in data
+    assert "The Gauntlet Calibration Suite" in markdown
+    assert "Overall pass rate: 100%" in markdown
+    assert "Category Calibration" in markdown
+    assert "False-positive guard" in markdown
+    assert "## Failing Cases" in markdown

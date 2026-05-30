@@ -17,7 +17,7 @@ from gauntlet_core.batch import (
     sort_batch_items,
     summarize_report,
 )
-from gauntlet_core.benchmarks import list_benchmark_samples, run_benchmark_sample
+from gauntlet_core.benchmarks import list_benchmark_samples, run_benchmark_sample, run_calibration_suite
 from gauntlet_core.document_loader import SUPPORTED_EXTENSIONS, load_document_from_bytes
 from gauntlet_core.evidence_map import build_claim_evidence_map, claim_evidence_map_to_markdown
 from gauntlet_core.models import source_reference
@@ -1063,6 +1063,12 @@ def active_benchmark_result():
     return report_store().get("benchmark_result")
 
 
+def active_calibration_result():
+    if "calibration_result" in st.session_state:
+        return st.session_state["calibration_result"]
+    return report_store().get("calibration_result")
+
+
 def active_batch_items() -> list[BatchScanItem]:
     if "batch_items" in st.session_state:
         return st.session_state["batch_items"]
@@ -1115,6 +1121,11 @@ def save_refinement(refinement_report) -> None:
 def save_benchmark_result(benchmark_result) -> None:
     st.session_state["benchmark_result"] = benchmark_result
     report_store()["benchmark_result"] = benchmark_result
+
+
+def save_calibration_result(calibration_result) -> None:
+    st.session_state["calibration_result"] = calibration_result
+    report_store()["calibration_result"] = calibration_result
 
 
 def save_batch_items(items: list[BatchScanItem]) -> None:
@@ -2322,6 +2333,7 @@ def render_benchmarks_page() -> None:
         """,
         unsafe_allow_html=True,
     )
+    render_calibration_dashboard()
     left, right = st.columns([0.42, 0.58], gap="medium")
     with left:
         selected_title = st.selectbox("Benchmark sample", list(sample_by_title.keys()))
@@ -2359,6 +2371,124 @@ def render_benchmarks_page() -> None:
                 """,
                 unsafe_allow_html=True,
             )
+
+
+def render_calibration_dashboard() -> None:
+    result = active_calibration_result()
+    st.markdown(
+        """
+        <div class="wide-detail-card">
+          <div class="small-label">Calibration Dashboard</div>
+          <div class="detail-title">Analyzer Trust Check</div>
+          <div class="detail-subtitle">Run every synthetic theory/paradox benchmark at once, including false-positive guardrails. These fixtures calibrate rule behavior; they are not a claim of real-world accuracy.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    run_col, note_col = st.columns([0.32, 0.68], gap="medium")
+    with run_col:
+        if st.button("Run Full Calibration Suite", type="primary", use_container_width=True):
+            with st.spinner("Running synthetic calibration suite..."):
+                save_calibration_result(run_calibration_suite())
+            st.rerun()
+    with note_col:
+        st.markdown(
+            """
+            <div class="empty-detail">The full suite checks verdict matches, missed findings, extra findings, missed/extra claim gaps, and unwanted false-positive guardrail hits.</div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    if not result:
+        return
+
+    failing_cases = ", ".join(f"`{sample_id}`" for sample_id in result.failing_sample_ids) or "none"
+    st.markdown(
+        f"""
+        <div class="benchmark-grid">
+          <div class="benchmark-card">
+            <div class="small-label">Overall Pass Rate</div>
+            <div class="stat-number">{result.pass_rate:.0%}</div>
+            <div class="muted-note">{result.passed_count}/{result.sample_count} synthetic cases matched expectations.</div>
+          </div>
+          <div class="benchmark-card">
+            <div class="small-label">Verdict Match</div>
+            <div class="stat-number">{result.verdict_match_rate:.0%}</div>
+            <div class="muted-note">{result.verdict_match_count}/{result.sample_count} verdicts matched the expected outcome.</div>
+          </div>
+          <div class="benchmark-card">
+            <div class="small-label">Guardrail Pass</div>
+            <div class="stat-number">{result.guardrail_pass_rate:.0%}</div>
+            <div class="muted-note">{result.guardrail_failure_count} false-positive guardrail failures across {result.guardrail_check_count} checks.</div>
+          </div>
+          <div class="benchmark-card">
+            <div class="small-label">Failing Cases</div>
+            <div class="stat-number">{len(result.failing_sample_ids)}</div>
+            <div class="muted-note">{html.escape(failing_cases)}</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    category_rows = "".join(
+        (
+            "<tr>"
+            f"<td>{html.escape(summary.category)}</td>"
+            f"<td>{summary.passed_count}/{summary.sample_count}</td>"
+            f"<td>{summary.pass_rate:.0%}</td>"
+            f"<td>{summary.verdict_match_rate:.0%}</td>"
+            f"<td>{summary.guardrail_pass_rate:.0%}</td>"
+            f"<td>{html.escape(', '.join(summary.failing_sample_ids) or 'none')}</td>"
+            "</tr>"
+        )
+        for summary in result.category_summaries
+    )
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="panel-title">Category Calibration</div>
+          <table class="compare-table">
+            <thead><tr><th>Category</th><th>Passed</th><th>Pass Rate</th><th>Verdict Match</th><th>Guardrail Pass</th><th>Failing Cases</th></tr></thead>
+            <tbody>{category_rows}</tbody>
+          </table>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    failed_results = [item for item in result.results if not item.passed]
+    if failed_results:
+        st.markdown('<div class="panel-title">Failing Cases</div>', unsafe_allow_html=True)
+        for item in failed_results:
+            st.markdown(
+                f"""
+                <div class="audit-card">
+                  <strong>{html.escape(item.sample.title)}</strong>
+                  <div class="muted-note">Expected {html.escape(item.sample.expected_verdict)}; actual {html.escape(item.report.verdict)}. Missed findings: {html.escape(', '.join(item.missed_findings) or 'none')}. Extra findings: {html.escape(', '.join(item.extra_findings) or 'none')}.</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+    else:
+        st.markdown(
+            '<div class="empty-detail">No failing calibration cases in the latest run.</div>',
+            unsafe_allow_html=True,
+        )
+
+    json_col, markdown_col = st.columns(2)
+    json_col.download_button(
+        "Export Calibration JSON",
+        data=result.to_json(),
+        file_name="gauntlet-calibration-suite.json",
+        mime="application/json",
+        use_container_width=True,
+    )
+    markdown_col.download_button(
+        "Export Calibration Markdown",
+        data=result.to_markdown(),
+        file_name="gauntlet-calibration-suite.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
 
 
 def render_benchmark_result(result) -> None:
