@@ -161,6 +161,50 @@ def test_unlinked_citations_and_equations_do_not_resolve():
     assert report.resolved_claims == 0
 
 
+def test_literature_review_attributions_do_not_become_resolution_claims():
+    text = """
+    Literature Review
+    Prior work by Smith et al. (2021) argues that the boundary paradox can be resolved by a sampling correction.
+    This review summarizes that position without adopting the resolution as the result of this paper.
+    """
+
+    report = analyze_paper_text(text)
+
+    assert report.verdict == "FAILS"
+    assert report.claims == []
+    assert "Missing Mechanism Barrier" not in {finding.type for finding in report.findings}
+
+
+def test_method_and_limitation_disclaimers_do_not_create_barrier_findings():
+    text = """
+    Methods
+    We normalize the samples, compute RMSE = 0.05, and compare three calibration windows.
+    The section reports procedure only and does not interpret or resolve the anomaly.
+    Limitations
+    The analysis is not a completed resolution and does not apply outside the calibration window.
+    """
+
+    report = analyze_paper_text(text)
+
+    assert report.verdict == "FAILS"
+    assert report.claims == []
+    assert not report.findings
+
+
+def test_empirical_mechanism_positive_control_still_resolves():
+    text = """
+    The paper resolves the anomaly in the calibrated sample through a measured transfer mechanism that specifically predicts the observed 11 percent shift.
+    Specifically, across 24 trials, the transfer term is measured before the anomaly appears, with equation t = a + b and RMSE = 0.03.
+    Smith et al. (2025) report an independent replication, and Jones (2026) validates the same transfer pattern with error = 0.02.
+    """
+
+    report = analyze_paper_text(text)
+
+    assert report.verdict == "RESOLVES"
+    assert not report.findings
+    assert report.resolved_claims >= 1
+
+
 def test_assertive_model_authority_still_flags_theory_as_fact():
     text = """
     The model proves that the paradox is impossible because the theory dictates that all violations are forbidden.

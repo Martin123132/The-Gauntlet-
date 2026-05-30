@@ -130,10 +130,11 @@ The verdict is a review aid, not a replacement for expert peer review.
 
 ## Benchmark Demo Gallery
 
-The `Benchmarks` page contains synthetic mini papers with known expected
-outcomes. These samples are not real papers and are not claims about any real
-author. They are calibration cases that show what the deterministic rules are
-supposed to catch.
+The `Benchmarks` page contains a Calibration Dashboard plus synthetic mini
+papers with known expected outcomes. These samples are not real papers and are
+not claims about any real author. They are calibration cases that show what the
+deterministic rules are supposed to catch, and where false-positive guardrails
+are expected to stay quiet.
 
 Current benchmark cases cover:
 
@@ -150,8 +151,19 @@ Current benchmark cases cover:
   internal contradictions
 - reference-like text, weak equation dumps, and caveated universal claims that
   should not create false-positive findings
+- literature reviews, definitions, future-work speculation, null results,
+  theorem/proof wording, method-only sections, limitation sections, competing
+  hypotheses, and citation-heavy background
+- scoped strong evidence, empirical mechanism claims, and limitation-aware
+  resolution claims that should still resolve
 
-Each benchmark shows the expected verdict, actual verdict, matched findings,
+Use `Run Full Calibration Suite` to compute the overall pass rate, verdict
+match rate, false-positive guardrail pass rate, category summaries, and failing
+case list. The dashboard can export JSON or Markdown for public release notes,
+but it is still synthetic calibration rather than a proof of real-world
+accuracy.
+
+Each single benchmark shows the expected verdict, actual verdict, matched findings,
 missed findings, extra findings, matched claim gaps, and false-positive
 guardrail checks for findings and claim gaps that should stay absent. The same
 benchmark corpus is used by the test suite so future rule changes cannot
@@ -303,14 +315,18 @@ print(report.to_html())
 Path("paper-gauntlet-report-bundle.zip").write_bytes(report.to_bundle_bytes())
 ```
 
-Benchmark samples and optional refinement can be imported separately:
+Benchmark samples, the calibration suite, and optional refinement can be
+imported separately:
 
 ```python
-from gauntlet_core import analyze_paper_text, list_benchmark_samples, run_benchmark_sample, run_refinement
+from gauntlet_core import analyze_paper_text, list_benchmark_samples, run_benchmark_sample, run_calibration_suite, run_refinement
 from gauntlet_core.refinement import ProviderSelection, run_provider_refinement
 
 for sample in list_benchmark_samples():
     print(sample.id, run_benchmark_sample(sample.id).passed)
+
+calibration = run_calibration_suite()
+print(calibration.pass_rate, calibration.guardrail_pass_rate)
 
 report = analyze_paper_text(paper_text, source_name="paper.txt")
 refinement = run_refinement(report, paper_text, openai_api_key="...", anthropic_api_key="...")

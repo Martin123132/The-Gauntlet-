@@ -199,6 +199,17 @@ def test_streamlit_benchmarks_page_runs_sample_and_compares_results():
 
     assert not app.exception
     assert any("Benchmark Demo Gallery" in item.value for item in app.markdown)
+    assert any("Calibration Dashboard" in item.value for item in app.markdown)
+    calibration_button = next(button for button in app.button if button.label == "Run Full Calibration Suite")
+    calibration_button.click()
+    app.run(timeout=30)
+
+    assert not app.exception
+    assert app.session_state["calibration_result"].pass_rate == 1.0
+    assert app.session_state["calibration_result"].guardrail_pass_rate == 1.0
+    assert any("Category Calibration" in item.value for item in app.markdown)
+    assert "The Gauntlet Calibration Suite" in app.session_state["calibration_result"].to_markdown()
+
     run_button = next(button for button in app.button if button.label == "Run Benchmark Sample")
     run_button.click()
     app.run(timeout=20)
