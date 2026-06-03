@@ -1,10 +1,19 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
+from collections import Counter
+from pathlib import Path
 import json
 
 from .analysis import analyze_paper_text
 from .models import AnalysisReport, Verdict
+
+
+CALIBRATION_VERSION = "v0.20.0"
+DEFAULT_CALIBRATION_THRESHOLD_PASS = 0.90
+DEFAULT_CALIBRATION_THRESHOLD_GUARDRAIL = 0.95
+DEFAULT_CALIBRATION_WARNING_BAND = 0.05
+DEFAULT_CALIBRATION_SNAPSHOT_PATH = Path(".gauntlet") / "reports" / "latest_calibration.json"
 
 
 @dataclass(frozen=True)
@@ -22,6 +31,23 @@ class BenchmarkSample:
 
 
 @dataclass(frozen=True)
+class CalibrationGateResult:
+    overall_pass: float
+    guardrail_pass: float
+    overall_threshold: float
+    guardrail_threshold: float
+    passed: bool
+    failures: tuple[str, ...]
+    warnings: tuple[str, ...]
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict(), indent=2)
+
+
+@dataclass(frozen=True)
 class BenchmarkComparison:
     sample: BenchmarkSample
     report: AnalysisReport
@@ -36,6 +62,7 @@ class BenchmarkComparison:
     unexpected_absent_findings: tuple[str, ...]
     absent_claim_gaps_kept_out: tuple[str, ...]
     unexpected_absent_claim_gaps: tuple[str, ...]
+    failure_reasons: tuple[str, ...]
     passed: bool
     score: float
 
@@ -46,6 +73,7 @@ class BenchmarkComparison:
         return json.dumps(self.to_dict(), indent=2)
 
     def to_markdown(self) -> str:
+        failure_details = "\n".join(f"- {reason}" for reason in self.failure_reasons) or "- none"
         return "\n".join(
             [
                 f"# The Gauntlet Benchmark: {self.sample.title}",
@@ -80,6 +108,10 @@ class BenchmarkComparison:
                 f"- Claim gaps kept out: {', '.join(self.absent_claim_gaps_kept_out) or 'none'}",
                 f"- Unexpected guarded claim gaps: {', '.join(self.unexpected_absent_claim_gaps) or 'none'}",
                 "",
+                "## Failure Explanations",
+                "",
+                failure_details,
+                "",
                 "## Actual Report Summary",
                 "",
                 self.report.summary,
@@ -97,6 +129,7 @@ class CalibrationCategorySummary:
     verdict_match_rate: float
     guardrail_pass_rate: float
     failing_sample_ids: tuple[str, ...]
+    confidence_explanation: str = ""
 
 
 @dataclass(frozen=True)
@@ -116,9 +149,15 @@ class CalibrationSuiteResult:
     extra_claim_gap_count: int
     failing_sample_ids: tuple[str, ...]
     category_summaries: tuple[CalibrationCategorySummary, ...]
+    calibration_version: str
+    gate: CalibrationGateResult | None
+    snapshot_path: str | None = None
 
     def to_dict(self) -> dict:
         return {
+            "calibration_version": self.calibration_version,
+            "gate": self.gate.to_dict() if self.gate else None,
+            "snapshot_path": self.snapshot_path,
             "sample_count": self.sample_count,
             "passed_count": self.passed_count,
             "pass_rate": self.pass_rate,
@@ -145,7 +184,8 @@ class CalibrationSuiteResult:
             (
                 f"| {summary.category} | {summary.passed_count}/{summary.sample_count} | "
                 f"{summary.pass_rate:.0%} | {summary.verdict_match_rate:.0%} | "
-                f"{summary.guardrail_pass_rate:.0%} | {', '.join(summary.failing_sample_ids) or 'none'} |"
+                f"{summary.guardrail_pass_rate:.0%} | {', '.join(summary.failing_sample_ids) or 'none'} | "
+                f"{summary.confidence_explanation or 'No category failures to explain.'} |"
             )
             for summary in self.category_summaries
         )
@@ -155,7 +195,8 @@ class CalibrationSuiteResult:
                 f"{'pass' if result.passed else 'review'} | {result.sample.expected_verdict} | "
                 f"{result.report.verdict} | {', '.join(result.missed_findings) or 'none'} | "
                 f"{', '.join(result.extra_findings) or 'none'} | "
-                f"{', '.join(result.unexpected_absent_findings + result.unexpected_absent_claim_gaps) or 'none'} |"
+                f"{', '.join(result.unexpected_absent_findings + result.unexpected_absent_claim_gaps) or 'none'} | "
+                f"{'; '.join(result.failure_reasons) or 'none'} |"
             )
             for result in self.results
         )
@@ -175,11 +216,39 @@ class CalibrationSuiteResult:
                 f"- Extra findings: {self.extra_finding_count}",
                 f"- Missed claim gaps: {self.missed_claim_gap_count}",
                 f"- Extra claim gaps: {self.extra_claim_gap_count}",
+                f"- Calibration version: {self.calibration_version}",
+                f"- Last run gate status: {'PASS' if (self.gate and self.gate.passed) else 'FAIL'}",
+                (
+                    f"- Gate thresholds: overall >= {self.gate.overall_threshold:.0%}, "
+                    f"guardrail >= {self.gate.guardrail_threshold:.0%}"
+                    if self.gate
+                    else "- Gate thresholds: not computed"
+                ),
+                (
+                    f"- Gate rates: overall {self.gate.overall_pass:.0%}, guardrail {self.gate.guardrail_pass:.0%}"
+                    if self.gate
+                    else "- Gate rates: not computed"
+                ),
+                (
+                    f"- Snapshot: `{self.snapshot_path}`"
+                    if self.snapshot_path
+                    else "- Snapshot: not written"
+                ),
+                (
+                    f"- Gate warnings: {', '.join(self.gate.warnings)}"
+                    if self.gate and self.gate.warnings
+                    else "- Gate warnings: none"
+                ),
+                (
+                    f"- Gate failures: {', '.join(self.gate.failures)}"
+                    if self.gate and self.gate.failures
+                    else "- Gate failures: none"
+                ),
                 "",
                 "## Category Calibration",
                 "",
-                "| Category | Passed | Pass Rate | Verdict Match | Guardrail Pass | Failing Cases |",
-                "| --- | ---: | ---: | ---: | ---: | --- |",
+                "| Category | Passed | Pass Rate | Verdict Match | Guardrail Pass | Failing Cases | Confidence / Rule Explanation |",
+                "| --- | ---: | ---: | ---: | ---: | --- | --- |",
                 category_rows,
                 "",
                 "## Failing Cases",
@@ -188,8 +257,8 @@ class CalibrationSuiteResult:
                 "",
                 "## Sample Detail",
                 "",
-                "| Sample | Category | Result | Expected Verdict | Actual Verdict | Missed Findings | Extra Findings | Guardrail Failures |",
-                "| --- | --- | --- | --- | --- | --- | --- | --- |",
+                "| Sample | Category | Result | Expected Verdict | Actual Verdict | Missed Findings | Extra Findings | Guardrail Failures | Failure Reasons |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
                 sample_rows,
                 "",
             ]
@@ -347,6 +416,22 @@ BENCHMARK_SAMPLES: tuple[BenchmarkSample, ...] = (
         """,
     ),
     BenchmarkSample(
+        id="prior-work-scoped-comparison",
+        title="Scoped Prior-Work Comparison",
+        category="False-positive guard",
+        expected_verdict="FAILS",
+        expected_findings=(),
+        expected_claim_gaps=(),
+        expected_absent_findings=("Potential Direct Negation", "Property Mismatch", "Scope Conflict", "Temporal Conflict", "Unsupported Resolution Claim"),
+        expected_absent_claim_gaps=("mechanism missing",),
+        why_it_matters="Verifies that explicit scoped comparisons to prior work are treated as context, not internal contradictions.",
+        paper_text="""
+        In previous studies, each approach reported a fixed boundary behavior under distinct laboratory conditions.
+        Here we compare prior work in a scoped section, explicitly limiting that comparison to the calibration band.
+        The section does not claim this paper resolves the full anomaly.
+        """,
+    ),
+    BenchmarkSample(
         id="reference-like-text",
         title="Reference-Like Text",
         category="False-positive guard",
@@ -363,6 +448,22 @@ BENCHMARK_SAMPLES: tuple[BenchmarkSample, ...] = (
         """,
     ),
     BenchmarkSample(
+        id="limitation-first-text",
+        title="Limitation-First Text",
+        category="False-positive guard",
+        expected_verdict="FAILS",
+        expected_findings=(),
+        expected_claim_gaps=(),
+        expected_absent_findings=("Theory-As-Fact Language", "Scope Conflict", "Temporal Conflict", "Unsupported Resolution Claim"),
+        expected_absent_claim_gaps=("mechanism missing",),
+        why_it_matters="Keeps explicit limitation-first framing from becoming a contradiction or unsupported-resolution trigger.",
+        paper_text="""
+        Limitation: this mechanism is only validated in one short calibration window.
+        We introduce these limits before discussing outcomes so readers know exactly where the model does not generalize.
+        No full resolution is claimed at this stage.
+        """,
+    ),
+    BenchmarkSample(
         id="equation-dump-without-claim-link",
         title="Equation Dump Without Claim Link",
         category="False-positive guard",
@@ -376,6 +477,22 @@ BENCHMARK_SAMPLES: tuple[BenchmarkSample, ...] = (
         Methods
         Equation x = y + 2. RMSE = 0.04. R2 = 0.91. The derivation has three algebraic steps.
         No interpretation, paradox, contradiction, or resolution claim is provided in this note.
+        """,
+    ),
+    BenchmarkSample(
+        id="uncertainty-caution-language",
+        title="Explicit Uncertainty Language",
+        category="False-positive guard",
+        expected_verdict="PARTIAL",
+        expected_findings=("Evidence Gap",),
+        expected_claim_gaps=("details not specific", "evidence not linked"),
+        expected_absent_findings=("Theory-As-Fact Language", "Unsupported Resolution Claim"),
+        expected_absent_claim_gaps=("mechanism missing",),
+        why_it_matters="Prevents exploratory language with explicit caution from being promoted as assertive resolution behavior.",
+        paper_text="""
+        The framework may explain the anomaly only if several calibration assumptions hold.
+        At this stage these assumptions are uncertain, and the authors note that further datasets are still required.
+        This text should not be treated as a definitive resolution claim.
         """,
     ),
     BenchmarkSample(
@@ -652,11 +769,69 @@ def run_all_benchmarks() -> tuple[BenchmarkComparison, ...]:
     return tuple(run_benchmark_sample(sample.id) for sample in BENCHMARK_SAMPLES)
 
 
-def run_calibration_suite() -> CalibrationSuiteResult:
-    return summarize_calibration_results(run_all_benchmarks())
+def run_calibration_suite(
+    min_overall_pass: float = DEFAULT_CALIBRATION_THRESHOLD_PASS,
+    min_guardrail_pass: float = DEFAULT_CALIBRATION_THRESHOLD_GUARDRAIL,
+    *,
+    strict: bool = False,
+    persist_snapshot: bool = True,
+    snapshot_path: str | Path | None = None,
+) -> CalibrationSuiteResult:
+    """
+    Run the full synthetic suite and evaluate thresholds.
+    """
+    result = summarize_calibration_results(run_all_benchmarks(), calibration_version=CALIBRATION_VERSION)
+    gate = evaluate_calibration_gate(
+        result,
+        overall_threshold=min_overall_pass,
+        guardrail_threshold=min_guardrail_pass,
+    )
+    result = replace(result, gate=gate)
+    if persist_snapshot:
+        persisted = persist_calibration_snapshot(result, snapshot_path=snapshot_path)
+        result = replace(result, snapshot_path=str(persisted) if persisted else result.snapshot_path)
+    if strict and not gate.passed:
+        failure_text = ", ".join(gate.failures or ("calibration gate failed",))
+        raise AssertionError(f"Calibration gate failed: {failure_text}")
+    return result
 
 
-def summarize_calibration_results(results: tuple[BenchmarkComparison, ...]) -> CalibrationSuiteResult:
+def evaluate_calibration_gate(
+    suite: CalibrationSuiteResult,
+    overall_threshold: float = DEFAULT_CALIBRATION_THRESHOLD_PASS,
+    guardrail_threshold: float = DEFAULT_CALIBRATION_THRESHOLD_GUARDRAIL,
+    warning_band: float = DEFAULT_CALIBRATION_WARNING_BAND,
+) -> CalibrationGateResult:
+    overall_pass = suite.pass_rate
+    guardrail_pass = suite.guardrail_pass_rate
+    failures = []
+    warnings = []
+    if overall_pass < overall_threshold:
+        failures.append(f"overall pass rate below threshold ({overall_pass:.0%} < {overall_threshold:.0%})")
+    if guardrail_pass < guardrail_threshold:
+        failures.append(
+            f"guardrail pass rate below threshold ({guardrail_pass:.0%} < {guardrail_threshold:.0%})"
+        )
+    if (overall_threshold <= overall_pass < overall_threshold + warning_band) and not failures:
+        warnings.append("overall pass rate is within 5% of the threshold")
+    if (guardrail_threshold <= guardrail_pass < guardrail_threshold + warning_band) and not failures:
+        warnings.append("guardrail pass rate is within 5% of the threshold")
+    return CalibrationGateResult(
+        overall_pass=overall_pass,
+        guardrail_pass=guardrail_pass,
+        overall_threshold=overall_threshold,
+        guardrail_threshold=guardrail_threshold,
+        passed=not failures,
+        failures=tuple(failures),
+        warnings=tuple(warnings),
+    )
+
+
+def summarize_calibration_results(
+    results: tuple[BenchmarkComparison, ...],
+    calibration_version: str = CALIBRATION_VERSION,
+    gate: CalibrationGateResult | None = None,
+) -> CalibrationSuiteResult:
     sample_count = len(results)
     passed_count = sum(1 for result in results if result.passed)
     verdict_match_count = sum(1 for result in results if result.verdict_match)
@@ -680,6 +855,8 @@ def summarize_calibration_results(results: tuple[BenchmarkComparison, ...]) -> C
         extra_claim_gap_count=sum(len(result.extra_claim_gaps) for result in results),
         failing_sample_ids=tuple(result.sample.id for result in results if not result.passed),
         category_summaries=category_summaries,
+        calibration_version=calibration_version,
+        gate=gate,
     )
 
 
@@ -690,6 +867,8 @@ def summarize_calibration_category(category: str, results: tuple[BenchmarkCompar
     verdict_match_count = sum(1 for result in category_results if result.verdict_match)
     checks = sum(guardrail_check_count(result) for result in category_results)
     failures = sum(guardrail_failure_count(result) for result in category_results)
+    failing_items = tuple(item for item in category_results if not item.passed)
+    confidence_explanation = _category_confidence_explanation(category_results, failing_items)
     return CalibrationCategorySummary(
         category=category,
         sample_count=sample_count,
@@ -697,8 +876,41 @@ def summarize_calibration_category(category: str, results: tuple[BenchmarkCompar
         pass_rate=ratio(passed_count, sample_count),
         verdict_match_rate=ratio(verdict_match_count, sample_count),
         guardrail_pass_rate=ratio(checks - failures, checks, empty=1.0),
-        failing_sample_ids=tuple(result.sample.id for result in category_results if not result.passed),
+        failing_sample_ids=tuple(item.sample.id for item in failing_items),
+        confidence_explanation=confidence_explanation,
     )
+
+
+def _category_confidence_explanation(
+    category_results: tuple[BenchmarkComparison, ...],
+    failing_results: tuple[BenchmarkComparison, ...],
+) -> str:
+    if not failing_results:
+        return "No known failures in this category."
+    all_failures = tuple(
+        reason
+        for result in failing_results
+        for reason in result.failure_reasons
+        if reason
+    )
+    if not all_failures:
+        return "Failing case exists, but no explicit reason was emitted."
+    reason_counts = Counter(all_failures)
+    top_reasons = ", ".join(f"{reason} ({count}x)" for reason, count in reason_counts.most_common(2))
+    return f"What failed: {top_reasons}. Review those checks before rule changes."
+
+
+def persist_calibration_snapshot(
+    suite: CalibrationSuiteResult,
+    snapshot_path: str | Path | None = None,
+) -> Path | None:
+    path = Path(snapshot_path) if snapshot_path is not None else DEFAULT_CALIBRATION_SNAPSHOT_PATH
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(suite.to_json(), encoding="utf-8")
+    except OSError:
+        return None
+    return path
 
 
 def guardrail_check_count(result: BenchmarkComparison) -> int:
@@ -737,6 +949,7 @@ def calibration_sample_summary(result: BenchmarkComparison) -> dict:
         "extra_claim_gaps": result.extra_claim_gaps,
         "unexpected_absent_findings": result.unexpected_absent_findings,
         "unexpected_absent_claim_gaps": result.unexpected_absent_claim_gaps,
+        "failure_reasons": result.failure_reasons,
     }
 
 
@@ -762,6 +975,23 @@ def compare_report_to_sample(sample: BenchmarkSample, report: AnalysisReport) ->
 
     clean_case_has_extras = not expected_findings and bool(extra_findings)
     clean_gap_case_has_extras = not expected_gaps and bool(extra_gaps)
+    failure_reasons: list[str] = []
+    if not verdict_match:
+        failure_reasons.append(
+            f"verdict mismatch: expected {sample.expected_verdict} but found {report.verdict}"
+        )
+    if missed_findings:
+        failure_reasons.append(f"missing findings: {', '.join(missed_findings)}")
+    if missed_gaps:
+        failure_reasons.append(f"missing claim gaps: {', '.join(missed_gaps)}")
+    if clean_case_has_extras:
+        failure_reasons.append(f"unexpected findings in clean case: {', '.join(extra_findings)}")
+    if clean_gap_case_has_extras:
+        failure_reasons.append(f"unexpected claim gaps in clean case: {', '.join(extra_gaps)}")
+    if unexpected_absent_findings:
+        failure_reasons.append(f"forbidden findings appeared: {', '.join(unexpected_absent_findings)}")
+    if unexpected_absent_gaps:
+        failure_reasons.append(f"forbidden claim gaps appeared: {', '.join(unexpected_absent_gaps)}")
     passed = (
         verdict_match
         and not missed_findings
@@ -781,6 +1011,8 @@ def compare_report_to_sample(sample: BenchmarkSample, report: AnalysisReport) ->
         not unexpected_absent_gaps,
     ]
     score = sum(1 for check in checks if check) / len(checks)
+    if not failure_reasons:
+        failure_reasons = ["all expected behaviors observed"]
 
     return BenchmarkComparison(
         sample=sample,
@@ -796,6 +1028,7 @@ def compare_report_to_sample(sample: BenchmarkSample, report: AnalysisReport) ->
         unexpected_absent_findings=unexpected_absent_findings,
         absent_claim_gaps_kept_out=absent_gaps_kept_out,
         unexpected_absent_claim_gaps=unexpected_absent_gaps,
+        failure_reasons=tuple(failure_reasons),
         passed=passed,
         score=score,
     )

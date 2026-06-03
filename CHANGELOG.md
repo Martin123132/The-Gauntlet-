@@ -4,6 +4,31 @@
 
 No unreleased changes yet.
 
+## v0.20.0 - Trust Guardrails + Calibration Governance
+
+This release adds governance guardrails to the synthetic calibration layer so
+drift is easier to spot and regression risk is visible before release.
+
+### Added
+
+- Added stable internal calibration versioning (`v0.20.0`) for the benchmark corpus.
+- Added calibration gate checks (`overall` and `guardrail` thresholds) and
+  detailed threshold pass/fail summaries to suite results.
+- Added optional local snapshot export to
+  `.gauntlet/reports/latest_calibration.json` for reproducible local runs.
+- Added failure reasons and category confidence explanations in benchmark and suite
+  summaries to make regressions easier to interpret.
+- Added new synthetic false-positive counterexamples around scoped prior-work comparisons,
+  limitation-first framing, methods-only language, and explicit uncertainty/caution
+  language.
+- Added Streamlit benchmark dashboard cards for last-run status, threshold checks, and
+  gate warnings; category table now includes per-category confidence explanation.
+
+### Changed
+
+- Analyzer trust checks now use explicit pass/fail gating so exploratory local runs can
+  stay non-blocking while strict checks in CI can enforce baseline quality.
+
 ## v0.19.0 - Calibration Suite + Analyzer Trust Dashboard
 
 This release adds a public calibration layer on top of the synthetic benchmark
