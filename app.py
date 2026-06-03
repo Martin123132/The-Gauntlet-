@@ -2403,9 +2403,32 @@ def render_calibration_dashboard() -> None:
         return
 
     failing_cases = ", ".join(f"`{sample_id}`" for sample_id in result.failing_sample_ids) or "none"
+    gate_status = "PASS" if (result.gate and result.gate.passed) else "FAIL"
+    gate_thresholds = (
+        f"overall >= {result.gate.overall_threshold:.0%}, guardrail >= {result.gate.guardrail_threshold:.0%}"
+        if result.gate
+        else "overall >= 90%, guardrail >= 95%"
+    )
+    gate_rates = (
+        f"overall {result.gate.overall_pass:.0%}, guardrail {result.gate.guardrail_pass:.0%}"
+        if result.gate
+        else f"overall {result.pass_rate:.0%}, guardrail {result.guardrail_pass_rate:.0%}"
+    )
+    gate_failures = ", ".join(result.gate.failures) if result.gate and result.gate.failures else "none"
+    gate_warnings = ", ".join(result.gate.warnings) if result.gate and result.gate.warnings else "none"
+
     st.markdown(
         f"""
         <div class="benchmark-grid">
+          <div class="benchmark-card">
+            <div class="small-label">Last Run Status</div>
+            <div class="muted-note">Threshold status: {html.escape(gate_status)}</div>
+            <ul class="comparison-list">
+              <li>Thresholds: {html.escape(gate_thresholds)}</li>
+              <li>Observed rates: {html.escape(gate_rates)}</li>
+              <li>Version: {html.escape(result.calibration_version)}</li>
+            </ul>
+          </div>
           <div class="benchmark-card">
             <div class="small-label">Overall Pass Rate</div>
             <div class="stat-number">{result.pass_rate:.0%}</div>
@@ -2426,6 +2449,12 @@ def render_calibration_dashboard() -> None:
             <div class="stat-number">{len(result.failing_sample_ids)}</div>
             <div class="muted-note">{html.escape(failing_cases)}</div>
           </div>
+          <div class="benchmark-card">
+            <div class="small-label">Calibration Warnings</div>
+            <div class="small-label">Gate issues</div>
+            <div class="muted-note">Failures: {html.escape(gate_failures)}</div>
+            <div class="muted-note">Warnings: {html.escape(gate_warnings)}</div>
+          </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -2433,13 +2462,14 @@ def render_calibration_dashboard() -> None:
     category_rows = "".join(
         (
             "<tr>"
-            f"<td>{html.escape(summary.category)}</td>"
-            f"<td>{summary.passed_count}/{summary.sample_count}</td>"
-            f"<td>{summary.pass_rate:.0%}</td>"
-            f"<td>{summary.verdict_match_rate:.0%}</td>"
-            f"<td>{summary.guardrail_pass_rate:.0%}</td>"
-            f"<td>{html.escape(', '.join(summary.failing_sample_ids) or 'none')}</td>"
-            "</tr>"
+        f"<td>{html.escape(summary.category)}</td>"
+        f"<td>{summary.passed_count}/{summary.sample_count}</td>"
+        f"<td>{summary.pass_rate:.0%}</td>"
+        f"<td>{summary.verdict_match_rate:.0%}</td>"
+        f"<td>{summary.guardrail_pass_rate:.0%}</td>"
+        f"<td>{html.escape(', '.join(summary.failing_sample_ids) or 'none')}</td>"
+        f"<td>{html.escape(summary.confidence_explanation or 'No failures in this category.')}</td>"
+        "</tr>"
         )
         for summary in result.category_summaries
     )
@@ -2448,7 +2478,7 @@ def render_calibration_dashboard() -> None:
         <div class="wide-detail-card">
           <div class="panel-title">Category Calibration</div>
           <table class="compare-table">
-            <thead><tr><th>Category</th><th>Passed</th><th>Pass Rate</th><th>Verdict Match</th><th>Guardrail Pass</th><th>Failing Cases</th></tr></thead>
+            <thead><tr><th>Category</th><th>Passed</th><th>Pass Rate</th><th>Verdict Match</th><th>Guardrail Pass</th><th>Failing Cases</th><th>Confidence / Rule Explanation</th></tr></thead>
             <tbody>{category_rows}</tbody>
           </table>
         </div>

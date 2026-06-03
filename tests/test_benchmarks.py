@@ -1,6 +1,13 @@
+from pathlib import Path
+import json
+
+import pytest
+
 from gauntlet_core import analyze_paper_text
 from gauntlet_core.benchmarks import (
     BenchmarkSample,
+    CALIBRATION_VERSION,
+    evaluate_calibration_gate,
     compare_report_to_sample,
     list_benchmark_samples,
     run_benchmark_sample,
@@ -11,7 +18,7 @@ from gauntlet_core.benchmarks import (
 def test_all_benchmark_samples_pass_expected_behavior():
     results = [run_benchmark_sample(sample.id) for sample in list_benchmark_samples()]
 
-    assert len(results) >= 28
+    assert len(results) >= 31
     assert all(result.passed for result in results)
     assert all(result.score == 1.0 for result in results)
 
@@ -96,15 +103,55 @@ def test_benchmark_export_distinguishes_match_from_paper_pass():
 def test_calibration_suite_summarizes_full_benchmark_corpus():
     result = run_calibration_suite()
 
-    assert result.sample_count >= 28
+    assert result.sample_count >= 31
     assert result.pass_rate == 1.0
     assert result.verdict_match_rate == 1.0
     assert result.guardrail_pass_rate == 1.0
     assert result.failing_sample_ids == ()
+    assert result.calibration_version == CALIBRATION_VERSION
+    assert result.gate is not None
+    assert result.gate.overall_pass == result.pass_rate
+    assert result.gate.guardrail_pass == result.guardrail_pass_rate
     assert {summary.category for summary in result.category_summaries} >= {
         "False-positive guard",
         "Positive control",
     }
+
+
+def test_calibration_gate_enforced_in_ci_mode():
+    result = run_calibration_suite(
+        min_overall_pass=0.9,
+        min_guardrail_pass=0.95,
+        strict=True,
+    )
+
+    assert result.gate is not None
+    assert result.gate.passed
+    assert not result.gate.failures
+
+
+def test_calibration_gate_exposes_close_to_threshold_warning(tmp_path):
+    sample_result = run_calibration_suite(persist_snapshot=False)
+    warn_gate = evaluate_calibration_gate(sample_result, overall_threshold=0.97, guardrail_threshold=0.97)
+    assert warn_gate.warnings
+    assert warn_gate.passed
+    assert not warn_gate.failures
+
+
+def test_calibration_snapshot_is_persisted_for_local_reproducibility(tmp_path):
+    snapshot_path = Path(tmp_path) / ".gauntlet" / "reports" / "latest_calibration.json"
+    result = run_calibration_suite(snapshot_path=snapshot_path, persist_snapshot=True)
+
+    assert snapshot_path.exists()
+    assert result.snapshot_path == str(snapshot_path)
+    data = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    assert data["calibration_version"] == result.calibration_version
+    assert data["sample_count"] == result.sample_count
+
+
+def test_calibration_suite_strict_mode_with_impossible_threshold_fails():
+    with pytest.raises(AssertionError, match="Calibration gate failed"):
+        run_calibration_suite(min_overall_pass=1.01, min_guardrail_pass=0.99, strict=True, persist_snapshot=False)
 
 
 def test_calibration_exports_include_metrics_and_category_detail():

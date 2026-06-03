@@ -159,9 +159,12 @@ Current benchmark cases cover:
 
 Use `Run Full Calibration Suite` to compute the overall pass rate, verdict
 match rate, false-positive guardrail pass rate, category summaries, and failing
-case list. The dashboard can export JSON or Markdown for public release notes,
-but it is still synthetic calibration rather than a proof of real-world
-accuracy.
+case list. The dashboard also shows a threshold status card (`overall` and
+`guardrail` gates) and category confidence explanations so you can see quickly if
+the suite is stable enough for the next release. Latest full-suite outputs are
+written to `.gauntlet/reports/latest_calibration.json` for local reproducibility.
+The suite can still export JSON or Markdown, but it is synthetic calibration
+rather than a claim of real-world accuracy.
 
 Each single benchmark shows the expected verdict, actual verdict, matched findings,
 missed findings, extra findings, matched claim gaps, and false-positive

@@ -6,6 +6,7 @@ Use this checklist before merging `non-ai-app-v1` into `main` or publishing a re
 
 - [ ] Run `.venv\Scripts\python.exe -m pytest` locally.
 - [ ] Confirm GitHub Actions passes on the branch or pull request.
+- [ ] Confirm `run_calibration_suite(strict=True)` passes the release gate thresholds.
 - [ ] Confirm `Start-Gauntlet.bat` installs `requirements.txt`, not optional AI packages.
 - [ ] Confirm `Start-Gauntlet.bat` prints the launcher log path under `.gauntlet/logs/`.
 
@@ -27,6 +28,8 @@ Use this checklist before merging `non-ai-app-v1` into `main` or publishing a re
 - [ ] Confirm the Summary page shows a verdict.
 - [ ] Confirm the Breakdown page shows claim audit and rule events.
 - [ ] Run one Benchmark sample and confirm expected-vs-actual results.
+- [ ] Run the full calibration suite and confirm Last Run/Threshold status cards render.
+- [ ] Confirm `.gauntlet/reports/latest_calibration.json` is refreshed after suite run.
 - [ ] Open Refinement and confirm Gemini, OpenAI, and Anthropic provider choices are visible without installing AI dependencies.
 - [ ] Open Workspace and confirm Reviewer Packet exports are visible.
 - [ ] Export JSON and Markdown reports.
