@@ -2403,7 +2403,10 @@ def render_calibration_dashboard() -> None:
         return
 
     failing_cases = ", ".join(f"`{sample_id}`" for sample_id in result.failing_sample_ids) or "none"
-    gate_status = "PASS" if (result.gate and result.gate.passed) else "FAIL"
+    if result.gate:
+        gate_status = "PASS" if result.gate.passed else "FAIL"
+    else:
+        gate_status = "NOT COMPUTED"
     gate_thresholds = (
         f"overall >= {result.gate.overall_threshold:.0%}, guardrail >= {result.gate.guardrail_threshold:.0%}"
         if result.gate
@@ -2450,8 +2453,7 @@ def render_calibration_dashboard() -> None:
             <div class="muted-note">{html.escape(failing_cases)}</div>
           </div>
           <div class="benchmark-card">
-            <div class="small-label">Calibration Warnings</div>
-            <div class="small-label">Gate issues</div>
+            <div class="small-label">Gate Issues</div>
             <div class="muted-note">Failures: {html.escape(gate_failures)}</div>
             <div class="muted-note">Warnings: {html.escape(gate_warnings)}</div>
           </div>
@@ -2462,14 +2464,14 @@ def render_calibration_dashboard() -> None:
     category_rows = "".join(
         (
             "<tr>"
-        f"<td>{html.escape(summary.category)}</td>"
-        f"<td>{summary.passed_count}/{summary.sample_count}</td>"
-        f"<td>{summary.pass_rate:.0%}</td>"
-        f"<td>{summary.verdict_match_rate:.0%}</td>"
-        f"<td>{summary.guardrail_pass_rate:.0%}</td>"
-        f"<td>{html.escape(', '.join(summary.failing_sample_ids) or 'none')}</td>"
-        f"<td>{html.escape(summary.confidence_explanation or 'No failures in this category.')}</td>"
-        "</tr>"
+            f"<td>{html.escape(summary.category)}</td>"
+            f"<td>{summary.passed_count}/{summary.sample_count}</td>"
+            f"<td>{summary.pass_rate:.0%}</td>"
+            f"<td>{summary.verdict_match_rate:.0%}</td>"
+            f"<td>{summary.guardrail_pass_rate:.0%}</td>"
+            f"<td>{html.escape(', '.join(summary.failing_sample_ids) or 'none')}</td>"
+            f"<td>{html.escape(summary.confidence_explanation or 'No failures in this category.')}</td>"
+            "</tr>"
         )
         for summary in result.category_summaries
     )
