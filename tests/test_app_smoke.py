@@ -258,6 +258,18 @@ def test_streamlit_share_demo_page_renders_share_kit():
     assert any("synthetic benchmark papers only" in item.value for item in app.markdown)
 
 
+def test_streamlit_system_check_page_renders_diagnostics():
+    app = AppTest.from_file("app.py")
+    app.query_params["page"] = "system"
+    app.run(timeout=20)
+
+    assert not app.exception
+    assert any("System Check" in item.value for item in app.markdown)
+    assert any("Local Diagnostics" in item.value for item in app.markdown)
+    assert any("Diagnostics Export" in item.value for item in app.markdown)
+    assert any("Copy diagnostics" == area.label for area in app.text_area)
+
+
 def test_streamlit_workspace_page_lists_opens_compares_and_deletes(tmp_path, monkeypatch):
     monkeypatch.setenv("GAUNTLET_WORKSPACE_DIR", str(tmp_path / "runs"))
     app = AppTest.from_file("app.py")

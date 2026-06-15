@@ -102,4 +102,5 @@ def test_release_checklist_includes_first_run_and_launcher_log_checks():
 
     assert "launcher log" in checklist.lower()
     assert "Try Sample Paper" in checklist
+    assert "System Check" in checklist
     assert "Reviewer Packet" in checklist

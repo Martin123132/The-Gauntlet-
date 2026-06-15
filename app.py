@@ -57,6 +57,7 @@ from gauntlet_core.share import (
 )
 from gauntlet_core.source_reader import build_source_reader_view, source_reader_to_markdown
 from gauntlet_core.source_review import build_source_review_items, source_review_to_markdown
+from gauntlet_core.system_check import collect_system_check
 from gauntlet_core.workspace import (
     ISSUE_REVIEW_STATUSES,
     REVIEW_STATUSES,
@@ -79,6 +80,7 @@ VALID_PAGES = (
     "workspace",
     "batch",
     "share",
+    "system",
     "action",
     "source",
     "breakdown",
@@ -93,6 +95,7 @@ PAGE_LABELS = {
     "workspace": "Workspace",
     "batch": "Batch",
     "share": "Share Demo",
+    "system": "System Check",
     "action": "Repair Workshop",
     "source": "Source Reader",
     "breakdown": "Breakdown",
@@ -1020,6 +1023,8 @@ def main() -> None:
         render_batch_page()
     elif page == "share":
         render_share_demo_page()
+    elif page == "system":
+        render_system_check_page()
     elif page == "benchmarks":
         render_benchmarks_page()
     else:
@@ -1201,14 +1206,17 @@ def render_upload_panel() -> None:
                     loaded_document = load_document_from_bytes(upload.name, upload.getvalue())
                     paper_text = loaded_document.text
                     if not paper_text.strip():
-                        st.error("No readable text was found in that file.")
+                        render_upload_error(
+                            "No readable text was found in that file.",
+                            "The parser opened the file, but extraction returned no text. Try exporting the paper as text, checking whether the PDF is scanned images, or running System Check.",
+                        )
                         return
                     report = analyze_loaded_document(loaded_document)
                 else:
                     st.error("Upload a paper or turn on the sample paper first.")
                     return
             except Exception as exc:  # Streamlit should show clean user-facing errors.
-                st.error(str(exc))
+                render_upload_error("The Gauntlet could not read that file.", str(exc))
                 return
             save_report(report, paper_text, run_kind=run_kind)
             st.rerun()
@@ -1217,6 +1225,21 @@ def render_upload_panel() -> None:
             '<p class="local-note">Analysis is 100% local. Completed reports auto-save under .gauntlet/workspace/runs/ without saving the uploaded file.</p>',
             unsafe_allow_html=True,
         )
+
+
+def render_upload_error(message: str, detail: str = "") -> None:
+    st.error(message)
+    st.markdown(
+        """
+        <div class="empty-detail">
+          Open <a href="?page=system" target="_self">System Check</a> to verify Python, dependencies, workspace access, and launcher logs before retrying.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if detail:
+        with st.expander("Troubleshooting detail"):
+            st.code(detail, language="text")
 
 
 def render_document_info(upload) -> None:
@@ -2319,6 +2342,97 @@ def render_share_demo_page() -> None:
             mime="image/svg+xml",
             use_container_width=True,
         )
+
+
+def render_system_check_page() -> None:
+    report = collect_system_check(workspace_path=workspace_runs_dir())
+    counts = report.status_counts
+    status_label = report.overall_status.upper()
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="small-label">System Check</div>
+          <div class="detail-title">Local Diagnostics</div>
+          <div class="detail-subtitle">A quick health check for the GitHub ZIP launcher, dependencies, workspace, and logs. This diagnostic does not include uploaded papers, report contents, API keys, or full launcher logs.</div>
+          <div class="verdict-meta">
+            <div>Status:<span>{html.escape(status_label)}</span></div>
+            <div>Checks:<span>{len(report.items)}</span></div>
+            <div>Generated:<span>{html.escape(report.generated_at)}</span></div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"""
+        <div class="stat-strip">
+          <div class="stat-tile"><div class="stat-title">Overall</div><div class="stat-number">{html.escape(status_label)}</div><div class="stat-note">Current diagnostic state</div></div>
+          <div class="stat-tile"><div class="stat-title">OK</div><div class="stat-number">{counts.get("ok", 0)}</div><div class="stat-note">Ready checks</div></div>
+          <div class="stat-tile"><div class="stat-title">Warnings</div><div class="stat-number">{counts.get("warn", 0)}</div><div class="stat-note">Review if stuck</div></div>
+          <div class="stat-tile"><div class="stat-title">Failures</div><div class="stat-number">{counts.get("fail", 0)}</div><div class="stat-note">Needs fixing</div></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    runtime_col, export_col = st.columns([0.52, 0.48], gap="medium")
+    with runtime_col:
+        st.markdown(
+            f"""
+            <div class="wide-detail-card">
+              <div class="panel-title">Runtime</div>
+              <div class="doc-row"><span>App version</span><strong>{html.escape(report.app_version)}</strong></div>
+              <div class="doc-row"><span>Python</span><strong>{html.escape(report.python_version)}</strong></div>
+              <div class="doc-row"><span>Repo</span><strong>{html.escape(report.repo_path)}</strong></div>
+              <div class="doc-row"><span>Workspace</span><strong>{html.escape(report.workspace_path)}</strong></div>
+              <div class="doc-row"><span>Launcher log</span><strong>{html.escape(report.launcher_log_path)}</strong></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with export_col:
+        st.markdown(
+            """
+            <div class="wide-detail-card">
+              <div class="panel-title">Diagnostics Export</div>
+              <div class="muted-note">Use this when opening a GitHub issue. It contains setup status and local paths only, not private paper text.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        json_col, markdown_col = st.columns(2)
+        json_col.download_button(
+            "Download Diagnostics JSON",
+            data=report.to_json(),
+            file_name="gauntlet-system-check.json",
+            mime="application/json",
+            use_container_width=True,
+        )
+        markdown_col.download_button(
+            "Download Diagnostics Markdown",
+            data=report.to_markdown(),
+            file_name="gauntlet-system-check.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+
+    st.markdown('<div class="panel-title">Checks</div>', unsafe_allow_html=True)
+    for item in report.items:
+        severity_class = "low" if item.status == "ok" else "medium" if item.status == "warn" else "high"
+        st.markdown(
+            f"""
+            <div class="finding-card {severity_class}">
+              <div class="finding-title">
+                <span>{html.escape(item.name)}</span>
+                <span class="severity-pill {severity_class}">{html.escape(item.status.upper())}</span>
+              </div>
+              <div class="finding-body">{html.escape(item.detail)}</div>
+              {f'<div class="repair-button-look">{html.escape(item.recovery)}</div>' if item.recovery else ''}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.text_area("Copy diagnostics", value=report.to_markdown(), height=380)
 
 
 def render_benchmarks_page() -> None:

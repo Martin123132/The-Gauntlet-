@@ -61,6 +61,12 @@ Streamlit app in your browser. It also prints the repo path, Python version,
 virtual environment path, browser URL, and a troubleshooting log path under
 `.gauntlet/logs/`.
 
+Open the `System Check` page inside the app if the first run feels off. It
+checks Python, required dependencies, public launcher files, workspace location,
+and launcher log presence, then gives you a diagnostics export that can be
+attached to a GitHub issue. The export lists local setup paths only; it does not
+include uploaded paper text, report contents, API keys, or full launcher logs.
+
 You can also drag a paper or folder onto `Analyze-Paper.bat` to write reports
 without opening the app.
 

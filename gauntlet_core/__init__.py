@@ -57,6 +57,7 @@ from .source_reader import (
     build_source_reader_view,
     source_reader_to_markdown,
 )
+from .system_check import DiagnosticItem, SystemCheckReport, collect_system_check
 from .workspace import (
     ISSUE_REVIEW_STATUSES,
     SavedRun,
@@ -84,6 +85,7 @@ __all__ = [
     "ClaimEvidenceMap",
     "ClaimEvidenceRow",
     "DemoShareSummary",
+    "DiagnosticItem",
     "LoadedDocument",
     "ISSUE_REVIEW_STATUSES",
     "ProviderSelection",
@@ -98,6 +100,7 @@ __all__ = [
     "SourceReaderAnchor",
     "SourceReaderRelatedItem",
     "SourceReaderView",
+    "SystemCheckReport",
     "analyze_loaded_document",
     "analyze_paper_text",
     "action_plan_to_markdown",
@@ -119,6 +122,7 @@ __all__ = [
     "build_source_review_items",
     "build_source_reader_view",
     "claim_evidence_map_to_markdown",
+    "collect_system_check",
     "delete_saved_run",
     "filter_batch_items",
     "list_benchmark_samples",

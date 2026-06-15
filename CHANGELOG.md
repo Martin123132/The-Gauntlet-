@@ -2,7 +2,18 @@
 
 ## Unreleased
 
-No unreleased changes yet.
+### Added
+
+- Added an in-app `System Check` page with local diagnostics for Python,
+  dependencies, required public files, workspace path, launcher log presence,
+  and optional AI setup.
+- Added diagnostics JSON/Markdown exports for GitHub issues without including
+  uploaded paper text, report contents, API keys, or full launcher logs.
+
+### Changed
+
+- Upload parsing errors now point users toward `System Check` and show
+  troubleshooting detail without making raw exceptions the main UI.
 
 ## v0.20.0 - Trust Guardrails + Calibration Governance
 
