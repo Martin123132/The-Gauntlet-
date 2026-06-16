@@ -17,7 +17,7 @@ from .batch import (
     build_batch_report_bundle,
     summarize_report,
 )
-from .document_loader import SUPPORTED_EXTENSIONS, load_document_from_path
+from .document_loader import SUPPORTED_EXTENSIONS, load_document_from_bytes, load_document_from_path
 from .models import AnalysisReport
 
 
@@ -202,6 +202,33 @@ def run_result_pack(
         except Exception as exc:
             items.append(result_pack_failure(entry, str(exc)))
     return ResultPackRun(manifest=manifest, papers_dir=str(root), items=tuple(items))
+
+
+def run_result_pack_file_bytes(
+    manifest: ResultPackManifest,
+    files: dict[str, bytes],
+    save_report=None,
+    papers_dir: str = "uploaded files",
+) -> ResultPackRun:
+    """Analyze in-memory user-supplied files matched by manifest filename."""
+    files_by_name = {Path(filename).name: content for filename, content in files.items()}
+    items: list[BatchScanItem] = []
+    for entry in manifest.entries:
+        content = files_by_name.get(entry.expected_filename)
+        if content is None:
+            items.append(result_pack_failure(entry, f"Missing expected file: {entry.expected_filename}"))
+            continue
+        try:
+            document = load_document_from_bytes(entry.expected_filename, content)
+            if not document.text.strip():
+                raise ValueError("No readable text was found in that file")
+            report = analyze_loaded_document(document)
+            if save_report:
+                save_report(report)
+            items.append(summarize_report(report))
+        except Exception as exc:
+            items.append(result_pack_failure(entry, str(exc)))
+    return ResultPackRun(manifest=manifest, papers_dir=papers_dir, items=tuple(items))
 
 
 def analyze_result_pack_path(path: Path) -> AnalysisReport:

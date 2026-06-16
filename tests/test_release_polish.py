@@ -107,6 +107,7 @@ def test_release_checklist_includes_first_run_and_launcher_log_checks():
     assert "System Check" in checklist
     assert "Document Extraction Quality" in checklist
     assert "Reviewer Packet" in checklist
+    assert "Open Result Packs" in checklist
     assert "result-pack" in checklist.lower()
     assert "metadata-only" in checklist.lower()
 
@@ -115,6 +116,7 @@ def test_readme_documents_metadata_only_result_packs():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
     assert "Result Packs" in readme
+    assert "The `Result Packs` page" in readme
     assert "metadata-only" in readme
     assert "not the original uploaded paper files" in readme
     assert "result-packs\\landmark-paper-starter.json" in readme

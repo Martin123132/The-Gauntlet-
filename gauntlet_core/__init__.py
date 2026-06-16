@@ -41,6 +41,7 @@ from .result_packs import (
     analyze_result_pack_path,
     build_result_pack_bundle,
     load_result_pack_manifest,
+    run_result_pack_file_bytes,
     result_pack_to_markdown,
     run_result_pack,
 )
@@ -153,6 +154,7 @@ __all__ = [
     "run_benchmark_sample",
     "run_calibration_suite",
     "run_result_pack",
+    "run_result_pack_file_bytes",
     "run_provider_refinement",
     "run_refinement",
     "save_analysis_run",

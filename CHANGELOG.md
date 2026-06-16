@@ -17,6 +17,9 @@
   no bundled paper PDFs or copied paper text.
 - Added CLI support for `--result-pack`, producing JSON, Markdown, and ZIP
   result-pack bundles from user-supplied local paper files.
+- Added the `Result Packs` app page for selecting the starter manifest,
+  uploading matching local paper copies, running the pack, opening individual
+  reports, and exporting JSON, Markdown, or ZIP result-pack bundles.
 
 ### Changed
 

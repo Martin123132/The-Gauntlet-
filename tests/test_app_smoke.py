@@ -248,6 +248,27 @@ def test_streamlit_batch_page_renders_controls():
     assert any("Filter & Sort" in item.value for item in app.markdown)
 
 
+def test_streamlit_result_packs_page_renders_and_runs_empty_pack():
+    app = AppTest.from_file("app.py")
+    app.query_params["page"] = "result-packs"
+    app.run(timeout=20)
+
+    assert not app.exception
+    assert any("Result Pack Studio" in item.value for item in app.markdown)
+    assert any("Expected Files" in item.value for item in app.markdown)
+    assert any("Landmark Paper Starter Pack" in item.value for item in app.markdown)
+    assert any("Run Result Pack" == button.label for button in app.button)
+    assert app.file_uploader
+
+    run_button = next(button for button in app.button if button.label == "Run Result Pack")
+    run_button.click()
+    app.run(timeout=20)
+
+    assert not app.exception
+    assert app.session_state["result_pack_run"].failed_count == 10
+    assert any("Missing / Failed" in item.value for item in app.markdown)
+
+
 def test_streamlit_share_demo_page_renders_share_kit():
     app = AppTest.from_file("app.py")
     app.query_params["page"] = "share"

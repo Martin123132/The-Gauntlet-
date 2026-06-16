@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 from dataclasses import replace
+from pathlib import Path
 from urllib.parse import quote
 
 import streamlit as st
@@ -47,6 +48,14 @@ from gauntlet_core.revision_recheck import (
     revision_recheck_log_to_markdown,
     revision_status_label,
 )
+from gauntlet_core.result_packs import (
+    ResultPackManifest,
+    ResultPackRun,
+    build_result_pack_bundle,
+    load_result_pack_manifest,
+    result_pack_to_markdown,
+    run_result_pack_file_bytes,
+)
 from gauntlet_core.sample_text import SAMPLE_PAPER
 from gauntlet_core.share import (
     build_demo_share_pack,
@@ -79,6 +88,7 @@ VALID_PAGES = (
     "summary",
     "workspace",
     "batch",
+    "result-packs",
     "share",
     "system",
     "action",
@@ -94,6 +104,7 @@ PAGE_LABELS = {
     "summary": "Summary",
     "workspace": "Workspace",
     "batch": "Batch",
+    "result-packs": "Result Packs",
     "share": "Share Demo",
     "system": "System Check",
     "action": "Repair Workshop",
@@ -105,6 +116,8 @@ PAGE_LABELS = {
     "evidence": "Evidence",
     "refinement": "Refinement",
 }
+RESULT_PACKS_DIR = Path(__file__).resolve().parent / "result-packs"
+STARTER_RESULT_PACK = RESULT_PACKS_DIR / "landmark-paper-starter.json"
 
 
 @st.cache_resource
@@ -1021,6 +1034,8 @@ def main() -> None:
         render_workspace_page()
     elif page == "batch":
         render_batch_page()
+    elif page == "result-packs":
+        render_result_packs_page()
     elif page == "share":
         render_share_demo_page()
     elif page == "system":
@@ -1080,6 +1095,12 @@ def active_batch_items() -> list[BatchScanItem]:
     return report_store().get("batch_items", [])
 
 
+def active_result_pack_run():
+    if "result_pack_run" in st.session_state:
+        return st.session_state["result_pack_run"]
+    return report_store().get("result_pack_run")
+
+
 def save_report(report, paper_text: str, run_kind: str = "analysis", benchmark_result=None) -> None:
     st.session_state["report"] = report
     st.session_state["paper_text"] = paper_text
@@ -1136,6 +1157,11 @@ def save_calibration_result(calibration_result) -> None:
 def save_batch_items(items: list[BatchScanItem]) -> None:
     st.session_state["batch_items"] = items
     report_store()["batch_items"] = items
+
+
+def save_result_pack_run(run: ResultPackRun) -> None:
+    st.session_state["result_pack_run"] = run
+    report_store()["result_pack_run"] = run
 
 
 def render_topbar(active_page: str) -> None:
@@ -2312,6 +2338,210 @@ def batch_row_for_display(item: BatchScanItem) -> dict[str, str | int]:
         "Findings": item.finding_count if item.status == "analyzed" else 0,
         "Top Risks": "; ".join(item.top_findings) or item.error or "-",
     }
+
+
+def render_result_packs_page() -> None:
+    manifest = load_selected_result_pack()
+    st.markdown(
+        """
+        <div class="wide-detail-card">
+          <div class="detail-title">Result Pack Studio</div>
+          <div class="detail-subtitle">Run a repeatable metadata-only paper set from user-supplied local files, then export a shareable results bundle without bundling the original papers.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    left, right = st.columns([0.34, 0.66], gap="medium")
+    with left:
+        render_result_pack_input(manifest)
+    with right:
+        run = active_result_pack_run()
+        render_result_pack_manifest_preview(manifest)
+        if run:
+            render_result_pack_results(run)
+        else:
+            st.markdown(
+                """
+                <div class="empty-detail">Upload files with the expected names, then run the pack to produce a public-ready summary and offline report bundle. Missing papers are shown clearly instead of stopping the run.</div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+def load_selected_result_pack() -> ResultPackManifest:
+    return load_result_pack_manifest(STARTER_RESULT_PACK)
+
+
+def render_result_pack_input(manifest: ResultPackManifest) -> None:
+    with st.container(border=True):
+        st.markdown('<div class="panel-title">Pack Input</div>', unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="document-card">
+              <div class="small-label">Selected pack</div>
+              <div class="doc-row"><span>Name</span><strong>{html.escape(manifest.title)}</strong></div>
+              <div class="doc-row"><span>Expected files</span><strong>{len(manifest.entries)}</strong></div>
+              <div class="doc-row"><span>Storage</span><strong>Metadata only</strong></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        uploads = st.file_uploader(
+            "Upload result-pack papers",
+            type=[extension.lstrip(".") for extension in sorted(SUPPORTED_EXTENSIONS)],
+            accept_multiple_files=True,
+            help="Use the expected filenames shown in the manifest table.",
+        )
+        upload_names = {upload.name for upload in uploads or []}
+        matched = sum(1 for entry in manifest.entries if entry.expected_filename in upload_names)
+        missing = len(manifest.entries) - matched
+        st.markdown(
+            f"""
+            <div class="document-card">
+              <div class="small-label">Readiness</div>
+              <div class="doc-row"><span>Uploaded</span><strong>{len(uploads or [])}</strong></div>
+              <div class="doc-row"><span>Matched</span><strong>{matched}</strong></div>
+              <div class="doc-row"><span>Missing</span><strong>{missing}</strong></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button("Run Result Pack", type="primary", use_container_width=True):
+            run_result_pack_uploads(manifest, uploads or [])
+            st.rerun()
+        st.markdown(
+            '<p class="local-note">Result packs use local deterministic rules. The manifest contains metadata and links only; uploads are analyzed in memory and the exported bundle excludes original paper files.</p>',
+            unsafe_allow_html=True,
+        )
+
+
+def run_result_pack_uploads(manifest: ResultPackManifest, uploads) -> None:
+    files = {upload.name: upload.getvalue() for upload in uploads}
+    progress = st.progress(0, text="Running result pack...")
+
+    def save_pack_report(report):
+        try:
+            save_analysis_run(report, run_kind="result-pack")
+        except OSError as exc:
+            st.warning(f"{report.source_name} analyzed, but the workspace could not save it: {exc}")
+
+    run = run_result_pack_file_bytes(manifest, files, save_report=save_pack_report, papers_dir="streamlit uploads")
+    progress.progress(1.0, text="Result pack complete.")
+    save_result_pack_run(run)
+
+
+def render_result_pack_manifest_preview(manifest: ResultPackManifest) -> None:
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="detail-title">Expected Files</div>
+          <div class="detail-subtitle">{html.escape(manifest.description)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    rows = [
+        {
+            "Expected filename": entry.expected_filename,
+            "Title": entry.title,
+            "Year": entry.year,
+            "Category": entry.category,
+            "Source": entry.source_url or "-",
+        }
+        for entry in manifest.entries
+    ]
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+    with st.expander("Pack privacy and source notes"):
+        st.markdown(manifest.privacy_note)
+        for entry in manifest.entries:
+            source_line = f" - {entry.source_url}" if entry.source_url else ""
+            st.markdown(
+                f"- **{entry.title}** (`{entry.expected_filename}`){source_line}\n"
+                f"  \n  {entry.license_note or 'Verify source access and redistribution terms before sharing paper files.'}"
+            )
+
+
+def render_result_pack_results(run: ResultPackRun) -> None:
+    high_risk = sum(
+        1
+        for item in run.items
+        if item.status == "failed" or item.high_severity_findings > 0 or item.verdict in {"FAILS", "CREATES_NEW_PARADOXES"}
+    )
+    avg_evidence = (
+        sum(item.evidence_score for item in run.items if item.status == "analyzed") / run.analyzed_count
+        if run.analyzed_count
+        else 0
+    )
+    st.markdown(
+        f"""
+        <div class="stat-strip">
+          <div class="stat-tile"><div class="stat-title">Analyzed</div><div class="stat-number">{run.analyzed_count}</div><div class="stat-note">of {len(run.items)} manifest entries</div></div>
+          <div class="stat-tile"><div class="stat-title">Missing / Failed</div><div class="stat-number">{run.failed_count}</div><div class="stat-note">needs local file attention</div></div>
+          <div class="stat-tile"><div class="stat-title">High Risk</div><div class="stat-number">{high_risk}</div><div class="stat-note">failed or severe results</div></div>
+          <div class="stat-tile"><div class="stat-title">Avg Evidence</div><div class="stat-number">{avg_evidence:.2f}</div><div class="stat-note">analyzed papers only</div></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.dataframe(result_pack_rows_for_display(run), use_container_width=True, hide_index=True)
+
+    json_col, markdown_col, bundle_col = st.columns(3)
+    json_col.download_button(
+        "Export Result Pack JSON",
+        data=run.to_json(),
+        file_name="gauntlet-result-pack-summary.json",
+        mime="application/json",
+        use_container_width=True,
+    )
+    markdown_col.download_button(
+        "Export Result Pack Markdown",
+        data=result_pack_to_markdown(run),
+        file_name="gauntlet-result-pack-summary.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
+    bundle_col.download_button(
+        "Export Result Pack Bundle",
+        data=build_result_pack_bundle(run),
+        file_name="gauntlet-result-pack-bundle.zip",
+        mime="application/zip",
+        use_container_width=True,
+    )
+
+    completed = [item for item in run.items if item.report]
+    if completed:
+        labels = {
+            f"{item.source_name} | {item.verdict} | {item.confidence:.0%}": index
+            for index, item in enumerate(completed)
+        }
+        selected_label = st.selectbox("Open result-pack report", list(labels.keys()))
+        if st.button("Open Selected Result-Pack Report", use_container_width=True):
+            selected = completed[labels[selected_label]]
+            st.session_state["report"] = selected.report
+            st.session_state["paper_text"] = ""
+            report_store()["report"] = selected.report
+            report_store()["paper_text"] = ""
+            st.query_params["page"] = "breakdown"
+            st.rerun()
+
+
+def result_pack_rows_for_display(run: ResultPackRun) -> list[dict[str, str | int]]:
+    rows: list[dict[str, str | int]] = []
+    for entry, item in zip(run.manifest.entries, run.items):
+        rows.append(
+            {
+                "Expected File": entry.expected_filename,
+                "Title": entry.title,
+                "Status": item.status,
+                "Verdict": item.verdict or "-",
+                "Confidence": f"{item.confidence:.0%}" if item.status == "analyzed" else "-",
+                "Evidence": f"{item.evidence_score:.2f}" if item.status == "analyzed" else "-",
+                "Findings": item.finding_count if item.status == "analyzed" else 0,
+                "Notes": "; ".join(item.top_findings) or item.error or entry.why_include or "-",
+            }
+        )
+    return rows
 
 
 def render_share_demo_page() -> None:

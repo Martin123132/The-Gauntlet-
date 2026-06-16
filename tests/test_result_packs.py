@@ -11,6 +11,7 @@ from gauntlet_core.result_packs import (
     build_result_pack_bundle,
     load_result_pack_manifest,
     result_pack_to_markdown,
+    run_result_pack_file_bytes,
     run_result_pack,
 )
 
@@ -67,6 +68,34 @@ def test_result_pack_run_handles_success_and_missing_files(tmp_path):
     assert run.items[1].status == "failed"
     assert "Missing expected file" in run.items[1].error
     assert run.to_summary_dict()["results"][0]["entry_id"] == "present"
+
+
+def test_result_pack_file_bytes_matches_upload_names_and_saves_reports():
+    manifest = ResultPackManifest.from_dict(
+        {
+            "id": "upload-pack",
+            "title": "Upload Pack",
+            "description": "In-memory upload demo.",
+            "entries": [
+                {"id": "present", "title": "Present", "expected_filename": "present.txt"},
+                {"id": "missing", "title": "Missing", "expected_filename": "missing.md"},
+            ],
+        }
+    )
+    saved = []
+
+    run = run_result_pack_file_bytes(
+        manifest,
+        {"present.txt": b"The framework resolves the anomaly because 12 measured observations support the mechanism."},
+        save_report=saved.append,
+    )
+
+    assert run.papers_dir == "uploaded files"
+    assert run.analyzed_count == 1
+    assert run.failed_count == 1
+    assert saved[0].source_name == "present.txt"
+    assert run.items[0].report is saved[0]
+    assert "Missing expected file" in run.items[1].error
 
 
 def test_result_pack_exports_markdown_and_bundle_without_original_files(tmp_path):

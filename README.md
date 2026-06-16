@@ -228,14 +228,19 @@ exports before uploading private documents.
 
 ## Result Packs
 
-Result packs are repeatable demo manifests for public comparison posts, lab
-checks, or release QA. The repo includes
-`result-packs/landmark-paper-starter.json`, a metadata-only starter list of
-famous landmark papers. It contains titles, expected filenames, source links,
-and notes, but no PDFs, copied paper text, or downloaded source files.
+The `Result Packs` page turns repeatable paper sets into a click-through
+workflow for public comparison posts, lab checks, or release QA. The repo
+includes `result-packs/landmark-paper-starter.json`, a metadata-only starter
+list of famous landmark papers. It contains titles, expected filenames, source
+links, and notes, but no PDFs, copied paper text, or downloaded source files.
 
-To use it, place your own lawful local copies in a `papers/` folder using the
-expected filenames from the manifest, then run:
+Open `Result Packs`, upload your own lawful local copies using the expected
+filenames, run the pack, then export JSON, Markdown, or a ZIP bundle with an
+offline index and per-paper reports.
+
+The same workflow is available from the command line. Place your own lawful
+local copies in a `papers/` folder using the expected filenames from the
+manifest, then run:
 
 ```bash
 .venv\Scripts\python -m gauntlet_core.cli --result-pack result-packs\landmark-paper-starter.json --papers-dir papers --out gauntlet-reports
