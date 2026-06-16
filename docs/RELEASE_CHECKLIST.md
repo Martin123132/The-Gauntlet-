@@ -26,6 +26,7 @@ Use this checklist before merging `non-ai-app-v1` into `main` or publishing a re
 - [ ] Press `Try Sample Paper` and confirm a verdict appears.
 - [ ] Run the built-in sample paper.
 - [ ] Confirm the Summary page shows a verdict.
+- [ ] Confirm the Breakdown page shows Document Extraction Quality.
 - [ ] Confirm the Breakdown page shows claim audit and rule events.
 - [ ] Run one Benchmark sample and confirm expected-vs-actual results.
 - [ ] Run the full calibration suite and confirm Last Run/Threshold status cards render.

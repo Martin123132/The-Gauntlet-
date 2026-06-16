@@ -9,11 +9,16 @@
   and optional AI setup.
 - Added diagnostics JSON/Markdown exports for GitHub issues without including
   uploaded paper text, report contents, API keys, or full launcher logs.
+- Added document extraction-quality scoring for real-paper uploads, including
+  warnings for scanned-looking PDFs, very short extraction, missing source
+  anchors, fragmented text, symbol-heavy extraction, and reference-heavy text.
 
 ### Changed
 
 - Upload parsing errors now point users toward `System Check` and show
   troubleshooting detail without making raw exceptions the main UI.
+- Summary, Breakdown, Markdown, JSON, and HTML reports now include extraction
+  quality so users know whether the verdict had usable source text.
 
 ## v0.20.0 - Trust Guardrails + Calibration Governance
 

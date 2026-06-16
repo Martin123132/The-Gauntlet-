@@ -67,6 +67,7 @@ def test_streamlit_breakdown_page_keeps_report_state():
     assert any("Actual Breakdown" in item.value for item in app.markdown)
     assert any("Claim-by-Claim Audit" in item.value for item in app.markdown)
     assert any("Curtain-Up Audit" in item.value for item in app.markdown)
+    assert any("Document Extraction Quality" in item.value for item in app.markdown)
     assert any("Source Trace" in item.value for item in app.markdown)
     assert any("Source for" in expander.label for expander in app.expander)
 

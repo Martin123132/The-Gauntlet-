@@ -110,6 +110,9 @@ The verdict is a review aid, not a replacement for expert peer review.
 ## What V2 Checks
 
 - document sections and claim locations
+- document extraction quality, including warnings for scanned-looking PDFs,
+  very short extraction, fragmented OCR-style text, symbol-heavy text, missing
+  source anchors, and reference-heavy uploads
 - explicit resolution claims
 - false-positive guardrails for tentative hypotheses, prior-work comparisons,
   scoped limitations, reference-like text, and unsupported equation/citation

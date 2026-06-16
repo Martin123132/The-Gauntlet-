@@ -25,13 +25,14 @@ from .benchmarks import (
     run_calibration_suite,
 )
 from .document_loader import LoadedDocument, load_document_from_bytes, load_document_from_path
+from .document_quality import assess_document_quality
 from .evidence_map import (
     ClaimEvidenceMap,
     ClaimEvidenceRow,
     build_claim_evidence_map,
     claim_evidence_map_to_markdown,
 )
-from .models import AnalysisReport, SourceSpan
+from .models import AnalysisReport, DocumentQualityIssue, DocumentQualityReport, SourceSpan
 from .report_bundle import build_report_bundle
 from .refinement import ProviderSelection, RefinementReport, run_provider_refinement, run_refinement
 from .repair_workshop import RepairStep, build_repair_steps, repair_workshop_to_markdown
@@ -86,6 +87,8 @@ __all__ = [
     "ClaimEvidenceRow",
     "DemoShareSummary",
     "DiagnosticItem",
+    "DocumentQualityIssue",
+    "DocumentQualityReport",
     "LoadedDocument",
     "ISSUE_REVIEW_STATUSES",
     "ProviderSelection",
@@ -104,6 +107,7 @@ __all__ = [
     "analyze_loaded_document",
     "analyze_paper_text",
     "action_plan_to_markdown",
+    "assess_document_quality",
     "batch_items_to_csv",
     "batch_items_to_html",
     "batch_items_to_json",

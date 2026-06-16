@@ -16,6 +16,8 @@ class LoadedDocument:
     filename: str
     text: str
     source_spans: list[SourceSpan]
+    file_size_bytes: int = 0
+    extension: str = ""
 
 
 def extract_text_from_path(path: str | Path) -> str:
@@ -39,12 +41,12 @@ def load_document_from_bytes(filename: str, data: bytes) -> LoadedDocument:
         raise ValueError(f"Unsupported file type '{extension}'. Supported types: {supported}")
     if extension in {".txt", ".md"}:
         text = decode_text(data)
-        return LoadedDocument(filename, text, build_source_spans(text))
+        return LoadedDocument(filename, text, build_source_spans(text), len(data), extension)
     if extension == ".pdf":
         return extract_pdf_document(filename, data)
     if extension == ".docx":
         text = extract_docx_text(data)
-        return LoadedDocument(filename, text, build_source_spans(text))
+        return LoadedDocument(filename, text, build_source_spans(text), len(data), extension)
     raise ValueError(f"Unsupported file type '{extension}'.")
 
 
@@ -83,7 +85,7 @@ def extract_pdf_document(filename: str, data: bytes) -> LoadedDocument:
         spans.extend(page_spans)
         offset += len(page_text)
     text = "".join(text_parts)
-    return LoadedDocument(filename, text, spans)
+    return LoadedDocument(filename, text, spans, len(data), ".pdf")
 
 
 def extract_docx_text(data: bytes) -> str:

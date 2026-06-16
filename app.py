@@ -1332,6 +1332,7 @@ def render_report_center(report) -> None:
     )
 
     render_stat_strip(report)
+    render_document_quality_panel(report)
     render_breakdowns(report)
     st.markdown(
         '<a class="export-chip" href="?page=breakdown" target="_self">Open full breakdown</a>',
@@ -1389,6 +1390,7 @@ def render_breakdown_page(report) -> None:
         """,
         unsafe_allow_html=True,
     )
+    render_document_quality_panel(report, always=True)
     render_stat_strip(report)
     render_breakdowns(report)
     render_curtain_up(report)
@@ -1397,6 +1399,53 @@ def render_breakdown_page(report) -> None:
     render_evidence_page(report, compact=True)
     render_action_plan_page(report, compact=True)
     render_exports(report)
+
+
+def render_document_quality_panel(report, always: bool = False) -> None:
+    quality = getattr(report, "document_quality", None)
+    if not quality or quality.status == "unknown":
+        return
+    if quality.status == "ok" and not always:
+        return
+    issue_rows = "".join(
+        f"<li><strong>{html.escape(issue.type)}</strong> ({html.escape(issue.severity)}): {html.escape(issue.message)}</li>"
+        for issue in quality.issues
+    ) or "<li>No extraction-quality issues were detected.</li>"
+    recovery_rows = "".join(
+        f"<li>{html.escape(issue.recovery)}</li>"
+        for issue in quality.issues
+        if issue.recovery
+    ) or "<li>No recovery action needed.</li>"
+    status_note = {
+        "ok": "The extracted text looks usable for the deterministic audit.",
+        "warn": "Review the source text before treating the verdict as final.",
+        "fail": "The verdict may be unfair because extraction quality is poor.",
+    }.get(quality.status, "Extraction quality was checked.")
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="small-label">Document Extraction Quality</div>
+          <div class="detail-title">{html.escape(quality.status.upper())} | {quality.score:.2f}/1.00</div>
+          <div class="detail-subtitle">{html.escape(status_note)}</div>
+          <div class="verdict-meta">
+            <div>Words:<span>{quality.word_count}</span></div>
+            <div>Sentences:<span>{quality.sentence_count}</span></div>
+            <div>Anchors:<span>{quality.source_span_count}</span></div>
+          </div>
+          <div class="breakdown-grid" style="margin-top:.8rem;">
+            <div>
+              <div class="small-label">Issues</div>
+              <ul class="comparison-list">{issue_rows}</ul>
+            </div>
+            <div>
+              <div class="small-label">Recovery</div>
+              <ul class="comparison-list">{recovery_rows}</ul>
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_curtain_up(report) -> None:
