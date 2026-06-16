@@ -13,6 +13,8 @@ def test_public_release_files_exist():
         "Analyze-Paper.bat",
         "requirements.txt",
         "requirements-ai.txt",
+        "result-packs/README.md",
+        "result-packs/landmark-paper-starter.json",
         "docs/RELEASE_CHECKLIST.md",
         "docs/images/gauntlet-summary.png",
         "docs/images/gauntlet-breakdown.png",
@@ -105,3 +107,14 @@ def test_release_checklist_includes_first_run_and_launcher_log_checks():
     assert "System Check" in checklist
     assert "Document Extraction Quality" in checklist
     assert "Reviewer Packet" in checklist
+    assert "result-pack" in checklist.lower()
+    assert "metadata-only" in checklist.lower()
+
+
+def test_readme_documents_metadata_only_result_packs():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "Result Packs" in readme
+    assert "metadata-only" in readme
+    assert "not the original uploaded paper files" in readme
+    assert "result-packs\\landmark-paper-starter.json" in readme

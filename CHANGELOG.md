@@ -12,6 +12,11 @@
 - Added document extraction-quality scoring for real-paper uploads, including
   warnings for scanned-looking PDFs, very short extraction, missing source
   anchors, fragmented text, symbol-heavy extraction, and reference-heavy text.
+- Added metadata-only Result Packs for repeatable public demos, including a
+  landmark-paper starter manifest that stores links and expected filenames but
+  no bundled paper PDFs or copied paper text.
+- Added CLI support for `--result-pack`, producing JSON, Markdown, and ZIP
+  result-pack bundles from user-supplied local paper files.
 
 ### Changed
 

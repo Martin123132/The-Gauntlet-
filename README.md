@@ -94,6 +94,12 @@ The same path is available from the command line:
 .venv\Scripts\python -m gauntlet_core.cli path\to\papers --out gauntlet-reports
 ```
 
+You can also run a metadata-only result pack:
+
+```bash
+.venv\Scripts\python -m gauntlet_core.cli --result-pack result-packs\landmark-paper-starter.json --papers-dir papers --out gauntlet-reports
+```
+
 ## What the Verdict Means
 
 - `RESOLVES`: the paper's detected claims include mechanisms and enough
@@ -219,6 +225,28 @@ findings, or low confidence before exporting.
 Use `Load Demo Batch` to run the built-in synthetic benchmark papers as a
 ready-made batch scan. It is useful for testing the table, filters, sorting, and
 exports before uploading private documents.
+
+## Result Packs
+
+Result packs are repeatable demo manifests for public comparison posts, lab
+checks, or release QA. The repo includes
+`result-packs/landmark-paper-starter.json`, a metadata-only starter list of
+famous landmark papers. It contains titles, expected filenames, source links,
+and notes, but no PDFs, copied paper text, or downloaded source files.
+
+To use it, place your own lawful local copies in a `papers/` folder using the
+expected filenames from the manifest, then run:
+
+```bash
+.venv\Scripts\python -m gauntlet_core.cli --result-pack result-packs\landmark-paper-starter.json --papers-dir papers --out gauntlet-reports
+```
+
+The command writes `gauntlet-result-pack-summary.json`,
+`gauntlet-result-pack-summary.md`, and `gauntlet-result-pack-bundle.zip`. The
+bundle includes Gauntlet reports, source snippets, anchors, summaries, and an
+offline index, but not the original uploaded paper files or API keys. Links in
+the starter manifest are convenience metadata only; verify source access and
+redistribution terms before sharing any paper file.
 
 ## Share Demo Kit
 

@@ -9,6 +9,8 @@ Use this checklist before merging `non-ai-app-v1` into `main` or publishing a re
 - [ ] Confirm `run_calibration_suite(strict=True)` passes the release gate thresholds.
 - [ ] Confirm `Start-Gauntlet.bat` installs `requirements.txt`, not optional AI packages.
 - [ ] Confirm `Start-Gauntlet.bat` prints the launcher log path under `.gauntlet/logs/`.
+- [ ] Run the metadata-only result-pack smoke command:
+  `.venv\Scripts\python.exe -m gauntlet_core.cli --result-pack result-packs\landmark-paper-starter.json --papers-dir papers --out gauntlet-reports`.
 
 ## Windows Download ZIP Check
 
@@ -40,5 +42,6 @@ Use this checklist before merging `non-ai-app-v1` into `main` or publishing a re
 
 - [ ] README screenshots render on GitHub.
 - [ ] README clearly says the normal checker is local and does not need an API key.
+- [ ] README explains Result Packs as metadata-only and user-supplied-paper only.
 - [ ] Optional AI setup points to `requirements-ai.txt`.
 - [ ] Legacy Colab files are still present under `legacy/colab-originals/`.

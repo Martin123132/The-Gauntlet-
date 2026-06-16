@@ -34,6 +34,16 @@ from .evidence_map import (
 )
 from .models import AnalysisReport, DocumentQualityIssue, DocumentQualityReport, SourceSpan
 from .report_bundle import build_report_bundle
+from .result_packs import (
+    ResultPackEntry,
+    ResultPackManifest,
+    ResultPackRun,
+    analyze_result_pack_path,
+    build_result_pack_bundle,
+    load_result_pack_manifest,
+    result_pack_to_markdown,
+    run_result_pack,
+)
 from .refinement import ProviderSelection, RefinementReport, run_provider_refinement, run_refinement
 from .repair_workshop import RepairStep, build_repair_steps, repair_workshop_to_markdown
 from .reviewer_packet import build_reviewer_packet_bundle, reviewer_packet_to_html, reviewer_packet_to_markdown
@@ -94,6 +104,9 @@ __all__ = [
     "ProviderSelection",
     "RefinementReport",
     "RepairStep",
+    "ResultPackEntry",
+    "ResultPackManifest",
+    "ResultPackRun",
     "RevisionRecheckResult",
     "ReviewerAction",
     "SavedRun",
@@ -106,6 +119,7 @@ __all__ = [
     "SystemCheckReport",
     "analyze_loaded_document",
     "analyze_paper_text",
+    "analyze_result_pack_path",
     "action_plan_to_markdown",
     "assess_document_quality",
     "batch_items_to_csv",
@@ -117,6 +131,7 @@ __all__ = [
     "build_batch_report_bundle",
     "build_claim_evidence_map",
     "build_report_bundle",
+    "build_result_pack_bundle",
     "build_reviewer_packet_bundle",
     "build_demo_share_pack",
     "build_demo_share_summary",
@@ -133,9 +148,11 @@ __all__ = [
     "list_saved_runs",
     "load_document_from_bytes",
     "load_document_from_path",
+    "load_result_pack_manifest",
     "load_saved_run",
     "run_benchmark_sample",
     "run_calibration_suite",
+    "run_result_pack",
     "run_provider_refinement",
     "run_refinement",
     "save_analysis_run",
@@ -143,6 +160,7 @@ __all__ = [
     "source_review_to_markdown",
     "source_reader_to_markdown",
     "repair_workshop_to_markdown",
+    "result_pack_to_markdown",
     "reviewer_packet_to_html",
     "reviewer_packet_to_markdown",
     "recheck_repair_revision",
