@@ -34,6 +34,11 @@ First run tip: the Summary page shows a `Start Here` panel until a report is
 loaded. Use `Try Sample Paper` to confirm the launcher, local rules, and
 workspace are working before uploading a private paper.
 
+Upload tip: the upload rail shows an `Extraction Preview` before analysis with
+character, word, anchor, page, and quality checks. If a PDF is scanned, empty,
+or badly fragmented, use `Paste Text Instead` to run the same local checker on
+copied text without saving the original file.
+
 ## Screenshots
 
 ![The Gauntlet summary dashboard](docs/images/gauntlet-summary.png)
@@ -119,6 +124,8 @@ The verdict is a review aid, not a replacement for expert peer review.
 - document extraction quality, including warnings for scanned-looking PDFs,
   very short extraction, fragmented OCR-style text, symbol-heavy text, missing
   source anchors, and reference-heavy uploads
+- pre-analysis extraction preview and a paste-text fallback for scanned or
+  broken PDF extraction
 - explicit resolution claims
 - false-positive guardrails for tentative hypotheses, prior-work comparisons,
   scoped limitations, reference-like text, and unsupported equation/citation

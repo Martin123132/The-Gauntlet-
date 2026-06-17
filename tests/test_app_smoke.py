@@ -20,8 +20,10 @@ def test_streamlit_app_renders_primary_controls():
     assert app.file_uploader
     assert any(button.label == "Analyze Paper" for button in app.button)
     assert any(button.label == "Try Sample Paper" for button in app.button)
+    assert any(toggle.label == "Paste Text Instead" for toggle in app.toggle)
     assert any("The Gauntlet" in item.value for item in app.markdown)
     assert any("Start Here" in item.value for item in app.markdown)
+    assert any("Extraction Preview" in item.value for item in app.markdown)
 
 
 def test_streamlit_start_here_sample_button_produces_report():
@@ -50,6 +52,31 @@ def test_streamlit_sample_workflow_produces_report():
     report = app.session_state["report"]
     assert report.verdict in {"RESOLVES", "PARTIAL", "FAILS", "CREATES_NEW_PARADOXES"}
     assert "The Gauntlet Report" in report.to_markdown()
+    assert list_saved_runs()
+
+
+def test_streamlit_paste_text_workflow_produces_report():
+    app = AppTest.from_file("app.py")
+    app.run(timeout=20)
+
+    paste_toggle = next(toggle for toggle in app.toggle if toggle.label == "Paste Text Instead")
+    paste_toggle.set_value(True)
+    app.run(timeout=20)
+
+    source_name = next(text_input for text_input in app.text_input if text_input.label == "Pasted source name")
+    source_name.set_value("copied-paper.txt")
+    paper_text = next(area for area in app.text_area if area.label == "Paper text")
+    paper_text.set_value(
+        "The copied paper resolves the anomaly because the mechanism uses 12 measured observations and a reproducible method."
+    )
+    analyze_button = next(button for button in app.button if button.label == "Analyze Paper")
+    analyze_button.click()
+    app.run(timeout=20)
+
+    assert not app.exception
+    report = app.session_state["report"]
+    assert report.source_name == "copied-paper.txt"
+    assert report.verdict in {"RESOLVES", "PARTIAL", "FAILS", "CREATES_NEW_PARADOXES"}
     assert list_saved_runs()
 
 

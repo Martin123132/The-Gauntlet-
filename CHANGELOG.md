@@ -23,6 +23,9 @@
 - Added a `Pack Builder` workflow for creating custom metadata-only manifests,
   importing existing manifest JSON, exporting the active manifest, and validating
   editable manifest rows before a pack run.
+- Added upload `Extraction Preview` with pre-analysis quality metrics, extracted
+  text samples, rescue suggestions, and a `Paste Text Instead` fallback for
+  scanned or broken PDF extraction.
 
 ### Changed
 

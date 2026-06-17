@@ -104,6 +104,8 @@ def test_release_checklist_includes_first_run_and_launcher_log_checks():
 
     assert "launcher log" in checklist.lower()
     assert "Try Sample Paper" in checklist
+    assert "Extraction Preview" in checklist
+    assert "Paste Text Instead" in checklist
     assert "System Check" in checklist
     assert "Document Extraction Quality" in checklist
     assert "Reviewer Packet" in checklist
@@ -119,6 +121,8 @@ def test_readme_documents_metadata_only_result_packs():
     assert "Result Packs" in readme
     assert "The `Result Packs` page" in readme
     assert "Pack Builder" in readme
+    assert "Extraction Preview" in readme
+    assert "Paste Text Instead" in readme
     assert "metadata-only" in readme
     assert "not the original uploaded paper files" in readme
     assert "result-packs\\landmark-paper-starter.json" in readme

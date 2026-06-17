@@ -22,6 +22,11 @@ from gauntlet_core.batch import (
 from gauntlet_core.benchmarks import list_benchmark_samples, run_benchmark_sample, run_calibration_suite
 from gauntlet_core.document_loader import SUPPORTED_EXTENSIONS, load_document_from_bytes
 from gauntlet_core.evidence_map import build_claim_evidence_map, claim_evidence_map_to_markdown
+from gauntlet_core.extraction_preview import (
+    ExtractionPreview,
+    preview_document_extraction,
+    preview_pasted_text,
+)
 from gauntlet_core.models import source_reference
 from gauntlet_core.refinement import (
     DEFAULT_CHALLENGER_PROVIDER,
@@ -1228,13 +1233,28 @@ def render_upload_panel() -> None:
             label_visibility="collapsed",
         )
 
-        render_document_info(upload)
+        upload_preview = build_upload_preview(upload)
+        render_document_info(upload, upload_preview)
+        render_extraction_preview(upload_preview)
 
         st.markdown('<div class="options-card">', unsafe_allow_html=True)
         st.markdown('<div class="small-label">Analysis options</div>', unsafe_allow_html=True)
         st.selectbox("Rule set", ["Standard (Default)"], label_visibility="visible")
         st.selectbox("Strictness", ["Normal", "Strict", "Lenient"], label_visibility="visible")
         use_sample = st.toggle("Use built-in sample paper", value=False)
+        paste_mode = st.toggle("Paste Text Instead", value=False)
+        pasted_text = ""
+        pasted_source_name = "pasted-paper.txt"
+        pasted_preview = None
+        if paste_mode:
+            pasted_source_name = st.text_input("Pasted source name", value="pasted-paper.txt")
+            pasted_text = st.text_area(
+                "Paper text",
+                height=180,
+                placeholder="Paste copied paper text here when PDF extraction is scanned, empty, or badly fragmented.",
+            )
+            pasted_preview = preview_pasted_text(pasted_source_name, pasted_text)
+            render_extraction_preview(pasted_preview, title="Pasted Text Preview")
         st.markdown("</div>", unsafe_allow_html=True)
 
         analyze_clicked = st.button("Analyze Paper", type="primary", use_container_width=True)
@@ -1245,13 +1265,27 @@ def render_upload_panel() -> None:
                     run_sample_analysis()
                     st.rerun()
                     return
+                elif paste_mode:
+                    if not pasted_text.strip():
+                        render_upload_error(
+                            "Paste paper text before analyzing.",
+                            "Paste copied text from a PDF viewer, browser page, repository page, or text export, then run analysis again.",
+                        )
+                        return
+                    report = analyze_paper_text(pasted_text, source_name=pasted_source_name.strip() or "pasted-paper.txt")
+                    paper_text = pasted_text
+                    run_kind = "paste"
                 elif upload is not None:
-                    loaded_document = load_document_from_bytes(upload.name, upload.getvalue())
+                    loaded_document = (
+                        upload_preview.document
+                        if upload_preview and upload_preview.document
+                        else load_document_from_bytes(upload.name, upload.getvalue())
+                    )
                     paper_text = loaded_document.text
                     if not paper_text.strip():
                         render_upload_error(
                             "No readable text was found in that file.",
-                            "The parser opened the file, but extraction returned no text. Try exporting the paper as text, checking whether the PDF is scanned images, or running System Check.",
+                            "The parser opened the file, but extraction returned no text. Try Paste Text Instead, export the paper as text, or check whether the PDF is scanned images.",
                         )
                         return
                     report = analyze_loaded_document(loaded_document)
@@ -1285,20 +1319,75 @@ def render_upload_error(message: str, detail: str = "") -> None:
             st.code(detail, language="text")
 
 
-def render_document_info(upload) -> None:
+def build_upload_preview(upload) -> ExtractionPreview | None:
+    if upload is None:
+        return None
+    return preview_document_extraction(upload.name, upload.getvalue())
+
+
+def render_document_info(upload, preview: ExtractionPreview | None = None) -> None:
     filename = upload.name if upload else "No file selected"
     size = f"{upload.size / 1024:.1f} KB" if upload else "-"
+    status = preview.status.upper() if preview else "-"
     st.markdown(
         f"""
         <div class="document-card">
           <div class="small-label">Document info</div>
           <div class="doc-row"><span>File</span><strong>{html.escape(filename)}</strong></div>
           <div class="doc-row"><span>Size</span><strong>{html.escape(size)}</strong></div>
+          <div class="doc-row"><span>Extraction</span><strong>{html.escape(status)}</strong></div>
           <div class="doc-row"><span>Supported</span><strong>PDF, TXT, DOCX, MD</strong></div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+
+def render_extraction_preview(preview: ExtractionPreview | None, title: str = "Extraction Preview") -> None:
+    if preview is None:
+        st.markdown(
+            f"""
+            <div class="document-card">
+              <div class="small-label">{html.escape(title)}</div>
+              <div class="empty-detail">Upload a paper to preview extraction quality before analysis. If a PDF is scanned or empty, use Paste Text Instead.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        return
+
+    quality = preview.quality
+    issue_rows = "".join(
+        f"<li><strong>{html.escape(issue.type)}</strong> ({html.escape(issue.severity)}): {html.escape(issue.message)}</li>"
+        for issue in quality.issues
+    ) or "<li>No extraction-quality issues were detected.</li>"
+    suggestion_rows = "".join(f"<li>{html.escape(suggestion)}</li>" for suggestion in preview.suggestions)
+    error_row = (
+        f'<div class="empty-detail"><strong>Loader error:</strong> {html.escape(preview.error)}</div>'
+        if preview.error
+        else ""
+    )
+    st.markdown(
+        f"""
+        <div class="document-card">
+          <div class="small-label">{html.escape(title)}</div>
+          <div class="doc-row"><span>Status</span><strong>{html.escape(quality.status.upper())}</strong></div>
+          <div class="doc-row"><span>Score</span><strong>{quality.score:.2f}/1.00</strong></div>
+          <div class="doc-row"><span>Characters</span><strong>{quality.character_count}</strong></div>
+          <div class="doc-row"><span>Words</span><strong>{quality.word_count}</strong></div>
+          <div class="doc-row"><span>Anchors</span><strong>{quality.source_span_count}</strong></div>
+          <div class="doc-row"><span>Pages</span><strong>{preview.page_count or "n/a"}</strong></div>
+        </div>
+        {error_row}
+        """,
+        unsafe_allow_html=True,
+    )
+    if quality.status != "ok" or preview.error:
+        with st.expander("Extraction rescue suggestions", expanded=True):
+            st.markdown(f"**Issues**\n\n<ul>{issue_rows}</ul>", unsafe_allow_html=True)
+            st.markdown(f"**Try next**\n\n<ul>{suggestion_rows}</ul>", unsafe_allow_html=True)
+    with st.expander("Extracted text sample", expanded=quality.status == "ok"):
+        st.code(preview.text_preview or "No preview text available.", language="text")
 
 
 def render_empty_state() -> None:

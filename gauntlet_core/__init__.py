@@ -32,6 +32,7 @@ from .evidence_map import (
     build_claim_evidence_map,
     claim_evidence_map_to_markdown,
 )
+from .extraction_preview import ExtractionPreview, preview_document_extraction, preview_pasted_text
 from .models import AnalysisReport, DocumentQualityIssue, DocumentQualityReport, SourceSpan
 from .report_bundle import build_report_bundle
 from .result_packs import (
@@ -101,6 +102,7 @@ __all__ = [
     "DiagnosticItem",
     "DocumentQualityIssue",
     "DocumentQualityReport",
+    "ExtractionPreview",
     "LoadedDocument",
     "ISSUE_REVIEW_STATUSES",
     "ProviderSelection",
@@ -153,6 +155,8 @@ __all__ = [
     "load_document_from_path",
     "load_result_pack_manifest",
     "load_saved_run",
+    "preview_document_extraction",
+    "preview_pasted_text",
     "run_benchmark_sample",
     "run_calibration_suite",
     "run_result_pack",

@@ -25,7 +25,9 @@ Use this checklist before merging `non-ai-app-v1` into `main` or publishing a re
 ## App Smoke Check
 
 - [ ] Confirm a fresh Summary page shows the `Start Here` panel.
+- [ ] Confirm the upload rail shows `Extraction Preview` and `Paste Text Instead` before analysis.
 - [ ] Press `Try Sample Paper` and confirm a verdict appears.
+- [ ] Paste text through `Paste Text Instead`, run analysis, and confirm a verdict appears.
 - [ ] Run the built-in sample paper.
 - [ ] Confirm the Summary page shows a verdict.
 - [ ] Confirm the Breakdown page shows Document Extraction Quality.
