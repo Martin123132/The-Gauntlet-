@@ -40,7 +40,7 @@ class OcrReadinessReport:
         package_detail = ", ".join(
             f"{package.package_name}: {'available' if package.available else 'missing'}"
             for package in self.packages
-        )
+        ) or "none checked"
         tesseract_detail = self.tesseract_path or "not found on PATH"
         return f"OCR status {self.status}. Tesseract: {tesseract_detail}. Packages: {package_detail}."
 
@@ -61,13 +61,18 @@ class OcrReadinessReport:
         }
 
 
+@lru_cache(maxsize=16)
 def collect_ocr_readiness(
     tesseract_path: str | None = None,
     package_specs: tuple[tuple[str, str], ...] = OPTIONAL_OCR_PACKAGES,
 ) -> OcrReadinessReport:
     resolved_tesseract = tesseract_path if tesseract_path is not None else shutil.which("tesseract")
     packages = tuple(
-        OcrPackageStatus(package_name=package_name, import_name=import_name, available=util.find_spec(import_name) is not None)
+        OcrPackageStatus(
+            package_name=package_name,
+            import_name=import_name,
+            available=util.find_spec(import_name) is not None,
+        )
         for package_name, import_name in package_specs
     )
     has_tesseract = bool(resolved_tesseract)

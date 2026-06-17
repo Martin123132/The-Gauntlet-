@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+No changes yet.
+
+## v0.27.0 - Intake, Result Packs, and OCR Readiness
+
+This release hardens the GitHub ZIP/local-app path for real papers: local
+diagnostics, extraction quality, metadata-only result packs, custom pack
+building, extraction rescue, paste-text fallback, and optional OCR readiness.
+
 ### Added
 
 - Added an in-app `System Check` page with local diagnostics for Python,
