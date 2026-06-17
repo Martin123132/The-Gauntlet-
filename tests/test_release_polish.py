@@ -16,6 +16,7 @@ def test_public_release_files_exist():
         "result-packs/README.md",
         "result-packs/landmark-paper-starter.json",
         "docs/RELEASE_CHECKLIST.md",
+        "docs/OCR_SETUP.md",
         "docs/images/gauntlet-summary.png",
         "docs/images/gauntlet-breakdown.png",
         "docs/images/gauntlet-workspace.png",
@@ -106,6 +107,7 @@ def test_release_checklist_includes_first_run_and_launcher_log_checks():
     assert "Try Sample Paper" in checklist
     assert "Extraction Preview" in checklist
     assert "Paste Text Instead" in checklist
+    assert "OCR readiness" in checklist
     assert "System Check" in checklist
     assert "Document Extraction Quality" in checklist
     assert "Reviewer Packet" in checklist
@@ -123,6 +125,8 @@ def test_readme_documents_metadata_only_result_packs():
     assert "Pack Builder" in readme
     assert "Extraction Preview" in readme
     assert "Paste Text Instead" in readme
+    assert "OCR_SETUP.md" in readme
+    assert "OCR readiness" in readme
     assert "metadata-only" in readme
     assert "not the original uploaded paper files" in readme
     assert "result-packs\\landmark-paper-starter.json" in readme

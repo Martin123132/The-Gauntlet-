@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from gauntlet_core.extraction_preview import preview_document_extraction, preview_pasted_text
+from gauntlet_core.ocr import OcrReadinessReport
 
 
 def test_preview_document_extraction_reports_usable_text():
@@ -17,12 +18,28 @@ def test_preview_document_extraction_reports_usable_text():
 
 
 def test_preview_document_extraction_returns_rescue_for_unsupported_file():
-    preview = preview_document_extraction("paper.csv", b"title,body\nx,y")
+    preview = preview_document_extraction(
+        "paper.csv",
+        b"title,body\nx,y",
+        ocr_readiness=OcrReadinessReport(status="not_installed"),
+    )
 
     assert not preview.can_analyze
     assert preview.status == "fail"
     assert "Unsupported file type" in preview.error
     assert any("PDF, DOCX, TXT, or MD" in suggestion for suggestion in preview.suggestions)
+    assert any("OCR is not installed locally" in suggestion for suggestion in preview.suggestions)
+
+
+def test_preview_document_extraction_mentions_available_ocr_when_extraction_fails():
+    preview = preview_document_extraction(
+        "broken.pdf",
+        b"not really a pdf",
+        ocr_readiness=OcrReadinessReport(status="available", tesseract_path="tesseract"),
+    )
+
+    assert preview.status == "fail"
+    assert any("OCR appears available locally" in suggestion for suggestion in preview.suggestions)
 
 
 def test_preview_pasted_text_gives_paste_source_and_rescue_guidance():

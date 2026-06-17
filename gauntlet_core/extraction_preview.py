@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from .document_loader import LoadedDocument, build_source_spans, load_document_from_bytes
 from .document_quality import assess_document_quality
 from .models import DocumentQualityReport
+from .ocr import OcrReadinessReport
 
 
 @dataclass(frozen=True)
@@ -23,7 +24,11 @@ class ExtractionPreview:
         return self.status in {"ok", "warn"} and bool(self.document and self.document.text.strip())
 
 
-def preview_document_extraction(filename: str, data: bytes) -> ExtractionPreview:
+def preview_document_extraction(
+    filename: str,
+    data: bytes,
+    ocr_readiness: OcrReadinessReport | None = None,
+) -> ExtractionPreview:
     try:
         document = load_document_from_bytes(filename, data)
     except Exception as exc:
@@ -33,7 +38,7 @@ def preview_document_extraction(filename: str, data: bytes) -> ExtractionPreview
             status="fail",
             quality=quality,
             error=str(exc),
-            suggestions=extraction_rescue_suggestions(quality, str(exc)),
+            suggestions=extraction_rescue_suggestions(quality, str(exc), ocr_readiness),
         )
 
     quality = assess_document_quality(
@@ -49,12 +54,16 @@ def preview_document_extraction(filename: str, data: bytes) -> ExtractionPreview
         quality=quality,
         text_preview=compact_preview(document.text),
         page_count=len(page_numbers),
-        suggestions=extraction_rescue_suggestions(quality),
+        suggestions=extraction_rescue_suggestions(quality, ocr_readiness=ocr_readiness),
         document=document,
     )
 
 
-def preview_pasted_text(source_name: str, text: str) -> ExtractionPreview:
+def preview_pasted_text(
+    source_name: str,
+    text: str,
+    ocr_readiness: OcrReadinessReport | None = None,
+) -> ExtractionPreview:
     filename = source_name.strip() or "pasted-paper.txt"
     source_spans = build_source_spans(text)
     document = LoadedDocument(
@@ -75,12 +84,16 @@ def preview_pasted_text(source_name: str, text: str) -> ExtractionPreview:
         status=quality.status,
         quality=quality,
         text_preview=compact_preview(text),
-        suggestions=extraction_rescue_suggestions(quality),
+        suggestions=extraction_rescue_suggestions(quality, ocr_readiness=ocr_readiness),
         document=document,
     )
 
 
-def extraction_rescue_suggestions(quality: DocumentQualityReport, error: str = "") -> tuple[str, ...]:
+def extraction_rescue_suggestions(
+    quality: DocumentQualityReport,
+    error: str = "",
+    ocr_readiness: OcrReadinessReport | None = None,
+) -> tuple[str, ...]:
     suggestions: list[str] = []
     for issue in quality.issues:
         if issue.recovery and issue.recovery not in suggestions:
@@ -88,6 +101,8 @@ def extraction_rescue_suggestions(quality: DocumentQualityReport, error: str = "
     if error and "unsupported file type" in error.lower():
         suggestions.append("Upload a PDF, DOCX, TXT, or MD file.")
     if quality.status in {"warn", "fail"}:
+        if ocr_readiness:
+            suggestions.append(ocr_status_suggestion(ocr_readiness))
         suggestions.extend(
             [
                 "If the paper is a scanned PDF, use OCR first or upload a selectable-text version.",
@@ -98,6 +113,14 @@ def extraction_rescue_suggestions(quality: DocumentQualityReport, error: str = "
     if not suggestions:
         suggestions.append("Extraction looks usable. Continue to analysis, then inspect Source Reader for exact snippets.")
     return tuple(dict.fromkeys(suggestions))
+
+
+def ocr_status_suggestion(readiness: OcrReadinessReport) -> str:
+    if readiness.status == "available":
+        return "OCR appears available locally. For scanned PDFs, run OCR outside The Gauntlet or wait for optional OCR processing in a future release."
+    if readiness.status == "partial":
+        return "OCR is partially installed locally. Finish installing Tesseract and Python OCR packages before relying on scanned-PDF recovery."
+    return "OCR is not installed locally. Install Tesseract only if you need scanned-PDF recovery; selectable-text PDFs, DOCX, TXT, and pasted text still work."
 
 
 def compact_preview(text: str, limit: int = 900) -> str:

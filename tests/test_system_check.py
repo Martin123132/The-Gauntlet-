@@ -22,10 +22,13 @@ def test_system_check_reports_runtime_and_export_data(tmp_path):
     assert report.overall_status in {"ok", "warn", "fail"}
     assert payload["repo_path"] == str(repo.resolve())
     assert payload["workspace_path"] == str(workspace.resolve())
+    assert payload["ocr_readiness"]["status"] in {"available", "partial", "not_installed"}
     assert "The Gauntlet System Check" in markdown
+    assert "OCR readiness" in markdown
     assert "Start-Gauntlet.bat" in markdown
     assert "uploaded paper files" in markdown
     assert any(item.name == "Launcher log" and item.status == "ok" for item in report.items)
+    assert any(item.name == "Optional OCR readiness" for item in report.items)
 
 
 def test_system_check_surfaces_missing_public_files(tmp_path):

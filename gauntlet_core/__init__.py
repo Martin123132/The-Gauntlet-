@@ -34,6 +34,7 @@ from .evidence_map import (
 )
 from .extraction_preview import ExtractionPreview, preview_document_extraction, preview_pasted_text
 from .models import AnalysisReport, DocumentQualityIssue, DocumentQualityReport, SourceSpan
+from .ocr import OcrPackageStatus, OcrReadinessReport, collect_ocr_readiness
 from .report_bundle import build_report_bundle
 from .result_packs import (
     ResultPackEntry,
@@ -105,6 +106,8 @@ __all__ = [
     "ExtractionPreview",
     "LoadedDocument",
     "ISSUE_REVIEW_STATUSES",
+    "OcrPackageStatus",
+    "OcrReadinessReport",
     "ProviderSelection",
     "RefinementReport",
     "RepairStep",
@@ -147,6 +150,7 @@ __all__ = [
     "build_source_reader_view",
     "claim_evidence_map_to_markdown",
     "collect_system_check",
+    "collect_ocr_readiness",
     "delete_saved_run",
     "filter_batch_items",
     "list_benchmark_samples",

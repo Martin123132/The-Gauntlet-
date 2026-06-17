@@ -318,6 +318,7 @@ def test_streamlit_system_check_page_renders_diagnostics():
     assert not app.exception
     assert any("System Check" in item.value for item in app.markdown)
     assert any("Local Diagnostics" in item.value for item in app.markdown)
+    assert any("OCR" in item.value for item in app.markdown)
     assert any("Diagnostics Export" in item.value for item in app.markdown)
     assert any("Copy diagnostics" == area.label for area in app.text_area)
 

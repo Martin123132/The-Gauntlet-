@@ -28,6 +28,7 @@ from gauntlet_core.extraction_preview import (
     preview_pasted_text,
 )
 from gauntlet_core.models import source_reference
+from gauntlet_core.ocr import collect_ocr_readiness
 from gauntlet_core.refinement import (
     DEFAULT_CHALLENGER_PROVIDER,
     DEFAULT_CRITIC_PROVIDER,
@@ -130,6 +131,11 @@ STARTER_RESULT_PACK = RESULT_PACKS_DIR / "landmark-paper-starter.json"
 @st.cache_resource
 def report_store() -> dict:
     return {}
+
+
+@st.cache_data(ttl=300)
+def cached_ocr_readiness():
+    return collect_ocr_readiness()
 
 
 CSS = """
@@ -1233,7 +1239,8 @@ def render_upload_panel() -> None:
             label_visibility="collapsed",
         )
 
-        upload_preview = build_upload_preview(upload)
+        ocr_readiness = cached_ocr_readiness()
+        upload_preview = build_upload_preview(upload, ocr_readiness)
         render_document_info(upload, upload_preview)
         render_extraction_preview(upload_preview)
 
@@ -1253,7 +1260,7 @@ def render_upload_panel() -> None:
                 height=180,
                 placeholder="Paste copied paper text here when PDF extraction is scanned, empty, or badly fragmented.",
             )
-            pasted_preview = preview_pasted_text(pasted_source_name, pasted_text)
+            pasted_preview = preview_pasted_text(pasted_source_name, pasted_text, ocr_readiness=ocr_readiness)
             render_extraction_preview(pasted_preview, title="Pasted Text Preview")
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1319,10 +1326,10 @@ def render_upload_error(message: str, detail: str = "") -> None:
             st.code(detail, language="text")
 
 
-def build_upload_preview(upload) -> ExtractionPreview | None:
+def build_upload_preview(upload, ocr_readiness=None) -> ExtractionPreview | None:
     if upload is None:
         return None
-    return preview_document_extraction(upload.name, upload.getvalue())
+    return preview_document_extraction(upload.name, upload.getvalue(), ocr_readiness=ocr_readiness)
 
 
 def render_document_info(upload, preview: ExtractionPreview | None = None) -> None:
@@ -2871,6 +2878,7 @@ def render_system_check_page() -> None:
           <div class="stat-tile"><div class="stat-title">OK</div><div class="stat-number">{counts.get("ok", 0)}</div><div class="stat-note">Ready checks</div></div>
           <div class="stat-tile"><div class="stat-title">Warnings</div><div class="stat-number">{counts.get("warn", 0)}</div><div class="stat-note">Review if stuck</div></div>
           <div class="stat-tile"><div class="stat-title">Failures</div><div class="stat-number">{counts.get("fail", 0)}</div><div class="stat-note">Needs fixing</div></div>
+          <div class="stat-tile"><div class="stat-title">OCR</div><div class="stat-number">{html.escape(report.ocr_readiness.status.replace("_", " ").upper())}</div><div class="stat-note">Optional scanned-PDF support</div></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -2886,6 +2894,7 @@ def render_system_check_page() -> None:
               <div class="doc-row"><span>Repo</span><strong>{html.escape(report.repo_path)}</strong></div>
               <div class="doc-row"><span>Workspace</span><strong>{html.escape(report.workspace_path)}</strong></div>
               <div class="doc-row"><span>Launcher log</span><strong>{html.escape(report.launcher_log_path)}</strong></div>
+              <div class="doc-row"><span>OCR</span><strong>{html.escape(report.ocr_readiness.detail)}</strong></div>
             </div>
             """,
             unsafe_allow_html=True,

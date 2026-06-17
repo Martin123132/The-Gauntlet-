@@ -26,6 +26,7 @@ Use this checklist before merging `non-ai-app-v1` into `main` or publishing a re
 
 - [ ] Confirm a fresh Summary page shows the `Start Here` panel.
 - [ ] Confirm the upload rail shows `Extraction Preview` and `Paste Text Instead` before analysis.
+- [ ] Confirm `System Check` shows optional OCR readiness and diagnostics exports include OCR status.
 - [ ] Press `Try Sample Paper` and confirm a verdict appears.
 - [ ] Paste text through `Paste Text Instead`, run analysis, and confirm a verdict appears.
 - [ ] Run the built-in sample paper.

@@ -8,6 +8,7 @@ import json
 import platform
 import sys
 
+from .ocr import OcrReadinessReport, collect_ocr_readiness
 from .workspace import workspace_runs_dir
 
 
@@ -46,6 +47,7 @@ class SystemCheckReport:
     repo_path: str
     workspace_path: str
     launcher_log_path: str
+    ocr_readiness: OcrReadinessReport
     items: tuple[DiagnosticItem, ...]
 
     @property
@@ -72,6 +74,7 @@ class SystemCheckReport:
             "repo_path": self.repo_path,
             "workspace_path": self.workspace_path,
             "launcher_log_path": self.launcher_log_path,
+            "ocr_readiness": self.ocr_readiness.to_dict(),
             "items": [item.to_dict() for item in self.items],
         }
 
@@ -90,6 +93,7 @@ class SystemCheckReport:
             f"- Repo path: `{self.repo_path}`",
             f"- Workspace path: `{self.workspace_path}`",
             f"- Launcher log: `{self.launcher_log_path}`",
+            f"- OCR readiness: **{self.ocr_readiness.status}**",
             "",
             "## Checks",
             "",
@@ -119,6 +123,7 @@ def collect_system_check(
     repo = Path(repo_path).resolve() if repo_path is not None else Path(__file__).resolve().parents[1]
     workspace = Path(workspace_path).resolve() if workspace_path is not None else workspace_runs_dir().resolve()
     launcher_log = repo / ".gauntlet" / "logs" / "Start-Gauntlet.log"
+    ocr_readiness = collect_ocr_readiness()
     items: list[DiagnosticItem] = []
     items.append(python_version_check())
     items.append(virtual_environment_check())
@@ -126,6 +131,7 @@ def collect_system_check(
     items.extend(public_file_checks(repo))
     items.append(workspace_check(workspace))
     items.append(launcher_log_check(launcher_log))
+    items.append(optional_ocr_check(ocr_readiness))
     items.append(optional_ai_check(repo))
     return SystemCheckReport(
         app_version=APP_VERSION,
@@ -135,6 +141,7 @@ def collect_system_check(
         repo_path=str(repo),
         workspace_path=str(workspace),
         launcher_log_path=str(launcher_log),
+        ocr_readiness=ocr_readiness,
         items=tuple(items),
     )
 
@@ -230,6 +237,12 @@ def launcher_log_check(launcher_log: Path) -> DiagnosticItem:
     size_kb = launcher_log.stat().st_size / 1024
     modified = datetime.fromtimestamp(launcher_log.stat().st_mtime).isoformat(timespec="seconds")
     return DiagnosticItem("Launcher log", "ok", f"Found {launcher_log} ({size_kb:.1f} KB, modified {modified}).")
+
+
+def optional_ocr_check(readiness: OcrReadinessReport) -> DiagnosticItem:
+    if readiness.status == "available":
+        return DiagnosticItem("Optional OCR readiness", "ok", readiness.detail, readiness.recovery)
+    return DiagnosticItem("Optional OCR readiness", "warn", readiness.detail, readiness.recovery)
 
 
 def optional_ai_check(repo: Path) -> DiagnosticItem:

@@ -39,6 +39,11 @@ character, word, anchor, page, and quality checks. If a PDF is scanned, empty,
 or badly fragmented, use `Paste Text Instead` to run the same local checker on
 copied text without saving the original file.
 
+OCR note: OCR is optional and not part of the default install. The `System
+Check` page detects whether local OCR tools are available and extraction rescue
+tips will mention that status for scanned-looking PDFs. See
+[`docs/OCR_SETUP.md`](docs/OCR_SETUP.md) for setup notes.
+
 ## Screenshots
 
 ![The Gauntlet summary dashboard](docs/images/gauntlet-summary.png)
@@ -126,6 +131,7 @@ The verdict is a review aid, not a replacement for expert peer review.
   source anchors, and reference-heavy uploads
 - pre-analysis extraction preview and a paste-text fallback for scanned or
   broken PDF extraction
+- optional OCR readiness detection in System Check and extraction rescue tips
 - explicit resolution claims
 - false-positive guardrails for tentative hypotheses, prior-work comparisons,
   scoped limitations, reference-like text, and unsupported equation/citation

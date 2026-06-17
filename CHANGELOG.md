@@ -26,6 +26,8 @@
 - Added upload `Extraction Preview` with pre-analysis quality metrics, extracted
   text samples, rescue suggestions, and a `Paste Text Instead` fallback for
   scanned or broken PDF extraction.
+- Added optional OCR readiness detection for Tesseract and Python OCR packages,
+  with System Check export data and extraction rescue guidance.
 
 ### Changed
 
