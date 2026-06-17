@@ -20,6 +20,9 @@
 - Added the `Result Packs` app page for selecting the starter manifest,
   uploading matching local paper copies, running the pack, opening individual
   reports, and exporting JSON, Markdown, or ZIP result-pack bundles.
+- Added a `Pack Builder` workflow for creating custom metadata-only manifests,
+  importing existing manifest JSON, exporting the active manifest, and validating
+  editable manifest rows before a pack run.
 
 ### Changed
 

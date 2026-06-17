@@ -5,6 +5,7 @@ from html import escape
 from io import BytesIO
 import json
 from pathlib import Path
+import re
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from .analysis import analyze_loaded_document
@@ -107,6 +108,75 @@ class ResultPackManifest:
 
     def to_json(self) -> str:
         return json.dumps(self.to_dict(), indent=2)
+
+
+def build_result_pack_manifest(
+    title: str,
+    description: str,
+    rows: list[dict[str, object]],
+    pack_id: str = "",
+    privacy_note: str = DEFAULT_PRIVACY_NOTE,
+) -> ResultPackManifest:
+    """Build and validate a manifest from editable UI rows."""
+    clean_title = title.strip()
+    clean_pack_id = slugify(pack_id or clean_title or "custom-result-pack")
+    entries: list[dict[str, object]] = []
+    used_ids: set[str] = set()
+    for row in rows:
+        entry = result_pack_entry_from_row(row, used_ids)
+        if entry:
+            entries.append(entry)
+    return ResultPackManifest.from_dict(
+        {
+            "schema_version": MANIFEST_SCHEMA_VERSION,
+            "id": clean_pack_id,
+            "title": clean_title,
+            "description": description.strip(),
+            "privacy_note": privacy_note.strip() or DEFAULT_PRIVACY_NOTE,
+            "entries": entries,
+        }
+    )
+
+
+def result_pack_entry_from_row(row: dict[str, object], used_ids: set[str]) -> dict[str, object] | None:
+    title = str(row.get("title", "") or row.get("Title", "")).strip()
+    expected_filename = str(row.get("expected_filename", "") or row.get("Expected filename", "")).strip()
+    if not title and not expected_filename:
+        return None
+    if not title:
+        raise ValueError(f"Entry for {expected_filename or 'untitled paper'} is missing a title")
+    if not expected_filename:
+        raise ValueError(f"Entry for {title} is missing expected_filename")
+
+    raw_id = str(row.get("id", "") or row.get("ID", "")).strip()
+    entry_id = unique_slug(raw_id or f"{title}-{Path(expected_filename).stem}", used_ids)
+    return {
+        "id": entry_id,
+        "title": title,
+        "expected_filename": expected_filename,
+        "authors": str(row.get("authors", "") or row.get("Authors", "")).strip(),
+        "year": str(row.get("year", "") or row.get("Year", "")).strip(),
+        "category": str(row.get("category", "") or row.get("Category", "") or "custom").strip(),
+        "source_url": str(row.get("source_url", "") or row.get("Source link", "")).strip(),
+        "license_note": str(row.get("license_note", "") or row.get("License note", "")).strip(),
+        "why_include": str(row.get("why_include", "") or row.get("Why include", "")).strip(),
+    }
+
+
+def unique_slug(value: str, used_ids: set[str]) -> str:
+    base = slugify(value or "entry")
+    candidate = base
+    suffix = 2
+    while candidate in used_ids:
+        candidate = f"{base}-{suffix}"
+        suffix += 1
+    used_ids.add(candidate)
+    return candidate
+
+
+def slugify(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    return slug or "entry"
 
 
 @dataclass(frozen=True)

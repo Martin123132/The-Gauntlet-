@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import json
 from dataclasses import replace
 from pathlib import Path
 from urllib.parse import quote
@@ -52,6 +53,7 @@ from gauntlet_core.result_packs import (
     ResultPackManifest,
     ResultPackRun,
     build_result_pack_bundle,
+    build_result_pack_manifest,
     load_result_pack_manifest,
     result_pack_to_markdown,
     run_result_pack_file_bytes,
@@ -1101,6 +1103,14 @@ def active_result_pack_run():
     return report_store().get("result_pack_run")
 
 
+def active_result_pack_manifest() -> ResultPackManifest:
+    if "result_pack_manifest" in st.session_state:
+        return st.session_state["result_pack_manifest"]
+    manifest = load_selected_result_pack()
+    report_store()["result_pack_manifest"] = manifest
+    return manifest
+
+
 def save_report(report, paper_text: str, run_kind: str = "analysis", benchmark_result=None) -> None:
     st.session_state["report"] = report
     st.session_state["paper_text"] = paper_text
@@ -1162,6 +1172,13 @@ def save_batch_items(items: list[BatchScanItem]) -> None:
 def save_result_pack_run(run: ResultPackRun) -> None:
     st.session_state["result_pack_run"] = run
     report_store()["result_pack_run"] = run
+
+
+def save_result_pack_manifest(manifest: ResultPackManifest) -> None:
+    st.session_state["result_pack_manifest"] = manifest
+    st.session_state.pop("result_pack_run", None)
+    report_store()["result_pack_manifest"] = manifest
+    report_store().pop("result_pack_run", None)
 
 
 def render_topbar(active_page: str) -> None:
@@ -2341,7 +2358,7 @@ def batch_row_for_display(item: BatchScanItem) -> dict[str, str | int]:
 
 
 def render_result_packs_page() -> None:
-    manifest = load_selected_result_pack()
+    manifest = active_result_pack_manifest()
     st.markdown(
         """
         <div class="wide-detail-card">
@@ -2354,6 +2371,7 @@ def render_result_packs_page() -> None:
 
     left, right = st.columns([0.34, 0.66], gap="medium")
     with left:
+        render_result_pack_builder(manifest)
         render_result_pack_input(manifest)
     with right:
         run = active_result_pack_run()
@@ -2371,6 +2389,121 @@ def render_result_packs_page() -> None:
 
 def load_selected_result_pack() -> ResultPackManifest:
     return load_result_pack_manifest(STARTER_RESULT_PACK)
+
+
+def render_result_pack_builder(manifest: ResultPackManifest) -> None:
+    with st.container(border=True):
+        st.markdown('<div class="panel-title">Pack Builder</div>', unsafe_allow_html=True)
+        builder_tab, import_tab = st.tabs(["Create Pack", "Import / Export"])
+        with builder_tab:
+            pack_title = st.text_input(
+                "Pack title",
+                value=manifest.title if manifest.id != "landmark-paper-starter" else "My Result Pack",
+                key="custom_pack_title",
+            )
+            pack_description = st.text_area(
+                "Pack description",
+                value=(
+                    manifest.description
+                    if manifest.id != "landmark-paper-starter"
+                    else "A metadata-only result pack built in The Gauntlet."
+                ),
+                key="custom_pack_description",
+                height=92,
+            )
+            default_rows = result_pack_editor_rows(manifest if manifest.id != "landmark-paper-starter" else None)
+            edited_rows = st.data_editor(
+                default_rows,
+                num_rows="dynamic",
+                use_container_width=True,
+                hide_index=True,
+                key="custom_result_pack_rows",
+                column_config={
+                    "expected_filename": st.column_config.TextColumn("expected_filename", help="Use .pdf, .docx, .txt, or .md"),
+                    "source_url": st.column_config.LinkColumn("source_url", help="Optional source or DOI link"),
+                },
+            )
+            if st.button("Build Custom Pack", use_container_width=True):
+                try:
+                    custom_manifest = build_result_pack_manifest(
+                        pack_title,
+                        pack_description,
+                        result_pack_rows_from_editor(edited_rows),
+                    )
+                except Exception as exc:
+                    st.error(f"Custom pack could not be built: {exc}")
+                else:
+                    save_result_pack_manifest(custom_manifest)
+                    st.success(f"Loaded custom pack: {custom_manifest.title}")
+                    st.rerun()
+            if st.button("Reset to Starter Pack", use_container_width=True):
+                save_result_pack_manifest(load_selected_result_pack())
+                st.rerun()
+
+        with import_tab:
+            manifest_upload = st.file_uploader(
+                "Import manifest JSON",
+                type=["json"],
+                help="Import a metadata-only result-pack manifest.",
+                key="result_pack_manifest_import",
+            )
+            if manifest_upload and st.button("Load Imported Manifest", use_container_width=True):
+                try:
+                    data = json.loads(manifest_upload.getvalue().decode("utf-8"))
+                    imported_manifest = ResultPackManifest.from_dict(data)
+                except Exception as exc:
+                    st.error(f"Manifest could not be imported: {exc}")
+                else:
+                    save_result_pack_manifest(imported_manifest)
+                    st.success(f"Loaded manifest: {imported_manifest.title}")
+                    st.rerun()
+            st.download_button(
+                "Export Current Manifest",
+                data=manifest.to_json(),
+                file_name=f"{manifest.id}-manifest.json",
+                mime="application/json",
+                use_container_width=True,
+            )
+            st.markdown(
+                '<p class="local-note">Manifest exports contain metadata only. Do not paste paper text into pack metadata fields.</p>',
+                unsafe_allow_html=True,
+            )
+
+
+def result_pack_editor_rows(manifest: ResultPackManifest | None) -> list[dict[str, str]]:
+    if manifest:
+        return [
+            {
+                "title": entry.title,
+                "expected_filename": entry.expected_filename,
+                "authors": entry.authors,
+                "year": entry.year,
+                "category": entry.category,
+                "source_url": entry.source_url,
+                "license_note": entry.license_note,
+                "why_include": entry.why_include,
+            }
+            for entry in manifest.entries
+        ]
+    return [
+        {
+            "title": "Example Paper",
+            "expected_filename": "example-paper.pdf",
+            "authors": "",
+            "year": "",
+            "category": "custom",
+            "source_url": "",
+            "license_note": "Verify source access and redistribution terms before sharing paper files.",
+            "why_include": "",
+        }
+    ]
+
+
+def result_pack_rows_from_editor(edited_rows) -> list[dict[str, object]]:
+    if hasattr(edited_rows, "to_dict"):
+        records = edited_rows.to_dict("records")
+        return [dict(record) for record in records]
+    return [dict(row) for row in edited_rows]
 
 
 def render_result_pack_input(manifest: ResultPackManifest) -> None:

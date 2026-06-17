@@ -238,6 +238,11 @@ Open `Result Packs`, upload your own lawful local copies using the expected
 filenames, run the pack, then export JSON, Markdown, or a ZIP bundle with an
 offline index and per-paper reports.
 
+Use `Pack Builder` on the same page to create your own metadata-only manifest,
+import an existing manifest JSON, export the current manifest, and validate file
+names before running the pack. Manifests should contain titles, filenames,
+source links, and notes only, not copied paper text.
+
 The same workflow is available from the command line. Place your own lawful
 local copies in a `papers/` folder using the expected filenames from the
 manifest, then run:

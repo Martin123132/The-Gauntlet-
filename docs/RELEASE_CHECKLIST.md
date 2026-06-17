@@ -34,6 +34,7 @@ Use this checklist before merging `non-ai-app-v1` into `main` or publishing a re
 - [ ] Run the full calibration suite and confirm Last Run/Threshold status cards render.
 - [ ] Confirm `.gauntlet/reports/latest_calibration.json` is refreshed after suite run.
 - [ ] Open Result Packs, confirm the starter manifest renders, and run the pack with no uploads to verify missing files are reported cleanly.
+- [ ] In Result Packs, create a one-row custom manifest, export it, reset to the starter pack, and confirm the active manifest changes cleanly.
 - [ ] Open System Check and confirm diagnostics plus JSON/Markdown exports render.
 - [ ] Open Refinement and confirm Gemini, OpenAI, and Anthropic provider choices are visible without installing AI dependencies.
 - [ ] Open Workspace and confirm Reviewer Packet exports are visible.

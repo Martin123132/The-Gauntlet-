@@ -257,6 +257,9 @@ def test_streamlit_result_packs_page_renders_and_runs_empty_pack():
     assert any("Result Pack Studio" in item.value for item in app.markdown)
     assert any("Expected Files" in item.value for item in app.markdown)
     assert any("Landmark Paper Starter Pack" in item.value for item in app.markdown)
+    assert any("Pack Builder" in item.value for item in app.markdown)
+    assert any("Build Custom Pack" == button.label for button in app.button)
+    assert any("Reset to Starter Pack" == button.label for button in app.button)
     assert any("Run Result Pack" == button.label for button in app.button)
     assert app.file_uploader
 
