@@ -2,7 +2,47 @@
 
 ## Unreleased
 
-No unreleased changes yet.
+No changes yet.
+
+## v0.27.0 - Intake, Result Packs, and OCR Readiness
+
+This release hardens the GitHub ZIP/local-app path for real papers: local
+diagnostics, extraction quality, metadata-only result packs, custom pack
+building, extraction rescue, paste-text fallback, and optional OCR readiness.
+
+### Added
+
+- Added an in-app `System Check` page with local diagnostics for Python,
+  dependencies, required public files, workspace path, launcher log presence,
+  and optional AI setup.
+- Added diagnostics JSON/Markdown exports for GitHub issues without including
+  uploaded paper text, report contents, API keys, or full launcher logs.
+- Added document extraction-quality scoring for real-paper uploads, including
+  warnings for scanned-looking PDFs, very short extraction, missing source
+  anchors, fragmented text, symbol-heavy extraction, and reference-heavy text.
+- Added metadata-only Result Packs for repeatable public demos, including a
+  landmark-paper starter manifest that stores links and expected filenames but
+  no bundled paper PDFs or copied paper text.
+- Added CLI support for `--result-pack`, producing JSON, Markdown, and ZIP
+  result-pack bundles from user-supplied local paper files.
+- Added the `Result Packs` app page for selecting the starter manifest,
+  uploading matching local paper copies, running the pack, opening individual
+  reports, and exporting JSON, Markdown, or ZIP result-pack bundles.
+- Added a `Pack Builder` workflow for creating custom metadata-only manifests,
+  importing existing manifest JSON, exporting the active manifest, and validating
+  editable manifest rows before a pack run.
+- Added upload `Extraction Preview` with pre-analysis quality metrics, extracted
+  text samples, rescue suggestions, and a `Paste Text Instead` fallback for
+  scanned or broken PDF extraction.
+- Added optional OCR readiness detection for Tesseract and Python OCR packages,
+  with System Check export data and extraction rescue guidance.
+
+### Changed
+
+- Upload parsing errors now point users toward `System Check` and show
+  troubleshooting detail without making raw exceptions the main UI.
+- Summary, Breakdown, Markdown, JSON, and HTML reports now include extraction
+  quality so users know whether the verdict had usable source text.
 
 ## v0.20.0 - Trust Guardrails + Calibration Governance
 

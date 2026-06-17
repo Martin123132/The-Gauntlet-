@@ -99,6 +99,37 @@ class EvidenceProfile:
 
 
 @dataclass(frozen=True)
+class DocumentQualityIssue:
+    type: str
+    severity: Severity
+    message: str
+    recovery: str = ""
+
+
+@dataclass(frozen=True)
+class DocumentQualityReport:
+    status: str
+    score: float
+    word_count: int
+    sentence_count: int
+    character_count: int
+    source_span_count: int
+    file_size_bytes: int | None = None
+    issues: list[DocumentQualityIssue] = field(default_factory=list)
+
+
+def default_document_quality() -> DocumentQualityReport:
+    return DocumentQualityReport(
+        status="unknown",
+        score=0.0,
+        word_count=0,
+        sentence_count=0,
+        character_count=0,
+        source_span_count=0,
+    )
+
+
+@dataclass(frozen=True)
 class AnalysisReport:
     source_name: str
     verdict: Verdict
@@ -115,6 +146,7 @@ class AnalysisReport:
     verdict_rubric: list[RubricScore] = field(default_factory=list)
     issue_brief: str = ""
     source_spans: list[SourceSpan] = field(default_factory=list)
+    document_quality: DocumentQualityReport = field(default_factory=default_document_quality)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AnalysisReport":
@@ -134,6 +166,7 @@ class AnalysisReport:
             verdict_rubric=[rubric_score_from_dict(item) for item in data.get("verdict_rubric", [])],
             issue_brief=data.get("issue_brief", ""),
             source_spans=[source_span_from_dict(item) for item in data.get("source_spans", []) if item],
+            document_quality=document_quality_report_from_dict(data.get("document_quality")),
         )
 
     @property
@@ -175,6 +208,7 @@ class AnalysisReport:
             f"- Verdict: **{self.verdict}**",
             f"- Confidence: **{self.confidence:.0%}**",
             f"- Evidence quality: **{self.evidence.score:.2f}/1.00**",
+            f"- Extraction quality: **{self.document_quality.status.upper()} ({self.document_quality.score:.2f}/1.00)**",
             f"- Claims: **{len(self.claims)} total** "
             f"({self.resolved_claims} resolved, {self.partial_claims} partial, {self.failed_claims} failed)",
             f"- Findings: **{len(self.findings)}** ({self.high_severity_findings} high severity)",
@@ -185,9 +219,35 @@ class AnalysisReport:
             "",
             self.summary,
             "",
-            "## Claims",
+            "## Document Extraction Quality",
+            "",
+            f"- Status: **{self.document_quality.status.upper()}**",
+            f"- Score: **{self.document_quality.score:.2f}/1.00**",
+            f"- Extracted words: **{self.document_quality.word_count}**",
+            f"- Extracted sentences: **{self.document_quality.sentence_count}**",
+            f"- Source anchors: **{self.document_quality.source_span_count}**",
             "",
         ]
+        if self.document_quality.issues:
+            for issue in self.document_quality.issues:
+                lines.extend(
+                    [
+                        f"### {issue.type} ({issue.severity})",
+                        "",
+                        issue.message,
+                        "",
+                        f"- Recovery: {issue.recovery or 'No recovery suggestion recorded.'}",
+                        "",
+                    ]
+                )
+        else:
+            lines.extend(["No extraction-quality issues were detected.", ""])
+        lines.extend(
+            [
+            "## Claims",
+            "",
+            ]
+        )
 
         if self.claims:
             for claim in self.claims:
@@ -461,6 +521,36 @@ def evidence_profile_from_dict(data: EvidenceProfile | dict[str, Any]) -> Eviden
         linked_evidence=int(data.get("linked_evidence", 0)),
         section_counts=dict(data.get("section_counts", {})),
         evidence_links=[evidence_link_from_dict(item) for item in data.get("evidence_links", [])],
+    )
+
+
+def document_quality_issue_from_dict(data: DocumentQualityIssue | dict[str, Any]) -> DocumentQualityIssue:
+    if isinstance(data, DocumentQualityIssue):
+        return data
+    return DocumentQualityIssue(
+        type=data.get("type", ""),
+        severity=data.get("severity", "low"),
+        message=data.get("message", ""),
+        recovery=data.get("recovery", ""),
+    )
+
+
+def document_quality_report_from_dict(
+    data: DocumentQualityReport | dict[str, Any] | None,
+) -> DocumentQualityReport:
+    if isinstance(data, DocumentQualityReport):
+        return data
+    if not data:
+        return default_document_quality()
+    return DocumentQualityReport(
+        status=data.get("status", "unknown"),
+        score=float(data.get("score", 0.0)),
+        word_count=int(data.get("word_count", 0)),
+        sentence_count=int(data.get("sentence_count", 0)),
+        character_count=int(data.get("character_count", 0)),
+        source_span_count=int(data.get("source_span_count", 0)),
+        file_size_bytes=data.get("file_size_bytes"),
+        issues=[document_quality_issue_from_dict(item) for item in data.get("issues", [])],
     )
 
 

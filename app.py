@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import html
+import json
 from dataclasses import replace
+from pathlib import Path
 from urllib.parse import quote
 
 import streamlit as st
@@ -20,7 +22,13 @@ from gauntlet_core.batch import (
 from gauntlet_core.benchmarks import list_benchmark_samples, run_benchmark_sample, run_calibration_suite
 from gauntlet_core.document_loader import SUPPORTED_EXTENSIONS, load_document_from_bytes
 from gauntlet_core.evidence_map import build_claim_evidence_map, claim_evidence_map_to_markdown
+from gauntlet_core.extraction_preview import (
+    ExtractionPreview,
+    preview_document_extraction,
+    preview_pasted_text,
+)
 from gauntlet_core.models import source_reference
+from gauntlet_core.ocr import collect_ocr_readiness
 from gauntlet_core.refinement import (
     DEFAULT_CHALLENGER_PROVIDER,
     DEFAULT_CRITIC_PROVIDER,
@@ -47,6 +55,15 @@ from gauntlet_core.revision_recheck import (
     revision_recheck_log_to_markdown,
     revision_status_label,
 )
+from gauntlet_core.result_packs import (
+    ResultPackManifest,
+    ResultPackRun,
+    build_result_pack_bundle,
+    build_result_pack_manifest,
+    load_result_pack_manifest,
+    result_pack_to_markdown,
+    run_result_pack_file_bytes,
+)
 from gauntlet_core.sample_text import SAMPLE_PAPER
 from gauntlet_core.share import (
     build_demo_share_pack,
@@ -57,6 +74,7 @@ from gauntlet_core.share import (
 )
 from gauntlet_core.source_reader import build_source_reader_view, source_reader_to_markdown
 from gauntlet_core.source_review import build_source_review_items, source_review_to_markdown
+from gauntlet_core.system_check import collect_system_check
 from gauntlet_core.workspace import (
     ISSUE_REVIEW_STATUSES,
     REVIEW_STATUSES,
@@ -78,7 +96,9 @@ VALID_PAGES = (
     "summary",
     "workspace",
     "batch",
+    "result-packs",
     "share",
+    "system",
     "action",
     "source",
     "breakdown",
@@ -92,7 +112,9 @@ PAGE_LABELS = {
     "summary": "Summary",
     "workspace": "Workspace",
     "batch": "Batch",
+    "result-packs": "Result Packs",
     "share": "Share Demo",
+    "system": "System Check",
     "action": "Repair Workshop",
     "source": "Source Reader",
     "breakdown": "Breakdown",
@@ -102,11 +124,18 @@ PAGE_LABELS = {
     "evidence": "Evidence",
     "refinement": "Refinement",
 }
+RESULT_PACKS_DIR = Path(__file__).resolve().parent / "result-packs"
+STARTER_RESULT_PACK = RESULT_PACKS_DIR / "landmark-paper-starter.json"
 
 
 @st.cache_resource
 def report_store() -> dict:
     return {}
+
+
+@st.cache_data(ttl=300)
+def cached_ocr_readiness():
+    return collect_ocr_readiness()
 
 
 CSS = """
@@ -1018,8 +1047,12 @@ def main() -> None:
         render_workspace_page()
     elif page == "batch":
         render_batch_page()
+    elif page == "result-packs":
+        render_result_packs_page()
     elif page == "share":
         render_share_demo_page()
+    elif page == "system":
+        render_system_check_page()
     elif page == "benchmarks":
         render_benchmarks_page()
     else:
@@ -1073,6 +1106,20 @@ def active_batch_items() -> list[BatchScanItem]:
     if "batch_items" in st.session_state:
         return st.session_state["batch_items"]
     return report_store().get("batch_items", [])
+
+
+def active_result_pack_run():
+    if "result_pack_run" in st.session_state:
+        return st.session_state["result_pack_run"]
+    return report_store().get("result_pack_run")
+
+
+def active_result_pack_manifest() -> ResultPackManifest:
+    if "result_pack_manifest" in st.session_state:
+        return st.session_state["result_pack_manifest"]
+    manifest = load_selected_result_pack()
+    report_store()["result_pack_manifest"] = manifest
+    return manifest
 
 
 def save_report(report, paper_text: str, run_kind: str = "analysis", benchmark_result=None) -> None:
@@ -1133,6 +1180,18 @@ def save_batch_items(items: list[BatchScanItem]) -> None:
     report_store()["batch_items"] = items
 
 
+def save_result_pack_run(run: ResultPackRun) -> None:
+    st.session_state["result_pack_run"] = run
+    report_store()["result_pack_run"] = run
+
+
+def save_result_pack_manifest(manifest: ResultPackManifest) -> None:
+    st.session_state["result_pack_manifest"] = manifest
+    st.session_state.pop("result_pack_run", None)
+    report_store()["result_pack_manifest"] = manifest
+    report_store().pop("result_pack_run", None)
+
+
 def render_topbar(active_page: str) -> None:
     nav = "\n".join(
         f'<a class="nav-tab {"active" if page == active_page else ""}" href="?page={page}" target="_self">{label}</a>'
@@ -1180,13 +1239,29 @@ def render_upload_panel() -> None:
             label_visibility="collapsed",
         )
 
-        render_document_info(upload)
+        ocr_readiness = cached_ocr_readiness()
+        upload_preview = build_upload_preview(upload, ocr_readiness)
+        render_document_info(upload, upload_preview)
+        render_extraction_preview(upload_preview)
 
         st.markdown('<div class="options-card">', unsafe_allow_html=True)
         st.markdown('<div class="small-label">Analysis options</div>', unsafe_allow_html=True)
         st.selectbox("Rule set", ["Standard (Default)"], label_visibility="visible")
         st.selectbox("Strictness", ["Normal", "Strict", "Lenient"], label_visibility="visible")
         use_sample = st.toggle("Use built-in sample paper", value=False)
+        paste_mode = st.toggle("Paste Text Instead", value=False)
+        pasted_text = ""
+        pasted_source_name = "pasted-paper.txt"
+        pasted_preview = None
+        if paste_mode:
+            pasted_source_name = st.text_input("Pasted source name", value="pasted-paper.txt")
+            pasted_text = st.text_area(
+                "Paper text",
+                height=180,
+                placeholder="Paste copied paper text here when PDF extraction is scanned, empty, or badly fragmented.",
+            )
+            pasted_preview = preview_pasted_text(pasted_source_name, pasted_text, ocr_readiness=ocr_readiness)
+            render_extraction_preview(pasted_preview, title="Pasted Text Preview")
         st.markdown("</div>", unsafe_allow_html=True)
 
         analyze_clicked = st.button("Analyze Paper", type="primary", use_container_width=True)
@@ -1197,18 +1272,35 @@ def render_upload_panel() -> None:
                     run_sample_analysis()
                     st.rerun()
                     return
+                elif paste_mode:
+                    if not pasted_text.strip():
+                        render_upload_error(
+                            "Paste paper text before analyzing.",
+                            "Paste copied text from a PDF viewer, browser page, repository page, or text export, then run analysis again.",
+                        )
+                        return
+                    report = analyze_paper_text(pasted_text, source_name=pasted_source_name.strip() or "pasted-paper.txt")
+                    paper_text = pasted_text
+                    run_kind = "paste"
                 elif upload is not None:
-                    loaded_document = load_document_from_bytes(upload.name, upload.getvalue())
+                    loaded_document = (
+                        upload_preview.document
+                        if upload_preview and upload_preview.document
+                        else load_document_from_bytes(upload.name, upload.getvalue())
+                    )
                     paper_text = loaded_document.text
                     if not paper_text.strip():
-                        st.error("No readable text was found in that file.")
+                        render_upload_error(
+                            "No readable text was found in that file.",
+                            "The parser opened the file, but extraction returned no text. Try Paste Text Instead, export the paper as text, or check whether the PDF is scanned images.",
+                        )
                         return
                     report = analyze_loaded_document(loaded_document)
                 else:
                     st.error("Upload a paper or turn on the sample paper first.")
                     return
             except Exception as exc:  # Streamlit should show clean user-facing errors.
-                st.error(str(exc))
+                render_upload_error("The Gauntlet could not read that file.", str(exc))
                 return
             save_report(report, paper_text, run_kind=run_kind)
             st.rerun()
@@ -1219,20 +1311,90 @@ def render_upload_panel() -> None:
         )
 
 
-def render_document_info(upload) -> None:
+def render_upload_error(message: str, detail: str = "") -> None:
+    st.error(message)
+    st.markdown(
+        """
+        <div class="empty-detail">
+          Open <a href="?page=system" target="_self">System Check</a> to verify Python, dependencies, workspace access, and launcher logs before retrying.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if detail:
+        with st.expander("Troubleshooting detail"):
+            st.code(detail, language="text")
+
+
+def build_upload_preview(upload, ocr_readiness=None) -> ExtractionPreview | None:
+    if upload is None:
+        return None
+    return preview_document_extraction(upload.name, upload.getvalue(), ocr_readiness=ocr_readiness)
+
+
+def render_document_info(upload, preview: ExtractionPreview | None = None) -> None:
     filename = upload.name if upload else "No file selected"
     size = f"{upload.size / 1024:.1f} KB" if upload else "-"
+    status = preview.status.upper() if preview else "-"
     st.markdown(
         f"""
         <div class="document-card">
           <div class="small-label">Document info</div>
           <div class="doc-row"><span>File</span><strong>{html.escape(filename)}</strong></div>
           <div class="doc-row"><span>Size</span><strong>{html.escape(size)}</strong></div>
+          <div class="doc-row"><span>Extraction</span><strong>{html.escape(status)}</strong></div>
           <div class="doc-row"><span>Supported</span><strong>PDF, TXT, DOCX, MD</strong></div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+
+def render_extraction_preview(preview: ExtractionPreview | None, title: str = "Extraction Preview") -> None:
+    if preview is None:
+        st.markdown(
+            f"""
+            <div class="document-card">
+              <div class="small-label">{html.escape(title)}</div>
+              <div class="empty-detail">Upload a paper to preview extraction quality before analysis. If a PDF is scanned or empty, use Paste Text Instead.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        return
+
+    quality = preview.quality
+    issue_rows = "".join(
+        f"<li><strong>{html.escape(issue.type)}</strong> ({html.escape(issue.severity)}): {html.escape(issue.message)}</li>"
+        for issue in quality.issues
+    ) or "<li>No extraction-quality issues were detected.</li>"
+    suggestion_rows = "".join(f"<li>{html.escape(suggestion)}</li>" for suggestion in preview.suggestions)
+    error_row = (
+        f'<div class="empty-detail"><strong>Loader error:</strong> {html.escape(preview.error)}</div>'
+        if preview.error
+        else ""
+    )
+    st.markdown(
+        f"""
+        <div class="document-card">
+          <div class="small-label">{html.escape(title)}</div>
+          <div class="doc-row"><span>Status</span><strong>{html.escape(quality.status.upper())}</strong></div>
+          <div class="doc-row"><span>Score</span><strong>{quality.score:.2f}/1.00</strong></div>
+          <div class="doc-row"><span>Characters</span><strong>{quality.character_count}</strong></div>
+          <div class="doc-row"><span>Words</span><strong>{quality.word_count}</strong></div>
+          <div class="doc-row"><span>Anchors</span><strong>{quality.source_span_count}</strong></div>
+          <div class="doc-row"><span>Pages</span><strong>{preview.page_count or "n/a"}</strong></div>
+        </div>
+        {error_row}
+        """,
+        unsafe_allow_html=True,
+    )
+    if quality.status != "ok" or preview.error:
+        with st.expander("Extraction rescue suggestions", expanded=True):
+            st.markdown(f"**Issues**\n\n<ul>{issue_rows}</ul>", unsafe_allow_html=True)
+            st.markdown(f"**Try next**\n\n<ul>{suggestion_rows}</ul>", unsafe_allow_html=True)
+    with st.expander("Extracted text sample", expanded=quality.status == "ok"):
+        st.code(preview.text_preview or "No preview text available.", language="text")
 
 
 def render_empty_state() -> None:
@@ -1309,6 +1471,7 @@ def render_report_center(report) -> None:
     )
 
     render_stat_strip(report)
+    render_document_quality_panel(report)
     render_breakdowns(report)
     st.markdown(
         '<a class="export-chip" href="?page=breakdown" target="_self">Open full breakdown</a>',
@@ -1366,6 +1529,7 @@ def render_breakdown_page(report) -> None:
         """,
         unsafe_allow_html=True,
     )
+    render_document_quality_panel(report, always=True)
     render_stat_strip(report)
     render_breakdowns(report)
     render_curtain_up(report)
@@ -1374,6 +1538,53 @@ def render_breakdown_page(report) -> None:
     render_evidence_page(report, compact=True)
     render_action_plan_page(report, compact=True)
     render_exports(report)
+
+
+def render_document_quality_panel(report, always: bool = False) -> None:
+    quality = getattr(report, "document_quality", None)
+    if not quality or quality.status == "unknown":
+        return
+    if quality.status == "ok" and not always:
+        return
+    issue_rows = "".join(
+        f"<li><strong>{html.escape(issue.type)}</strong> ({html.escape(issue.severity)}): {html.escape(issue.message)}</li>"
+        for issue in quality.issues
+    ) or "<li>No extraction-quality issues were detected.</li>"
+    recovery_rows = "".join(
+        f"<li>{html.escape(issue.recovery)}</li>"
+        for issue in quality.issues
+        if issue.recovery
+    ) or "<li>No recovery action needed.</li>"
+    status_note = {
+        "ok": "The extracted text looks usable for the deterministic audit.",
+        "warn": "Review the source text before treating the verdict as final.",
+        "fail": "The verdict may be unfair because extraction quality is poor.",
+    }.get(quality.status, "Extraction quality was checked.")
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="small-label">Document Extraction Quality</div>
+          <div class="detail-title">{html.escape(quality.status.upper())} | {quality.score:.2f}/1.00</div>
+          <div class="detail-subtitle">{html.escape(status_note)}</div>
+          <div class="verdict-meta">
+            <div>Words:<span>{quality.word_count}</span></div>
+            <div>Sentences:<span>{quality.sentence_count}</span></div>
+            <div>Anchors:<span>{quality.source_span_count}</span></div>
+          </div>
+          <div class="breakdown-grid" style="margin-top:.8rem;">
+            <div>
+              <div class="small-label">Issues</div>
+              <ul class="comparison-list">{issue_rows}</ul>
+            </div>
+            <div>
+              <div class="small-label">Recovery</div>
+              <ul class="comparison-list">{recovery_rows}</ul>
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_curtain_up(report) -> None:
@@ -2242,6 +2453,326 @@ def batch_row_for_display(item: BatchScanItem) -> dict[str, str | int]:
     }
 
 
+def render_result_packs_page() -> None:
+    manifest = active_result_pack_manifest()
+    st.markdown(
+        """
+        <div class="wide-detail-card">
+          <div class="detail-title">Result Pack Studio</div>
+          <div class="detail-subtitle">Run a repeatable metadata-only paper set from user-supplied local files, then export a shareable results bundle without bundling the original papers.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    left, right = st.columns([0.34, 0.66], gap="medium")
+    with left:
+        render_result_pack_builder(manifest)
+        render_result_pack_input(manifest)
+    with right:
+        run = active_result_pack_run()
+        render_result_pack_manifest_preview(manifest)
+        if run:
+            render_result_pack_results(run)
+        else:
+            st.markdown(
+                """
+                <div class="empty-detail">Upload files with the expected names, then run the pack to produce a public-ready summary and offline report bundle. Missing papers are shown clearly instead of stopping the run.</div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+def load_selected_result_pack() -> ResultPackManifest:
+    return load_result_pack_manifest(STARTER_RESULT_PACK)
+
+
+def render_result_pack_builder(manifest: ResultPackManifest) -> None:
+    with st.container(border=True):
+        st.markdown('<div class="panel-title">Pack Builder</div>', unsafe_allow_html=True)
+        builder_tab, import_tab = st.tabs(["Create Pack", "Import / Export"])
+        with builder_tab:
+            pack_title = st.text_input(
+                "Pack title",
+                value=manifest.title if manifest.id != "landmark-paper-starter" else "My Result Pack",
+                key="custom_pack_title",
+            )
+            pack_description = st.text_area(
+                "Pack description",
+                value=(
+                    manifest.description
+                    if manifest.id != "landmark-paper-starter"
+                    else "A metadata-only result pack built in The Gauntlet."
+                ),
+                key="custom_pack_description",
+                height=92,
+            )
+            default_rows = result_pack_editor_rows(manifest if manifest.id != "landmark-paper-starter" else None)
+            edited_rows = st.data_editor(
+                default_rows,
+                num_rows="dynamic",
+                use_container_width=True,
+                hide_index=True,
+                key="custom_result_pack_rows",
+                column_config={
+                    "expected_filename": st.column_config.TextColumn("expected_filename", help="Use .pdf, .docx, .txt, or .md"),
+                    "source_url": st.column_config.LinkColumn("source_url", help="Optional source or DOI link"),
+                },
+            )
+            if st.button("Build Custom Pack", use_container_width=True):
+                try:
+                    custom_manifest = build_result_pack_manifest(
+                        pack_title,
+                        pack_description,
+                        result_pack_rows_from_editor(edited_rows),
+                    )
+                except Exception as exc:
+                    st.error(f"Custom pack could not be built: {exc}")
+                else:
+                    save_result_pack_manifest(custom_manifest)
+                    st.success(f"Loaded custom pack: {custom_manifest.title}")
+                    st.rerun()
+            if st.button("Reset to Starter Pack", use_container_width=True):
+                save_result_pack_manifest(load_selected_result_pack())
+                st.rerun()
+
+        with import_tab:
+            manifest_upload = st.file_uploader(
+                "Import manifest JSON",
+                type=["json"],
+                help="Import a metadata-only result-pack manifest.",
+                key="result_pack_manifest_import",
+            )
+            if manifest_upload and st.button("Load Imported Manifest", use_container_width=True):
+                try:
+                    data = json.loads(manifest_upload.getvalue().decode("utf-8"))
+                    imported_manifest = ResultPackManifest.from_dict(data)
+                except Exception as exc:
+                    st.error(f"Manifest could not be imported: {exc}")
+                else:
+                    save_result_pack_manifest(imported_manifest)
+                    st.success(f"Loaded manifest: {imported_manifest.title}")
+                    st.rerun()
+            st.download_button(
+                "Export Current Manifest",
+                data=manifest.to_json(),
+                file_name=f"{manifest.id}-manifest.json",
+                mime="application/json",
+                use_container_width=True,
+            )
+            st.markdown(
+                '<p class="local-note">Manifest exports contain metadata only. Do not paste paper text into pack metadata fields.</p>',
+                unsafe_allow_html=True,
+            )
+
+
+def result_pack_editor_rows(manifest: ResultPackManifest | None) -> list[dict[str, str]]:
+    if manifest:
+        return [
+            {
+                "title": entry.title,
+                "expected_filename": entry.expected_filename,
+                "authors": entry.authors,
+                "year": entry.year,
+                "category": entry.category,
+                "source_url": entry.source_url,
+                "license_note": entry.license_note,
+                "why_include": entry.why_include,
+            }
+            for entry in manifest.entries
+        ]
+    return [
+        {
+            "title": "Example Paper",
+            "expected_filename": "example-paper.pdf",
+            "authors": "",
+            "year": "",
+            "category": "custom",
+            "source_url": "",
+            "license_note": "Verify source access and redistribution terms before sharing paper files.",
+            "why_include": "",
+        }
+    ]
+
+
+def result_pack_rows_from_editor(edited_rows) -> list[dict[str, object]]:
+    if hasattr(edited_rows, "to_dict"):
+        records = edited_rows.to_dict("records")
+        return [dict(record) for record in records]
+    return [dict(row) for row in edited_rows]
+
+
+def render_result_pack_input(manifest: ResultPackManifest) -> None:
+    with st.container(border=True):
+        st.markdown('<div class="panel-title">Pack Input</div>', unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="document-card">
+              <div class="small-label">Selected pack</div>
+              <div class="doc-row"><span>Name</span><strong>{html.escape(manifest.title)}</strong></div>
+              <div class="doc-row"><span>Expected files</span><strong>{len(manifest.entries)}</strong></div>
+              <div class="doc-row"><span>Storage</span><strong>Metadata only</strong></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        uploads = st.file_uploader(
+            "Upload result-pack papers",
+            type=[extension.lstrip(".") for extension in sorted(SUPPORTED_EXTENSIONS)],
+            accept_multiple_files=True,
+            help="Use the expected filenames shown in the manifest table.",
+        )
+        upload_names = {upload.name for upload in uploads or []}
+        matched = sum(1 for entry in manifest.entries if entry.expected_filename in upload_names)
+        missing = len(manifest.entries) - matched
+        st.markdown(
+            f"""
+            <div class="document-card">
+              <div class="small-label">Readiness</div>
+              <div class="doc-row"><span>Uploaded</span><strong>{len(uploads or [])}</strong></div>
+              <div class="doc-row"><span>Matched</span><strong>{matched}</strong></div>
+              <div class="doc-row"><span>Missing</span><strong>{missing}</strong></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button("Run Result Pack", type="primary", use_container_width=True):
+            run_result_pack_uploads(manifest, uploads or [])
+            st.rerun()
+        st.markdown(
+            '<p class="local-note">Result packs use local deterministic rules. The manifest contains metadata and links only; uploads are analyzed in memory and the exported bundle excludes original paper files.</p>',
+            unsafe_allow_html=True,
+        )
+
+
+def run_result_pack_uploads(manifest: ResultPackManifest, uploads) -> None:
+    files = {upload.name: upload.getvalue() for upload in uploads}
+    progress = st.progress(0, text="Running result pack...")
+
+    def save_pack_report(report):
+        try:
+            save_analysis_run(report, run_kind="result-pack")
+        except OSError as exc:
+            st.warning(f"{report.source_name} analyzed, but the workspace could not save it: {exc}")
+
+    run = run_result_pack_file_bytes(manifest, files, save_report=save_pack_report, papers_dir="streamlit uploads")
+    progress.progress(1.0, text="Result pack complete.")
+    save_result_pack_run(run)
+
+
+def render_result_pack_manifest_preview(manifest: ResultPackManifest) -> None:
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="detail-title">Expected Files</div>
+          <div class="detail-subtitle">{html.escape(manifest.description)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    rows = [
+        {
+            "Expected filename": entry.expected_filename,
+            "Title": entry.title,
+            "Year": entry.year,
+            "Category": entry.category,
+            "Source": entry.source_url or "-",
+        }
+        for entry in manifest.entries
+    ]
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+    with st.expander("Pack privacy and source notes"):
+        st.markdown(manifest.privacy_note)
+        for entry in manifest.entries:
+            source_line = f" - {entry.source_url}" if entry.source_url else ""
+            st.markdown(
+                f"- **{entry.title}** (`{entry.expected_filename}`){source_line}\n"
+                f"  \n  {entry.license_note or 'Verify source access and redistribution terms before sharing paper files.'}"
+            )
+
+
+def render_result_pack_results(run: ResultPackRun) -> None:
+    high_risk = sum(
+        1
+        for item in run.items
+        if item.status == "failed" or item.high_severity_findings > 0 or item.verdict in {"FAILS", "CREATES_NEW_PARADOXES"}
+    )
+    avg_evidence = (
+        sum(item.evidence_score for item in run.items if item.status == "analyzed") / run.analyzed_count
+        if run.analyzed_count
+        else 0
+    )
+    st.markdown(
+        f"""
+        <div class="stat-strip">
+          <div class="stat-tile"><div class="stat-title">Analyzed</div><div class="stat-number">{run.analyzed_count}</div><div class="stat-note">of {len(run.items)} manifest entries</div></div>
+          <div class="stat-tile"><div class="stat-title">Missing / Failed</div><div class="stat-number">{run.failed_count}</div><div class="stat-note">needs local file attention</div></div>
+          <div class="stat-tile"><div class="stat-title">High Risk</div><div class="stat-number">{high_risk}</div><div class="stat-note">failed or severe results</div></div>
+          <div class="stat-tile"><div class="stat-title">Avg Evidence</div><div class="stat-number">{avg_evidence:.2f}</div><div class="stat-note">analyzed papers only</div></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.dataframe(result_pack_rows_for_display(run), use_container_width=True, hide_index=True)
+
+    json_col, markdown_col, bundle_col = st.columns(3)
+    json_col.download_button(
+        "Export Result Pack JSON",
+        data=run.to_json(),
+        file_name="gauntlet-result-pack-summary.json",
+        mime="application/json",
+        use_container_width=True,
+    )
+    markdown_col.download_button(
+        "Export Result Pack Markdown",
+        data=result_pack_to_markdown(run),
+        file_name="gauntlet-result-pack-summary.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
+    bundle_col.download_button(
+        "Export Result Pack Bundle",
+        data=build_result_pack_bundle(run),
+        file_name="gauntlet-result-pack-bundle.zip",
+        mime="application/zip",
+        use_container_width=True,
+    )
+
+    completed = [item for item in run.items if item.report]
+    if completed:
+        labels = {
+            f"{item.source_name} | {item.verdict} | {item.confidence:.0%}": index
+            for index, item in enumerate(completed)
+        }
+        selected_label = st.selectbox("Open result-pack report", list(labels.keys()))
+        if st.button("Open Selected Result-Pack Report", use_container_width=True):
+            selected = completed[labels[selected_label]]
+            st.session_state["report"] = selected.report
+            st.session_state["paper_text"] = ""
+            report_store()["report"] = selected.report
+            report_store()["paper_text"] = ""
+            st.query_params["page"] = "breakdown"
+            st.rerun()
+
+
+def result_pack_rows_for_display(run: ResultPackRun) -> list[dict[str, str | int]]:
+    rows: list[dict[str, str | int]] = []
+    for entry, item in zip(run.manifest.entries, run.items):
+        rows.append(
+            {
+                "Expected File": entry.expected_filename,
+                "Title": entry.title,
+                "Status": item.status,
+                "Verdict": item.verdict or "-",
+                "Confidence": f"{item.confidence:.0%}" if item.status == "analyzed" else "-",
+                "Evidence": f"{item.evidence_score:.2f}" if item.status == "analyzed" else "-",
+                "Findings": item.finding_count if item.status == "analyzed" else 0,
+                "Notes": "; ".join(item.top_findings) or item.error or entry.why_include or "-",
+            }
+        )
+    return rows
+
+
 def render_share_demo_page() -> None:
     summary = build_demo_share_summary()
     x_post = build_x_post()
@@ -2319,6 +2850,99 @@ def render_share_demo_page() -> None:
             mime="image/svg+xml",
             use_container_width=True,
         )
+
+
+def render_system_check_page() -> None:
+    report = collect_system_check(workspace_path=workspace_runs_dir())
+    counts = report.status_counts
+    status_label = report.overall_status.upper()
+    st.markdown(
+        f"""
+        <div class="wide-detail-card">
+          <div class="small-label">System Check</div>
+          <div class="detail-title">Local Diagnostics</div>
+          <div class="detail-subtitle">A quick health check for the GitHub ZIP launcher, dependencies, workspace, and logs. This diagnostic does not include uploaded papers, report contents, API keys, or full launcher logs.</div>
+          <div class="verdict-meta">
+            <div>Status:<span>{html.escape(status_label)}</span></div>
+            <div>Checks:<span>{len(report.items)}</span></div>
+            <div>Generated:<span>{html.escape(report.generated_at)}</span></div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"""
+        <div class="stat-strip">
+          <div class="stat-tile"><div class="stat-title">Overall</div><div class="stat-number">{html.escape(status_label)}</div><div class="stat-note">Current diagnostic state</div></div>
+          <div class="stat-tile"><div class="stat-title">OK</div><div class="stat-number">{counts.get("ok", 0)}</div><div class="stat-note">Ready checks</div></div>
+          <div class="stat-tile"><div class="stat-title">Warnings</div><div class="stat-number">{counts.get("warn", 0)}</div><div class="stat-note">Review if stuck</div></div>
+          <div class="stat-tile"><div class="stat-title">Failures</div><div class="stat-number">{counts.get("fail", 0)}</div><div class="stat-note">Needs fixing</div></div>
+          <div class="stat-tile"><div class="stat-title">OCR</div><div class="stat-number">{html.escape(report.ocr_readiness.status.replace("_", " ").upper())}</div><div class="stat-note">Optional scanned-PDF support</div></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    runtime_col, export_col = st.columns([0.52, 0.48], gap="medium")
+    with runtime_col:
+        st.markdown(
+            f"""
+            <div class="wide-detail-card">
+              <div class="panel-title">Runtime</div>
+              <div class="doc-row"><span>App version</span><strong>{html.escape(report.app_version)}</strong></div>
+              <div class="doc-row"><span>Python</span><strong>{html.escape(report.python_version)}</strong></div>
+              <div class="doc-row"><span>Repo</span><strong>{html.escape(report.repo_path)}</strong></div>
+              <div class="doc-row"><span>Workspace</span><strong>{html.escape(report.workspace_path)}</strong></div>
+              <div class="doc-row"><span>Launcher log</span><strong>{html.escape(report.launcher_log_path)}</strong></div>
+              <div class="doc-row"><span>OCR</span><strong>{html.escape(report.ocr_readiness.detail)}</strong></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with export_col:
+        st.markdown(
+            """
+            <div class="wide-detail-card">
+              <div class="panel-title">Diagnostics Export</div>
+              <div class="muted-note">Use this when opening a GitHub issue. It contains setup status and local paths only, not private paper text.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        json_col, markdown_col = st.columns(2)
+        json_col.download_button(
+            "Download Diagnostics JSON",
+            data=report.to_json(),
+            file_name="gauntlet-system-check.json",
+            mime="application/json",
+            use_container_width=True,
+        )
+        markdown_col.download_button(
+            "Download Diagnostics Markdown",
+            data=report.to_markdown(),
+            file_name="gauntlet-system-check.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+
+    st.markdown('<div class="panel-title">Checks</div>', unsafe_allow_html=True)
+    for item in report.items:
+        severity_class = "low" if item.status == "ok" else "medium" if item.status == "warn" else "high"
+        st.markdown(
+            f"""
+            <div class="finding-card {severity_class}">
+              <div class="finding-title">
+                <span>{html.escape(item.name)}</span>
+                <span class="severity-pill {severity_class}">{html.escape(item.status.upper())}</span>
+              </div>
+              <div class="finding-body">{html.escape(item.detail)}</div>
+              {f'<div class="repair-button-look">{html.escape(item.recovery)}</div>' if item.recovery else ''}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.text_area("Copy diagnostics", value=report.to_markdown(), height=380)
 
 
 def render_benchmarks_page() -> None:
@@ -2403,7 +3027,10 @@ def render_calibration_dashboard() -> None:
         return
 
     failing_cases = ", ".join(f"`{sample_id}`" for sample_id in result.failing_sample_ids) or "none"
-    gate_status = "PASS" if (result.gate and result.gate.passed) else "FAIL"
+    if result.gate:
+        gate_status = "PASS" if result.gate.passed else "FAIL"
+    else:
+        gate_status = "NOT COMPUTED"
     gate_thresholds = (
         f"overall >= {result.gate.overall_threshold:.0%}, guardrail >= {result.gate.guardrail_threshold:.0%}"
         if result.gate
@@ -2450,8 +3077,7 @@ def render_calibration_dashboard() -> None:
             <div class="muted-note">{html.escape(failing_cases)}</div>
           </div>
           <div class="benchmark-card">
-            <div class="small-label">Calibration Warnings</div>
-            <div class="small-label">Gate issues</div>
+            <div class="small-label">Gate Issues</div>
             <div class="muted-note">Failures: {html.escape(gate_failures)}</div>
             <div class="muted-note">Warnings: {html.escape(gate_warnings)}</div>
           </div>
@@ -2462,14 +3088,14 @@ def render_calibration_dashboard() -> None:
     category_rows = "".join(
         (
             "<tr>"
-        f"<td>{html.escape(summary.category)}</td>"
-        f"<td>{summary.passed_count}/{summary.sample_count}</td>"
-        f"<td>{summary.pass_rate:.0%}</td>"
-        f"<td>{summary.verdict_match_rate:.0%}</td>"
-        f"<td>{summary.guardrail_pass_rate:.0%}</td>"
-        f"<td>{html.escape(', '.join(summary.failing_sample_ids) or 'none')}</td>"
-        f"<td>{html.escape(summary.confidence_explanation or 'No failures in this category.')}</td>"
-        "</tr>"
+            f"<td>{html.escape(summary.category)}</td>"
+            f"<td>{summary.passed_count}/{summary.sample_count}</td>"
+            f"<td>{summary.pass_rate:.0%}</td>"
+            f"<td>{summary.verdict_match_rate:.0%}</td>"
+            f"<td>{summary.guardrail_pass_rate:.0%}</td>"
+            f"<td>{html.escape(', '.join(summary.failing_sample_ids) or 'none')}</td>"
+            f"<td>{html.escape(summary.confidence_explanation or 'No failures in this category.')}</td>"
+            "</tr>"
         )
         for summary in result.category_summaries
     )

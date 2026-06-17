@@ -60,3 +60,38 @@ def test_cli_scans_directory_and_writes_batch_outputs(tmp_path, capsys):
     assert (output_dir / "gauntlet-batch-summary.csv").exists()
     assert (output_dir / "gauntlet-batch-report-bundle.zip").exists()
     assert [path.name for path in supported_files_in_directory(papers)] == ["first.txt", "second.md"]
+
+
+def test_cli_runs_metadata_only_result_pack(tmp_path, capsys):
+    papers = tmp_path / "papers"
+    papers.mkdir()
+    (papers / "paper.txt").write_text(
+        "The framework resolves the anomaly because the mechanism uses 12 measured observations.",
+        encoding="utf-8",
+    )
+    manifest = tmp_path / "pack.json"
+    manifest.write_text(
+        """{
+  "id": "cli-pack",
+  "title": "CLI Pack",
+  "description": "CLI metadata-only pack.",
+  "entries": [
+    {"id": "paper", "title": "Paper", "expected_filename": "paper.txt"},
+    {"id": "missing", "title": "Missing", "expected_filename": "missing.md"}
+  ]
+}""",
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "reports"
+
+    exit_code = main(["--result-pack", str(manifest), "--papers-dir", str(papers), "--out", str(output_dir)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "Result pack complete: 1 analyzed, 1 failed or missing" in captured.out
+    assert (output_dir / "gauntlet-result-pack-summary.json").exists()
+    assert (output_dir / "gauntlet-result-pack-summary.md").exists()
+    bundle = output_dir / "gauntlet-result-pack-bundle.zip"
+    assert bundle.exists()
+    with ZipFile(bundle) as archive:
+        assert "result-pack-manifest.json" in archive.namelist()

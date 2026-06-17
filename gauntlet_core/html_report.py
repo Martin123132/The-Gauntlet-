@@ -24,6 +24,7 @@ def analysis_report_to_html(report: AnalysisReport) -> str:
             '<main class="report-shell">',
             render_header(report),
             render_summary(report),
+            render_document_quality(report),
             render_claims(report),
             render_claim_evidence_map(report),
             render_findings(report),
@@ -75,6 +76,25 @@ def render_summary(report: AnalysisReport) -> str:
     <div><span>Sections</span><strong>{escape(sections)}</strong></div>
     <div><span>Source Anchors</span><strong>{len(report.source_spans)}</strong></div>
   </div>
+</section>
+"""
+
+
+def render_document_quality(report: AnalysisReport) -> str:
+    quality = report.document_quality
+    issues = "".join(
+        f"<li><strong>{escape(issue.type)}</strong> ({escape(issue.severity)}): {escape(issue.message)}</li>"
+        for issue in quality.issues
+    ) or "<li>No extraction-quality issues were detected.</li>"
+    return f"""
+<section class="panel">
+  <h2>Document Extraction Quality</h2>
+  <div class="meta-grid">
+    <div><span>Status</span><strong>{escape(quality.status.upper())}</strong></div>
+    <div><span>Score</span><strong>{quality.score:.2f}/1.00</strong></div>
+    <div><span>Source Anchors</span><strong>{quality.source_span_count}</strong></div>
+  </div>
+  <ul>{issues}</ul>
 </section>
 """
 

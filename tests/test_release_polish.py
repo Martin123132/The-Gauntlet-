@@ -13,7 +13,11 @@ def test_public_release_files_exist():
         "Analyze-Paper.bat",
         "requirements.txt",
         "requirements-ai.txt",
+        "result-packs/README.md",
+        "result-packs/landmark-paper-starter.json",
         "docs/RELEASE_CHECKLIST.md",
+        "docs/OCR_SETUP.md",
+        "docs/V0_27_RELEASE_NOTES.md",
         "docs/images/gauntlet-summary.png",
         "docs/images/gauntlet-breakdown.png",
         "docs/images/gauntlet-workspace.png",
@@ -102,4 +106,39 @@ def test_release_checklist_includes_first_run_and_launcher_log_checks():
 
     assert "launcher log" in checklist.lower()
     assert "Try Sample Paper" in checklist
+    assert "Extraction Preview" in checklist
+    assert "Paste Text Instead" in checklist
+    assert "OCR readiness" in checklist
+    assert "V0_27_RELEASE_NOTES.md" in checklist
+    assert "System Check" in checklist
+    assert "Document Extraction Quality" in checklist
     assert "Reviewer Packet" in checklist
+    assert "Open Result Packs" in checklist
+    assert "custom manifest" in checklist
+    assert "result-pack" in checklist.lower()
+    assert "metadata-only" in checklist.lower()
+
+
+def test_readme_documents_metadata_only_result_packs():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "Result Packs" in readme
+    assert "The `Result Packs` page" in readme
+    assert "Pack Builder" in readme
+    assert "Extraction Preview" in readme
+    assert "Paste Text Instead" in readme
+    assert "OCR_SETUP.md" in readme
+    assert "OCR readiness" in readme
+    assert "metadata-only" in readme
+    assert "not the original uploaded paper files" in readme
+    assert "result-packs\\landmark-paper-starter.json" in readme
+
+
+def test_changelog_has_v027_release_section():
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    release_notes = (ROOT / "docs" / "V0_27_RELEASE_NOTES.md").read_text(encoding="utf-8")
+
+    assert "## Unreleased\n\nNo changes yet." in changelog
+    assert "## v0.27.0 - Intake, Result Packs, and OCR Readiness" in changelog
+    assert "V0.27.0 is a local-app hardening release" in release_notes
+    assert "OCR processing is not implemented yet" in release_notes

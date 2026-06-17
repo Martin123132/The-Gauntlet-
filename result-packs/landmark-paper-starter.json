@@ -1,0 +1,119 @@
+{
+  "schema_version": "v1",
+  "id": "landmark-paper-starter",
+  "title": "Landmark Paper Starter Pack",
+  "description": "A metadata-only starter manifest for testing The Gauntlet on famous theory and science papers. This file does not include or redistribute paper PDFs. Place your own lawful local copies in the papers folder using the expected filenames, then run the result-pack command.",
+  "privacy_note": "This manifest stores metadata and links only. Generated Gauntlet bundles contain reports, source snippets, anchors, and summaries, but not the original uploaded documents or API keys.",
+  "entries": [
+    {
+      "id": "einstein-1905-photoelectric",
+      "title": "A Heuristic Viewpoint Concerning the Production and Transformation of Light",
+      "authors": "Albert Einstein",
+      "year": "1905",
+      "category": "physics",
+      "source_url": "https://doi.org/10.1002/andp.19053220607",
+      "expected_filename": "einstein-1905-photoelectric.pdf",
+      "license_note": "Metadata only. Verify source access and redistribution terms before sharing any paper file.",
+      "why_include": "A classic resolution-style physics argument with explicit mechanism claims."
+    },
+    {
+      "id": "hubble-1929-distance-velocity",
+      "title": "A Relation between Distance and Radial Velocity among Extra-Galactic Nebulae",
+      "authors": "Edwin Hubble",
+      "year": "1929",
+      "category": "astronomy",
+      "source_url": "https://doi.org/10.1073/pnas.15.3.168",
+      "expected_filename": "hubble-1929-distance-velocity.pdf",
+      "license_note": "Metadata only. Verify source access and redistribution terms before sharing any paper file.",
+      "why_include": "A compact empirical argument with measurement-heavy evidence structure."
+    },
+    {
+      "id": "shannon-1948-communication",
+      "title": "A Mathematical Theory of Communication",
+      "authors": "Claude E. Shannon",
+      "year": "1948",
+      "category": "information-theory",
+      "source_url": "https://doi.org/10.1002/j.1538-7305.1948.tb01338.x",
+      "expected_filename": "shannon-1948-communication.pdf",
+      "license_note": "Metadata only. Verify source access and redistribution terms before sharing any paper file.",
+      "why_include": "A theory-building paper with equations and definitions that should be linked to claims."
+    },
+    {
+      "id": "turing-1950-computing-machinery",
+      "title": "Computing Machinery and Intelligence",
+      "authors": "Alan M. Turing",
+      "year": "1950",
+      "category": "computing",
+      "source_url": "https://doi.org/10.1093/mind/LIX.236.433",
+      "expected_filename": "turing-1950-computing-machinery.pdf",
+      "license_note": "Metadata only. Verify source access and redistribution terms before sharing any paper file.",
+      "why_include": "A famous argument paper with definitions, objections, and scoped claims."
+    },
+    {
+      "id": "turing-1952-morphogenesis",
+      "title": "The Chemical Basis of Morphogenesis",
+      "authors": "Alan M. Turing",
+      "year": "1952",
+      "category": "biology-mathematics",
+      "source_url": "https://doi.org/10.1098/rstb.1952.0012",
+      "expected_filename": "turing-1952-morphogenesis.pdf",
+      "license_note": "Metadata only. Verify source access and redistribution terms before sharing any paper file.",
+      "why_include": "A mechanism paper that connects mathematical structure to biological pattern formation."
+    },
+    {
+      "id": "watson-crick-1953-dna",
+      "title": "Molecular Structure of Nucleic Acids",
+      "authors": "James D. Watson and Francis H. C. Crick",
+      "year": "1953",
+      "category": "biology",
+      "source_url": "https://doi.org/10.1038/171737a0",
+      "expected_filename": "watson-crick-1953-dna.pdf",
+      "license_note": "Metadata only. Verify source access and redistribution terms before sharing any paper file.",
+      "why_include": "A short landmark paper with a strong model claim and evidence references."
+    },
+    {
+      "id": "bardeen-cooper-schrieffer-1957",
+      "title": "Theory of Superconductivity",
+      "authors": "John Bardeen, Leon N. Cooper, and J. Robert Schrieffer",
+      "year": "1957",
+      "category": "physics",
+      "source_url": "https://doi.org/10.1103/PhysRev.108.1175",
+      "expected_filename": "bardeen-cooper-schrieffer-1957-superconductivity.pdf",
+      "license_note": "Metadata only. Verify source access and redistribution terms before sharing any paper file.",
+      "why_include": "A theory paper with mechanism, equations, and explanatory scope."
+    },
+    {
+      "id": "bell-1964-epr",
+      "title": "On the Einstein Podolsky Rosen Paradox",
+      "authors": "John S. Bell",
+      "year": "1964",
+      "category": "physics-foundations",
+      "source_url": "https://doi.org/10.1103/PhysicsPhysiqueFizika.1.195",
+      "expected_filename": "bell-1964-epr.pdf",
+      "license_note": "Metadata only. Verify source access and redistribution terms before sharing any paper file.",
+      "why_include": "A paradox-focused paper that is useful for testing contradiction and scope handling."
+    },
+    {
+      "id": "higgs-1964-broken-symmetries",
+      "title": "Broken Symmetries and the Masses of Gauge Bosons",
+      "authors": "Peter W. Higgs",
+      "year": "1964",
+      "category": "physics",
+      "source_url": "https://doi.org/10.1103/PhysRevLett.13.508",
+      "expected_filename": "higgs-1964-broken-symmetries.pdf",
+      "license_note": "Metadata only. Verify source access and redistribution terms before sharing any paper file.",
+      "why_include": "A concise theoretical mechanism paper with high information density."
+    },
+    {
+      "id": "penrose-1965-singularities",
+      "title": "Gravitational Collapse and Space-Time Singularities",
+      "authors": "Roger Penrose",
+      "year": "1965",
+      "category": "physics",
+      "source_url": "https://doi.org/10.1103/PhysRevLett.14.57",
+      "expected_filename": "penrose-1965-singularities.pdf",
+      "license_note": "Metadata only. Verify source access and redistribution terms before sharing any paper file.",
+      "why_include": "A compact theorem-style paper that can test proof language and claim support."
+    }
+  ]
+}

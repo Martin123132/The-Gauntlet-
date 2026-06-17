@@ -5,6 +5,7 @@ import math
 import re
 
 from .contradiction import ClaimPair, ContradictionEngine, content_words, has_negation
+from .document_quality import assess_document_quality
 from .models import (
     AnalysisReport,
     AuditEvent,
@@ -258,11 +259,18 @@ def analyze_paper_text(
     text: str,
     source_name: str = "uploaded document",
     source_spans: list[SourceSpan] | None = None,
+    file_size_bytes: int | None = None,
 ) -> AnalysisReport:
     sections = parse_document_sections(text)
     sentences = split_section_sentences(sections)
     cleaned_text = normalize_document_text(" ".join(section.text for section in sections))
     aligned_spans = align_source_spans(sentences, source_spans, cleaned_text)
+    document_quality = assess_document_quality(
+        cleaned_text,
+        source_spans=aligned_spans,
+        source_name=source_name,
+        file_size_bytes=file_size_bytes,
+    )
     sentences = attach_source_spans(sentences, aligned_spans)
     evidence_links = extract_evidence_links(sentences)
     evidence = assess_evidence(cleaned_text, evidence_links)
@@ -276,6 +284,15 @@ def analyze_paper_text(
     confidence = calculate_confidence(claims, findings, evidence, verdict)
     summary = build_summary(verdict, claims, findings, evidence)
     audit_events = build_report_audit_events(sections, sentences, claims, findings, evidence, verdict)
+    audit_events.insert(
+        0,
+        AuditEvent(
+            "document quality",
+            document_quality.status,
+            f"Extraction quality score {document_quality.score:.2f} with {len(document_quality.issues)} issue(s)",
+            document_quality.score,
+        ),
+    )
     issue_brief = build_issue_brief(claims, findings, evidence, verdict)
     return AnalysisReport(
         source_name=source_name,
@@ -293,6 +310,7 @@ def analyze_paper_text(
         verdict_rubric=verdict_rubric,
         issue_brief=issue_brief,
         source_spans=aligned_spans,
+        document_quality=document_quality,
     )
 
 
@@ -301,6 +319,7 @@ def analyze_loaded_document(document) -> AnalysisReport:
         document.text,
         source_name=getattr(document, "filename", "uploaded document"),
         source_spans=getattr(document, "source_spans", None),
+        file_size_bytes=getattr(document, "file_size_bytes", None),
     )
 
 

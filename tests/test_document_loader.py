@@ -20,6 +20,8 @@ def test_load_txt_creates_source_spans():
     assert loaded.source_spans[0].anchor_id == "S1"
     assert loaded.source_spans[0].page_number is None
     assert loaded.source_spans[0].char_start == 0
+    assert loaded.file_size_bytes > 0
+    assert loaded.extension == ".txt"
 
 
 def test_extract_markdown():
@@ -103,3 +105,5 @@ def test_load_pdf_preserves_page_numbers():
     assert loaded.source_spans
     assert loaded.source_spans[0].page_number == 1
     assert "resolves" in loaded.source_spans[0].text
+    assert loaded.file_size_bytes == len(pdf_bytes)
+    assert loaded.extension == ".pdf"

@@ -20,8 +20,10 @@ def test_streamlit_app_renders_primary_controls():
     assert app.file_uploader
     assert any(button.label == "Analyze Paper" for button in app.button)
     assert any(button.label == "Try Sample Paper" for button in app.button)
+    assert any(toggle.label == "Paste Text Instead" for toggle in app.toggle)
     assert any("The Gauntlet" in item.value for item in app.markdown)
     assert any("Start Here" in item.value for item in app.markdown)
+    assert any("Extraction Preview" in item.value for item in app.markdown)
 
 
 def test_streamlit_start_here_sample_button_produces_report():
@@ -53,6 +55,31 @@ def test_streamlit_sample_workflow_produces_report():
     assert list_saved_runs()
 
 
+def test_streamlit_paste_text_workflow_produces_report():
+    app = AppTest.from_file("app.py")
+    app.run(timeout=20)
+
+    paste_toggle = next(toggle for toggle in app.toggle if toggle.label == "Paste Text Instead")
+    paste_toggle.set_value(True)
+    app.run(timeout=20)
+
+    source_name = next(text_input for text_input in app.text_input if text_input.label == "Pasted source name")
+    source_name.set_value("copied-paper.txt")
+    paper_text = next(area for area in app.text_area if area.label == "Paper text")
+    paper_text.set_value(
+        "The copied paper resolves the anomaly because the mechanism uses 12 measured observations and a reproducible method."
+    )
+    analyze_button = next(button for button in app.button if button.label == "Analyze Paper")
+    analyze_button.click()
+    app.run(timeout=20)
+
+    assert not app.exception
+    report = app.session_state["report"]
+    assert report.source_name == "copied-paper.txt"
+    assert report.verdict in {"RESOLVES", "PARTIAL", "FAILS", "CREATES_NEW_PARADOXES"}
+    assert list_saved_runs()
+
+
 def test_streamlit_breakdown_page_keeps_report_state():
     app = AppTest.from_file("app.py")
     app.run(timeout=20)
@@ -67,6 +94,7 @@ def test_streamlit_breakdown_page_keeps_report_state():
     assert any("Actual Breakdown" in item.value for item in app.markdown)
     assert any("Claim-by-Claim Audit" in item.value for item in app.markdown)
     assert any("Curtain-Up Audit" in item.value for item in app.markdown)
+    assert any("Document Extraction Quality" in item.value for item in app.markdown)
     assert any("Source Trace" in item.value for item in app.markdown)
     assert any("Source for" in expander.label for expander in app.expander)
 
@@ -247,6 +275,30 @@ def test_streamlit_batch_page_renders_controls():
     assert any("Filter & Sort" in item.value for item in app.markdown)
 
 
+def test_streamlit_result_packs_page_renders_and_runs_empty_pack():
+    app = AppTest.from_file("app.py")
+    app.query_params["page"] = "result-packs"
+    app.run(timeout=20)
+
+    assert not app.exception
+    assert any("Result Pack Studio" in item.value for item in app.markdown)
+    assert any("Expected Files" in item.value for item in app.markdown)
+    assert any("Landmark Paper Starter Pack" in item.value for item in app.markdown)
+    assert any("Pack Builder" in item.value for item in app.markdown)
+    assert any("Build Custom Pack" == button.label for button in app.button)
+    assert any("Reset to Starter Pack" == button.label for button in app.button)
+    assert any("Run Result Pack" == button.label for button in app.button)
+    assert app.file_uploader
+
+    run_button = next(button for button in app.button if button.label == "Run Result Pack")
+    run_button.click()
+    app.run(timeout=20)
+
+    assert not app.exception
+    assert app.session_state["result_pack_run"].failed_count == 10
+    assert any("Missing / Failed" in item.value for item in app.markdown)
+
+
 def test_streamlit_share_demo_page_renders_share_kit():
     app = AppTest.from_file("app.py")
     app.query_params["page"] = "share"
@@ -256,6 +308,19 @@ def test_streamlit_share_demo_page_renders_share_kit():
     assert any("Share Demo Kit" in item.value for item in app.markdown)
     assert any("X Post Draft" in item.value for item in app.markdown)
     assert any("synthetic benchmark papers only" in item.value for item in app.markdown)
+
+
+def test_streamlit_system_check_page_renders_diagnostics():
+    app = AppTest.from_file("app.py")
+    app.query_params["page"] = "system"
+    app.run(timeout=20)
+
+    assert not app.exception
+    assert any("System Check" in item.value for item in app.markdown)
+    assert any("Local Diagnostics" in item.value for item in app.markdown)
+    assert any("OCR" in item.value for item in app.markdown)
+    assert any("Diagnostics Export" in item.value for item in app.markdown)
+    assert any("Copy diagnostics" == area.label for area in app.text_area)
 
 
 def test_streamlit_workspace_page_lists_opens_compares_and_deletes(tmp_path, monkeypatch):

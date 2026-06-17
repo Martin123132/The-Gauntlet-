@@ -34,6 +34,16 @@ First run tip: the Summary page shows a `Start Here` panel until a report is
 loaded. Use `Try Sample Paper` to confirm the launcher, local rules, and
 workspace are working before uploading a private paper.
 
+Upload tip: the upload rail shows an `Extraction Preview` before analysis with
+character, word, anchor, page, and quality checks. If a PDF is scanned, empty,
+or badly fragmented, use `Paste Text Instead` to run the same local checker on
+copied text without saving the original file.
+
+OCR note: OCR is optional and not part of the default install. The `System
+Check` page detects whether local OCR tools are available and extraction rescue
+tips will mention that status for scanned-looking PDFs. See
+[`docs/OCR_SETUP.md`](docs/OCR_SETUP.md) for setup notes.
+
 ## Screenshots
 
 ![The Gauntlet summary dashboard](docs/images/gauntlet-summary.png)
@@ -60,6 +70,12 @@ The launcher creates a local `.venv`, installs the requirements, and opens the
 Streamlit app in your browser. It also prints the repo path, Python version,
 virtual environment path, browser URL, and a troubleshooting log path under
 `.gauntlet/logs/`.
+
+Open the `System Check` page inside the app if the first run feels off. It
+checks Python, required dependencies, public launcher files, workspace location,
+and launcher log presence, then gives you a diagnostics export that can be
+attached to a GitHub issue. The export lists local setup paths only; it does not
+include uploaded paper text, report contents, API keys, or full launcher logs.
 
 You can also drag a paper or folder onto `Analyze-Paper.bat` to write reports
 without opening the app.
@@ -88,6 +104,12 @@ The same path is available from the command line:
 .venv\Scripts\python -m gauntlet_core.cli path\to\papers --out gauntlet-reports
 ```
 
+You can also run a metadata-only result pack:
+
+```bash
+.venv\Scripts\python -m gauntlet_core.cli --result-pack result-packs\landmark-paper-starter.json --papers-dir papers --out gauntlet-reports
+```
+
 ## What the Verdict Means
 
 - `RESOLVES`: the paper's detected claims include mechanisms and enough
@@ -104,6 +126,12 @@ The verdict is a review aid, not a replacement for expert peer review.
 ## What V2 Checks
 
 - document sections and claim locations
+- document extraction quality, including warnings for scanned-looking PDFs,
+  very short extraction, fragmented OCR-style text, symbol-heavy text, missing
+  source anchors, and reference-heavy uploads
+- pre-analysis extraction preview and a paste-text fallback for scanned or
+  broken PDF extraction
+- optional OCR readiness detection in System Check and extraction rescue tips
 - explicit resolution claims
 - false-positive guardrails for tentative hypotheses, prior-work comparisons,
   scoped limitations, reference-like text, and unsupported equation/citation
@@ -210,6 +238,38 @@ findings, or low confidence before exporting.
 Use `Load Demo Batch` to run the built-in synthetic benchmark papers as a
 ready-made batch scan. It is useful for testing the table, filters, sorting, and
 exports before uploading private documents.
+
+## Result Packs
+
+The `Result Packs` page turns repeatable paper sets into a click-through
+workflow for public comparison posts, lab checks, or release QA. The repo
+includes `result-packs/landmark-paper-starter.json`, a metadata-only starter
+list of famous landmark papers. It contains titles, expected filenames, source
+links, and notes, but no PDFs, copied paper text, or downloaded source files.
+
+Open `Result Packs`, upload your own lawful local copies using the expected
+filenames, run the pack, then export JSON, Markdown, or a ZIP bundle with an
+offline index and per-paper reports.
+
+Use `Pack Builder` on the same page to create your own metadata-only manifest,
+import an existing manifest JSON, export the current manifest, and validate file
+names before running the pack. Manifests should contain titles, filenames,
+source links, and notes only, not copied paper text.
+
+The same workflow is available from the command line. Place your own lawful
+local copies in a `papers/` folder using the expected filenames from the
+manifest, then run:
+
+```bash
+.venv\Scripts\python -m gauntlet_core.cli --result-pack result-packs\landmark-paper-starter.json --papers-dir papers --out gauntlet-reports
+```
+
+The command writes `gauntlet-result-pack-summary.json`,
+`gauntlet-result-pack-summary.md`, and `gauntlet-result-pack-bundle.zip`. The
+bundle includes Gauntlet reports, source snippets, anchors, summaries, and an
+offline index, but not the original uploaded paper files or API keys. Links in
+the starter manifest are convenience metadata only; verify source access and
+redistribution terms before sharing any paper file.
 
 ## Share Demo Kit
 

@@ -25,14 +25,29 @@ from .benchmarks import (
     run_calibration_suite,
 )
 from .document_loader import LoadedDocument, load_document_from_bytes, load_document_from_path
+from .document_quality import assess_document_quality
 from .evidence_map import (
     ClaimEvidenceMap,
     ClaimEvidenceRow,
     build_claim_evidence_map,
     claim_evidence_map_to_markdown,
 )
-from .models import AnalysisReport, SourceSpan
+from .extraction_preview import ExtractionPreview, preview_document_extraction, preview_pasted_text
+from .models import AnalysisReport, DocumentQualityIssue, DocumentQualityReport, SourceSpan
+from .ocr import OcrPackageStatus, OcrReadinessReport, collect_ocr_readiness
 from .report_bundle import build_report_bundle
+from .result_packs import (
+    ResultPackEntry,
+    ResultPackManifest,
+    ResultPackRun,
+    analyze_result_pack_path,
+    build_result_pack_bundle,
+    build_result_pack_manifest,
+    load_result_pack_manifest,
+    run_result_pack_file_bytes,
+    result_pack_to_markdown,
+    run_result_pack,
+)
 from .refinement import ProviderSelection, RefinementReport, run_provider_refinement, run_refinement
 from .repair_workshop import RepairStep, build_repair_steps, repair_workshop_to_markdown
 from .reviewer_packet import build_reviewer_packet_bundle, reviewer_packet_to_html, reviewer_packet_to_markdown
@@ -57,6 +72,7 @@ from .source_reader import (
     build_source_reader_view,
     source_reader_to_markdown,
 )
+from .system_check import DiagnosticItem, SystemCheckReport, collect_system_check
 from .workspace import (
     ISSUE_REVIEW_STATUSES,
     SavedRun,
@@ -84,11 +100,20 @@ __all__ = [
     "ClaimEvidenceMap",
     "ClaimEvidenceRow",
     "DemoShareSummary",
+    "DiagnosticItem",
+    "DocumentQualityIssue",
+    "DocumentQualityReport",
+    "ExtractionPreview",
     "LoadedDocument",
     "ISSUE_REVIEW_STATUSES",
+    "OcrPackageStatus",
+    "OcrReadinessReport",
     "ProviderSelection",
     "RefinementReport",
     "RepairStep",
+    "ResultPackEntry",
+    "ResultPackManifest",
+    "ResultPackRun",
     "RevisionRecheckResult",
     "ReviewerAction",
     "SavedRun",
@@ -98,9 +123,12 @@ __all__ = [
     "SourceReaderAnchor",
     "SourceReaderRelatedItem",
     "SourceReaderView",
+    "SystemCheckReport",
     "analyze_loaded_document",
     "analyze_paper_text",
+    "analyze_result_pack_path",
     "action_plan_to_markdown",
+    "assess_document_quality",
     "batch_items_to_csv",
     "batch_items_to_html",
     "batch_items_to_json",
@@ -110,6 +138,8 @@ __all__ = [
     "build_batch_report_bundle",
     "build_claim_evidence_map",
     "build_report_bundle",
+    "build_result_pack_bundle",
+    "build_result_pack_manifest",
     "build_reviewer_packet_bundle",
     "build_demo_share_pack",
     "build_demo_share_summary",
@@ -119,15 +149,22 @@ __all__ = [
     "build_source_review_items",
     "build_source_reader_view",
     "claim_evidence_map_to_markdown",
+    "collect_system_check",
+    "collect_ocr_readiness",
     "delete_saved_run",
     "filter_batch_items",
     "list_benchmark_samples",
     "list_saved_runs",
     "load_document_from_bytes",
     "load_document_from_path",
+    "load_result_pack_manifest",
     "load_saved_run",
+    "preview_document_extraction",
+    "preview_pasted_text",
     "run_benchmark_sample",
     "run_calibration_suite",
+    "run_result_pack",
+    "run_result_pack_file_bytes",
     "run_provider_refinement",
     "run_refinement",
     "save_analysis_run",
@@ -135,6 +172,7 @@ __all__ = [
     "source_review_to_markdown",
     "source_reader_to_markdown",
     "repair_workshop_to_markdown",
+    "result_pack_to_markdown",
     "reviewer_packet_to_html",
     "reviewer_packet_to_markdown",
     "recheck_repair_revision",

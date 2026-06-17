@@ -62,9 +62,9 @@ class BenchmarkComparison:
     unexpected_absent_findings: tuple[str, ...]
     absent_claim_gaps_kept_out: tuple[str, ...]
     unexpected_absent_claim_gaps: tuple[str, ...]
-    failure_reasons: tuple[str, ...]
     passed: bool
     score: float
+    failure_reasons: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -149,8 +149,8 @@ class CalibrationSuiteResult:
     extra_claim_gap_count: int
     failing_sample_ids: tuple[str, ...]
     category_summaries: tuple[CalibrationCategorySummary, ...]
-    calibration_version: str
-    gate: CalibrationGateResult | None
+    calibration_version: str = CALIBRATION_VERSION
+    gate: CalibrationGateResult | None = None
     snapshot_path: str | None = None
 
     def to_dict(self) -> dict:
@@ -179,6 +179,9 @@ class CalibrationSuiteResult:
         return json.dumps(self.to_dict(), indent=2)
 
     def to_markdown(self) -> str:
+        gate_status = "NOT COMPUTED"
+        if self.gate:
+            gate_status = "PASS" if self.gate.passed else "FAIL"
         failing_cases = "\n".join(f"- `{sample_id}`" for sample_id in self.failing_sample_ids) or "- none"
         category_rows = "\n".join(
             (
@@ -217,7 +220,7 @@ class CalibrationSuiteResult:
                 f"- Missed claim gaps: {self.missed_claim_gap_count}",
                 f"- Extra claim gaps: {self.extra_claim_gap_count}",
                 f"- Calibration version: {self.calibration_version}",
-                f"- Last run gate status: {'PASS' if (self.gate and self.gate.passed) else 'FAIL'}",
+                f"- Last run gate status: {gate_status}",
                 (
                     f"- Gate thresholds: overall >= {self.gate.overall_threshold:.0%}, "
                     f"guardrail >= {self.gate.guardrail_threshold:.0%}"
@@ -812,9 +815,9 @@ def evaluate_calibration_gate(
         failures.append(
             f"guardrail pass rate below threshold ({guardrail_pass:.0%} < {guardrail_threshold:.0%})"
         )
-    if (overall_threshold <= overall_pass < overall_threshold + warning_band) and not failures:
+    if (overall_threshold <= overall_pass < 1.0 and overall_pass < overall_threshold + warning_band) and not failures:
         warnings.append("overall pass rate is within 5% of the threshold")
-    if (guardrail_threshold <= guardrail_pass < guardrail_threshold + warning_band) and not failures:
+    if (guardrail_threshold <= guardrail_pass < 1.0 and guardrail_pass < guardrail_threshold + warning_band) and not failures:
         warnings.append("guardrail pass rate is within 5% of the threshold")
     return CalibrationGateResult(
         overall_pass=overall_pass,
@@ -868,7 +871,7 @@ def summarize_calibration_category(category: str, results: tuple[BenchmarkCompar
     checks = sum(guardrail_check_count(result) for result in category_results)
     failures = sum(guardrail_failure_count(result) for result in category_results)
     failing_items = tuple(item for item in category_results if not item.passed)
-    confidence_explanation = _category_confidence_explanation(category_results, failing_items)
+    confidence_explanation = _category_confidence_explanation(failing_items)
     return CalibrationCategorySummary(
         category=category,
         sample_count=sample_count,
@@ -881,10 +884,7 @@ def summarize_calibration_category(category: str, results: tuple[BenchmarkCompar
     )
 
 
-def _category_confidence_explanation(
-    category_results: tuple[BenchmarkComparison, ...],
-    failing_results: tuple[BenchmarkComparison, ...],
-) -> str:
+def _category_confidence_explanation(failing_results: tuple[BenchmarkComparison, ...]) -> str:
     if not failing_results:
         return "No known failures in this category."
     all_failures = tuple(
@@ -907,7 +907,8 @@ def persist_calibration_snapshot(
     path = Path(snapshot_path) if snapshot_path is not None else DEFAULT_CALIBRATION_SNAPSHOT_PATH
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(suite.to_json(), encoding="utf-8")
+        snapshot_suite = replace(suite, snapshot_path=str(path))
+        path.write_text(snapshot_suite.to_json(), encoding="utf-8")
     except OSError:
         return None
     return path

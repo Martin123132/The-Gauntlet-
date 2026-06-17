@@ -1,5 +1,6 @@
-from pathlib import Path
 import json
+from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -12,6 +13,7 @@ from gauntlet_core.benchmarks import (
     list_benchmark_samples,
     run_benchmark_sample,
     run_calibration_suite,
+    summarize_calibration_results,
 )
 
 
@@ -101,7 +103,7 @@ def test_benchmark_export_distinguishes_match_from_paper_pass():
 
 
 def test_calibration_suite_summarizes_full_benchmark_corpus():
-    result = run_calibration_suite()
+    result = run_calibration_suite(persist_snapshot=False)
 
     assert result.sample_count >= 31
     assert result.pass_rate == 1.0
@@ -123,6 +125,7 @@ def test_calibration_gate_enforced_in_ci_mode():
         min_overall_pass=0.9,
         min_guardrail_pass=0.95,
         strict=True,
+        persist_snapshot=False,
     )
 
     assert result.gate is not None
@@ -130,12 +133,21 @@ def test_calibration_gate_enforced_in_ci_mode():
     assert not result.gate.failures
 
 
-def test_calibration_gate_exposes_close_to_threshold_warning(tmp_path):
+def test_calibration_gate_exposes_close_to_threshold_warning():
     sample_result = run_calibration_suite(persist_snapshot=False)
-    warn_gate = evaluate_calibration_gate(sample_result, overall_threshold=0.97, guardrail_threshold=0.97)
+    near_threshold_result = replace(sample_result, pass_rate=0.93, guardrail_pass_rate=0.96)
+    warn_gate = evaluate_calibration_gate(
+        near_threshold_result,
+        overall_threshold=0.90,
+        guardrail_threshold=0.95,
+    )
     assert warn_gate.warnings
     assert warn_gate.passed
     assert not warn_gate.failures
+
+    perfect_gate = evaluate_calibration_gate(sample_result, overall_threshold=0.97, guardrail_threshold=0.97)
+    assert perfect_gate.passed
+    assert not perfect_gate.warnings
 
 
 def test_calibration_snapshot_is_persisted_for_local_reproducibility(tmp_path):
@@ -147,6 +159,16 @@ def test_calibration_snapshot_is_persisted_for_local_reproducibility(tmp_path):
     data = json.loads(snapshot_path.read_text(encoding="utf-8"))
     assert data["calibration_version"] == result.calibration_version
     assert data["sample_count"] == result.sample_count
+    assert data["snapshot_path"] == str(snapshot_path)
+
+
+def test_calibration_markdown_distinguishes_missing_gate_from_failure():
+    result = summarize_calibration_results(tuple(run_benchmark_sample(sample.id) for sample in list_benchmark_samples()))
+    markdown = result.to_markdown()
+
+    assert result.gate is None
+    assert "Last run gate status: NOT COMPUTED" in markdown
+    assert "Last run gate status: FAIL" not in markdown
 
 
 def test_calibration_suite_strict_mode_with_impossible_threshold_fails():
@@ -155,7 +177,7 @@ def test_calibration_suite_strict_mode_with_impossible_threshold_fails():
 
 
 def test_calibration_exports_include_metrics_and_category_detail():
-    result = run_calibration_suite()
+    result = run_calibration_suite(persist_snapshot=False)
     data = result.to_json()
     markdown = result.to_markdown()
 
