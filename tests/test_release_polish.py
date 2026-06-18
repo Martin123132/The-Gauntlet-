@@ -137,8 +137,13 @@ def test_readme_documents_metadata_only_result_packs():
 def test_changelog_has_v027_release_section():
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     release_notes = (ROOT / "docs" / "V0_27_RELEASE_NOTES.md").read_text(encoding="utf-8")
+    zip_qa = (ROOT / "docs" / "V0_27_ZIP_QA.md").read_text(encoding="utf-8")
 
-    assert "## Unreleased\n\nNo changes yet." in changelog
+    assert "## Unreleased" in changelog
+    assert "generated-source-ZIP QA notes" in changelog
     assert "## v0.27.0 - Intake, Result Packs, and OCR Readiness" in changelog
     assert "V0.27.0 is a local-app hardening release" in release_notes
+    assert "Generated source ZIP smoke" in release_notes
     assert "OCR processing is not implemented yet" in release_notes
+    assert "Generated source ZIP smoke test completed" in zip_qa
+    assert "requirements.txt" in zip_qa

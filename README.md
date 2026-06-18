@@ -5,6 +5,10 @@ papers, and arguments. Upload a document and it produces a transparent
 rule-based verdict: `RESOLVES`, `PARTIAL`, `FAILS`, or
 `CREATES_NEW_PARADOXES`.
 
+Latest verified release: [`v0.27.0`](https://github.com/Martin123132/The-Gauntlet-/releases/tag/v0.27.0).
+The generated GitHub source ZIP was smoke-tested on Windows; see
+[`docs/V0_27_ZIP_QA.md`](docs/V0_27_ZIP_QA.md).
+
 ## Download ZIP -> Double-Click -> Upload Paper
 
 1. Click GitHub's green `Code` button.
@@ -70,6 +74,11 @@ The launcher creates a local `.venv`, installs the requirements, and opens the
 Streamlit app in your browser. It also prints the repo path, Python version,
 virtual environment path, browser URL, and a troubleshooting log path under
 `.gauntlet/logs/`.
+
+The first run may take a few minutes while Streamlit and parser dependencies
+install into the local `.venv`. If `System Check` reports an OCR warning on a
+base install, that is expected: OCR is optional and not required for normal
+PDF/DOCX/TXT/MD analysis.
 
 Open the `System Check` page inside the app if the first run feels off. It
 checks Python, required dependencies, public launcher files, workspace location,

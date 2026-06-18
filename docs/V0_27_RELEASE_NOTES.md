@@ -34,6 +34,7 @@ non-AI.
 - GitHub Actions target: Ubuntu and Windows pytest jobs on `non-ai-app-v1`
 - Manual smoke target: Summary, Extraction Preview, Result Packs, System Check,
   Workspace, Benchmarks, and report exports
+- Generated source ZIP smoke: see [`V0_27_ZIP_QA.md`](V0_27_ZIP_QA.md)
 
 ## Known Limits
 

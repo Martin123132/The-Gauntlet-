@@ -20,8 +20,11 @@ Use this checklist before merging `non-ai-app-v1` into `main` or publishing a re
 - [ ] Double-click `Start-Gauntlet.bat`.
 - [ ] Confirm the launcher accepts Python 3.10 or newer.
 - [ ] Confirm the launcher creates `.venv` and installs local requirements.
+- [ ] Confirm first-run dependency installation can take several minutes but continues logging progress.
 - [ ] Confirm the browser opens at `http://localhost:8501`.
 - [ ] Confirm `.gauntlet/logs/Start-Gauntlet.log` exists after launch.
+- [ ] If OCR is not installed, confirm `System Check` shows an optional OCR warning rather than a failed base install.
+- [ ] Record the completed generated-source-ZIP smoke in a versioned QA note, such as `docs/V0_27_ZIP_QA.md`.
 
 ## App Smoke Check
 
