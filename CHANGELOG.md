@@ -2,7 +2,15 @@
 
 ## Unreleased
 
-No changes yet.
+### Added
+
+- Added public `v0.27.0` generated-source-ZIP QA notes and linked the latest
+  verified release from the README.
+
+### Changed
+
+- Clarified first-run install time and optional OCR warning expectations in the
+  README and release checklist.
 
 ## v0.27.0 - Intake, Result Packs, and OCR Readiness
 
