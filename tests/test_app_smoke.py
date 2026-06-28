@@ -23,6 +23,8 @@ def test_streamlit_app_renders_primary_controls():
     assert any(toggle.label == "Paste Text Instead" for toggle in app.toggle)
     assert any("The Gauntlet" in item.value for item in app.markdown)
     assert any("Start Here" in item.value for item in app.markdown)
+    assert any("first launch felt slow" in item.value for item in app.markdown)
+    assert any("launcher log" in item.value for item in app.markdown)
     assert any("Extraction Preview" in item.value for item in app.markdown)
 
 
@@ -319,6 +321,7 @@ def test_streamlit_system_check_page_renders_diagnostics():
     assert any("System Check" in item.value for item in app.markdown)
     assert any("Local Diagnostics" in item.value for item in app.markdown)
     assert any("OCR" in item.value for item in app.markdown)
+    assert any("base local checker is broken" in item.value for item in app.markdown)
     assert any("Diagnostics Export" in item.value for item in app.markdown)
     assert any("Copy diagnostics" == area.label for area in app.text_area)
 

@@ -2,15 +2,29 @@
 
 ## Unreleased
 
+No changes yet.
+
+## v0.28.0 - Public Trust Polish
+
+This release closes the current public-polish pass: the app remains local-first
+and non-AI by default, while the GitHub-facing docs now read more like a
+finished product page with clearer first-run, storage, and licensing guidance.
+
 ### Added
 
 - Added public `v0.27.0` generated-source-ZIP QA notes and linked the latest
   verified release from the README.
+- Added maintainer-local D-drive development/storage guidance for release and
+  test work.
+- Added commercial-use guidance that points public users to the non-commercial
+  license and keeps third-party paper rights separate from The Gauntlet.
+- Reworked the README opening into a landing-page style overview with product
+  value, quick start, screenshot captions, and the trust model near the top.
 
 ### Changed
 
 - Clarified first-run install time and optional OCR warning expectations in the
-  README and release checklist.
+  README, app first-run panel, System Check, and release checklist.
 
 ## v0.27.0 - Intake, Result Packs, and OCR Readiness
 

@@ -1429,7 +1429,7 @@ def render_start_here_panel() -> None:
         st.markdown(
             """
             <div class="panel-title">Start Here</div>
-            <div class="muted-note">The fastest first run is the built-in sample. After that, upload a real paper and follow the audit trail from verdict to source snippets and exports.</div>
+            <div class="muted-note">The fastest first run is the built-in sample. After that, upload a real paper and follow the audit trail from verdict to source snippets and exports. If the first launch felt slow, that was usually dependency setup; check System Check and the launcher log before retrying.</div>
             """,
             unsafe_allow_html=True,
         )
@@ -2861,7 +2861,7 @@ def render_system_check_page() -> None:
         <div class="wide-detail-card">
           <div class="small-label">System Check</div>
           <div class="detail-title">Local Diagnostics</div>
-          <div class="detail-subtitle">A quick health check for the GitHub ZIP launcher, dependencies, workspace, and logs. This diagnostic does not include uploaded papers, report contents, API keys, or full launcher logs.</div>
+          <div class="detail-subtitle">A quick health check for the GitHub ZIP launcher, dependencies, workspace, and logs. This diagnostic does not include uploaded papers, report contents, API keys, or full launcher logs. Optional OCR warnings mean scanned-PDF recovery is not installed, not that the base local checker is broken.</div>
           <div class="verdict-meta">
             <div>Status:<span>{html.escape(status_label)}</span></div>
             <div>Checks:<span>{len(report.items)}</span></div>
