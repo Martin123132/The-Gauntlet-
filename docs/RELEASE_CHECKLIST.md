@@ -4,6 +4,7 @@ Use this checklist before merging `non-ai-app-v1` into `main` or publishing a re
 
 ## Automated Checks
 
+- [ ] Run local release work from the active D-drive checkout, currently `D:\Projects\The-Gauntlet-`, and keep temp/cache/output paths on `D:\`.
 - [ ] Run `.venv\Scripts\python.exe -m pytest` locally.
 - [ ] Confirm GitHub Actions passes on the branch or pull request.
 - [ ] Confirm `run_calibration_suite(strict=True)` passes the release gate thresholds.
@@ -11,7 +12,7 @@ Use this checklist before merging `non-ai-app-v1` into `main` or publishing a re
 - [ ] Confirm `Start-Gauntlet.bat` prints the launcher log path under `.gauntlet/logs/`.
 - [ ] Run the metadata-only result-pack smoke command:
   `.venv\Scripts\python.exe -m gauntlet_core.cli --result-pack result-packs\landmark-paper-starter.json --papers-dir papers --out gauntlet-reports`.
-- [ ] Review `docs/V0_27_RELEASE_NOTES.md` and confirm it matches the branch diff.
+- [ ] Review `docs/V0_28_RELEASE_NOTES.md` and confirm it matches the branch diff.
 
 ## Windows Download ZIP Check
 

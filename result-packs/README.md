@@ -17,3 +17,8 @@ paper files or API keys.
 The included starter manifest uses famous landmark papers as a seed list for
 testing. Links are convenience metadata only; always check source access and
 redistribution terms before sharing any paper file.
+
+The Gauntlet license covers this software and its metadata-only manifests. It
+does not grant rights to third-party papers, PDFs, datasets, or downloaded
+source files. Commercial use of The Gauntlet requires a separate written
+commercial license; see `../LICENSE` and `../docs/COMMERCIAL_USE.md`.

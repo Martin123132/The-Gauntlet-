@@ -1,15 +1,29 @@
 # The Gauntlet
 
 The Gauntlet is a local-first paper checker for stress-testing theories,
-papers, and arguments. Upload a document and it produces a transparent
-rule-based verdict: `RESOLVES`, `PARTIAL`, `FAILS`, or
-`CREATES_NEW_PARADOXES`.
+papers, and arguments. Download the repo, double-click the Windows launcher,
+upload a paper, and get a transparent rule-based verdict with claim evidence,
+contradictions, source snippets, calibration checks, and repair guidance.
 
-Latest verified release: [`v0.27.0`](https://github.com/Martin123132/The-Gauntlet-/releases/tag/v0.27.0).
+Latest verified release: [`v0.28.0`](https://github.com/Martin123132/The-Gauntlet-/releases/tag/v0.28.0).
 The generated GitHub source ZIP was smoke-tested on Windows; see
 [`docs/V0_27_ZIP_QA.md`](docs/V0_27_ZIP_QA.md).
 
-## Download ZIP -> Double-Click -> Upload Paper
+## What It Does
+
+- Gives each paper a deterministic verdict: `RESOLVES`, `PARTIAL`, `FAILS`, or
+  `CREATES_NEW_PARADOXES`.
+- Extracts claims, evidence links, contradictions, weak mechanisms, scope gaps,
+  and theory-as-fact language.
+- Shows source anchors and snippets so users can audit why a finding appeared.
+- Saves local reports, reviewer notes, repair progress, and export packets
+  without saving the uploaded paper file.
+- Includes synthetic benchmarks and calibration guardrails so rule changes are
+  visible instead of mysterious.
+- Keeps optional Gemini/OpenAI/Anthropic refinement separate from the normal
+  non-AI checker.
+
+## Quick Start
 
 1. Click GitHub's green `Code` button.
 2. Choose `Download ZIP`.
@@ -22,6 +36,45 @@ The default flow does not call any AI provider. There is no API key setup for
 the normal checker. The app runs on your machine and uses deterministic rules
 for section parsing, claim extraction, contradiction checks, mechanism checks,
 evidence linking, and verdict scoring.
+
+**Use rights:** The Gauntlet is free for personal, educational, academic, and
+other non-commercial use under the Motion-TimeSpace Non-Commercial License.
+Commercial use requires a separate written commercial license. See
+[`LICENSE`](LICENSE) and [`docs/COMMERCIAL_USE.md`](docs/COMMERCIAL_USE.md).
+
+## Screenshots
+
+![The Gauntlet summary dashboard](docs/images/gauntlet-summary.png)
+
+The first screen gives users the upload path, extraction preview, local privacy
+note, and one-click sample analysis.
+
+![The Gauntlet breakdown page](docs/images/gauntlet-breakdown.png)
+
+The breakdown explains verdict scoring, rule hits, claim support, and extraction
+quality instead of hiding the audit behind a single score.
+
+![The Gauntlet saved workspace](docs/images/gauntlet-workspace.png)
+
+The local workspace reopens past runs, compares reports, stores reviewer notes,
+and exports reviewer packets without saving full uploaded papers.
+
+![The Gauntlet source review](docs/images/gauntlet-source-viewer.png)
+
+Source Reader links findings back to exact extracted source snippets and nearby
+context.
+
+![The Gauntlet benchmark gallery](docs/images/gauntlet-benchmarks.png)
+
+Benchmarks and calibration show how the deterministic rules behave on synthetic
+known cases and false-positive guardrails.
+
+![The Gauntlet refinement provider setup](docs/images/gauntlet-refinement.png)
+
+Optional refinement is clearly separated from the default checker and only runs
+when a user provides session-only API keys.
+
+## Trust Model
 
 **Privacy note:** the normal checker runs locally and does not require an API
 key. Optional AI refinement only runs when you paste a session key on the
@@ -48,20 +101,6 @@ Check` page detects whether local OCR tools are available and extraction rescue
 tips will mention that status for scanned-looking PDFs. See
 [`docs/OCR_SETUP.md`](docs/OCR_SETUP.md) for setup notes.
 
-## Screenshots
-
-![The Gauntlet summary dashboard](docs/images/gauntlet-summary.png)
-
-![The Gauntlet breakdown page](docs/images/gauntlet-breakdown.png)
-
-![The Gauntlet saved workspace](docs/images/gauntlet-workspace.png)
-
-![The Gauntlet source review](docs/images/gauntlet-source-viewer.png)
-
-![The Gauntlet benchmark gallery](docs/images/gauntlet-benchmarks.png)
-
-![The Gauntlet refinement provider setup](docs/images/gauntlet-refinement.png)
-
 ## Quick Start on Windows
 
 1. Download this repo from GitHub.
@@ -79,6 +118,11 @@ The first run may take a few minutes while Streamlit and parser dependencies
 install into the local `.venv`. If `System Check` reports an OCR warning on a
 base install, that is expected: OCR is optional and not required for normal
 PDF/DOCX/TXT/MD analysis.
+
+If launch feels stuck during first install, leave the launcher window open while
+it logs progress to `.gauntlet/logs/Start-Gauntlet.log`. After the app opens,
+use `System Check` to confirm dependencies, workspace access, optional OCR
+readiness, and the local launcher log before retrying.
 
 Open the `System Check` page inside the app if the first run feels off. It
 checks Python, required dependencies, public launcher files, workspace location,
@@ -278,7 +322,8 @@ The command writes `gauntlet-result-pack-summary.json`,
 bundle includes Gauntlet reports, source snippets, anchors, summaries, and an
 offline index, but not the original uploaded paper files or API keys. Links in
 the starter manifest are convenience metadata only; verify source access and
-redistribution terms before sharing any paper file.
+redistribution terms before sharing any paper file. The Gauntlet license covers
+this software, not third-party papers or datasets you analyze with it.
 
 ## Share Demo Kit
 
@@ -368,6 +413,14 @@ experiments or AI-wired versions.
 
 ## Development
 
+Maintainer storage note: the active local development and test checkout for the
+current polish pass is `D:\Projects\The-Gauntlet-`. Keep test caches, temporary
+files, Streamlit artifacts, screenshots, `.gauntlet/`, and generated reports on
+`D:\`. Treat any older OneDrive/C-drive checkout as archive-only. Public ZIP
+users can still unzip anywhere, but should avoid synced folders if they do not
+want local report snippets to sync. See
+[`docs/LOCAL_DEVELOPMENT.md`](docs/LOCAL_DEVELOPMENT.md).
+
 ```bash
 python -m pip install -r requirements-dev.txt
 pytest
@@ -415,4 +468,13 @@ print(gemini_refinement.repair_plan)
 
 ## License
 
-This project uses the Motion-TimeSpace Non-Commercial License. See `LICENSE`.
+This project uses the Motion-TimeSpace Non-Commercial License. The software is
+available for personal, educational, academic, and other non-commercial use.
+Commercial use requires a separate written commercial license from the copyright
+holder/company. For commercial licensing discussions, contact the company's COO
+or licensing contact.
+
+See [`LICENSE`](LICENSE) for the controlling terms and
+[`docs/COMMERCIAL_USE.md`](docs/COMMERCIAL_USE.md) for a plain-language summary.
+The project license does not grant rights to third-party papers, PDFs, datasets,
+or other materials you upload, analyze, or reference in result-pack manifests.
