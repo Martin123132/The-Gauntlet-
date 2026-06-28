@@ -7,7 +7,7 @@ contradictions, source snippets, calibration checks, and repair guidance.
 
 Latest verified release: [`v0.28.0`](https://github.com/Martin123132/The-Gauntlet-/releases/tag/v0.28.0).
 The generated GitHub source ZIP was smoke-tested on Windows; see
-[`docs/V0_27_ZIP_QA.md`](docs/V0_27_ZIP_QA.md).
+[`docs/V0_28_ZIP_QA.md`](docs/V0_28_ZIP_QA.md).
 
 ## What It Does
 

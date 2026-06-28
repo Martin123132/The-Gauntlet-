@@ -21,6 +21,7 @@ def test_public_release_files_exist():
         "docs/OCR_SETUP.md",
         "docs/V0_27_RELEASE_NOTES.md",
         "docs/V0_28_RELEASE_NOTES.md",
+        "docs/V0_28_ZIP_QA.md",
         "docs/images/gauntlet-summary.png",
         "docs/images/gauntlet-breakdown.png",
         "docs/images/gauntlet-workspace.png",
@@ -147,6 +148,7 @@ def test_readme_opens_as_landing_page():
     assert "## Screenshots" in readme
     assert "## Trust Model" in readme
     assert "Latest verified release: [`v0.28.0`" in readme
+    assert "docs/V0_28_ZIP_QA.md" in readme
     assert "Download the repo, double-click the Windows launcher" in readme
     assert "The first screen gives users the upload path" in readme
     assert "Optional refinement is clearly separated" in readme
@@ -190,8 +192,10 @@ def test_changelog_has_v027_release_section():
     release_notes = (ROOT / "docs" / "V0_27_RELEASE_NOTES.md").read_text(encoding="utf-8")
     release_notes_v028 = (ROOT / "docs" / "V0_28_RELEASE_NOTES.md").read_text(encoding="utf-8")
     zip_qa = (ROOT / "docs" / "V0_27_ZIP_QA.md").read_text(encoding="utf-8")
+    zip_qa_v028 = (ROOT / "docs" / "V0_28_ZIP_QA.md").read_text(encoding="utf-8")
 
-    assert "## Unreleased\n\nNo changes yet." in changelog
+    assert "## Unreleased" in changelog
+    assert "v0.28.0` generated-source-ZIP QA notes" in changelog
     assert "## v0.28.0 - Public Trust Polish" in changelog
     assert "generated-source-ZIP QA notes" in changelog
     assert "D-drive development/storage guidance" in changelog
@@ -204,4 +208,7 @@ def test_changelog_has_v027_release_section():
     assert "Generated source ZIP smoke" in release_notes
     assert "OCR processing is not implemented yet" in release_notes
     assert "Generated source ZIP smoke test completed" in zip_qa
+    assert "The Gauntlet v0.28.0 ZIP QA" in zip_qa_v028
+    assert "COMMERCIAL-LICENSE.md" in zip_qa_v028
+    assert "Try Sample Paper" in zip_qa_v028
     assert "requirements.txt" in zip_qa
