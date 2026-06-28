@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-No changes yet.
+### Added
+
+- Added public `v0.28.0` generated-source-ZIP QA notes and linked them from
+  the README.
 
 ## v0.28.0 - Public Trust Polish
 
