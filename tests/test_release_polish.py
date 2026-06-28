@@ -18,6 +18,7 @@ def test_public_release_files_exist():
         "docs/RELEASE_CHECKLIST.md",
         "docs/LOCAL_DEVELOPMENT.md",
         "docs/COMMERCIAL_USE.md",
+        "docs/ROADMAP.md",
         "docs/OCR_SETUP.md",
         "docs/V0_27_RELEASE_NOTES.md",
         "docs/V0_28_RELEASE_NOTES.md",
@@ -152,6 +153,21 @@ def test_readme_opens_as_landing_page():
     assert "Download the repo, double-click the Windows launcher" in readme
     assert "The first screen gives users the upload path" in readme
     assert "Optional refinement is clearly separated" in readme
+    assert "v0.28 is the finished public local-app milestone" in readme
+    assert "docs/ROADMAP.md" in readme
+
+
+def test_post_v028_roadmap_sets_maintenance_mode():
+    roadmap = (ROOT / "docs" / "ROADMAP.md").read_text(encoding="utf-8")
+
+    assert "V0.28 is the finished public local-app milestone" in roadmap
+    assert "Maintenance Gates" in roadmap
+    assert "Run strict calibration" in roadmap
+    assert "generated source ZIP smoke test" in roadmap
+    assert "Keep landmark/result-pack lists metadata-only" in roadmap
+    assert "Not For The Next Release" in roadmap
+    assert "More AI providers" in roadmap
+    assert "Bundled third-party paper PDFs" in roadmap
 
 
 def test_readme_documents_first_user_and_maintainer_storage_guidance():
@@ -196,6 +212,7 @@ def test_changelog_has_v027_release_section():
 
     assert "## Unreleased" in changelog
     assert "v0.28.0` generated-source-ZIP QA notes" in changelog
+    assert "post-v0.28 maintenance roadmap" in changelog
     assert "## v0.28.0 - Public Trust Polish" in changelog
     assert "generated-source-ZIP QA notes" in changelog
     assert "D-drive development/storage guidance" in changelog
