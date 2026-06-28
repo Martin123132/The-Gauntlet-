@@ -9,6 +9,11 @@ Latest verified release: [`v0.28.0`](https://github.com/Martin123132/The-Gauntle
 The generated GitHub source ZIP was smoke-tested on Windows; see
 [`docs/V0_28_ZIP_QA.md`](docs/V0_28_ZIP_QA.md).
 
+Current project mode: v0.28 is the finished public local-app milestone. Future
+work should be maintenance, calibration, docs, and carefully scoped backlog
+items rather than adding more surfaces to this release. See
+[`docs/ROADMAP.md`](docs/ROADMAP.md).
+
 ## What It Does
 
 - Gives each paper a deterministic verdict: `RESOLVES`, `PARTIAL`, `FAILS`, or
@@ -420,6 +425,9 @@ files, Streamlit artifacts, screenshots, `.gauntlet/`, and generated reports on
 users can still unzip anywhere, but should avoid synced folders if they do not
 want local report snippets to sync. See
 [`docs/LOCAL_DEVELOPMENT.md`](docs/LOCAL_DEVELOPMENT.md).
+
+Post-v0.28 work should follow the maintenance roadmap in
+[`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ```bash
 python -m pip install -r requirements-dev.txt

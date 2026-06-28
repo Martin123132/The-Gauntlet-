@@ -6,6 +6,9 @@
 
 - Added public `v0.28.0` generated-source-ZIP QA notes and linked them from
   the README.
+- Added a post-v0.28 maintenance roadmap so future work stays focused on
+  stability, calibration, docs, and small backlog items rather than expanding
+  the finished public milestone.
 
 ## v0.28.0 - Public Trust Polish
 
